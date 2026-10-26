@@ -44,10 +44,14 @@ public abstract class CameraMixin {
         if (frame == null) {
             return;
         }
-        this.setRotation(focused.getYaw(tickDelta) + frame[0], frame[1]);
-        this.setPos(MathHelper.lerp(tickDelta, focused.prevX, focused.getX()),
+        float yaw = focused.getYaw(tickDelta);
+        // Центр кадра — между игроком и тем, к чему он обращён (меч, моб).
+        double yawRad = Math.toRadians(yaw);
+        double ahead = frame[3];
+        this.setRotation(yaw + frame[0], frame[1]);
+        this.setPos(MathHelper.lerp(tickDelta, focused.prevX, focused.getX()) - Math.sin(yawRad) * ahead,
                 MathHelper.lerp(tickDelta, focused.prevY, focused.getY()) + MathHelper.lerp(tickDelta, this.lastCameraY, this.cameraY) - 0.35,
-                MathHelper.lerp(tickDelta, focused.prevZ, focused.getZ()));
+                MathHelper.lerp(tickDelta, focused.prevZ, focused.getZ()) + Math.cos(yawRad) * ahead);
         this.moveBy(-this.clipToSpace(frame[2]), 0.0F, 0.0F);
     }
 }

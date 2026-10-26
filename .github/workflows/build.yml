@@ -28,3 +28,38 @@ jobs:
 
       - name: Сценарий съёмки
         run: ./gradlew shotsClasses --stacktrace
+
+  # Каждое обновление main с успешной сборкой выкладывает jar на страницу Releases.
+  # Версия — mod_version из gradle.properties, описание — её раздел в CHANGELOG.md.
+  release:
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: zangetsu
+          path: dist
+
+      - name: Релиз
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(grep '^mod_version=' gradle.properties | cut -d= -f2)
+          {
+            awk -v v="$version" '/^## /{p = ($2 == v); next} p' CHANGELOG.md
+            echo
+            echo "**Установка:** положите \`zangetsu-$version.jar\` и [Fabric API](https://modrinth.com/mod/fabric-api/versions?g=1.21.1) в папку \`.minecraft/mods\` и запустите Minecraft 1.21.1 с [Fabric Loader](https://fabricmc.net/use/) 0.16+."
+          } > notes.md
+          rm -f dist/*-sources.jar
+          if gh release view "v$version" >/dev/null 2>&1; then
+            gh release upload "v$version" dist/*.jar --clobber
+            gh release edit "v$version" --notes-file notes.md
+          else
+            gh release create "v$version" dist/*.jar --target "$GITHUB_SHA" \
+              --title "Зангецу $version" --notes-file notes.md
+          fi

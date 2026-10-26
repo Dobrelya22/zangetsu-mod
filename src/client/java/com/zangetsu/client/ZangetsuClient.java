@@ -98,12 +98,12 @@ public class ZangetsuClient implements ClientModInitializer {
             if (entity == client.player) {
                 // У себя — камера облетает сбоку; превращение — спереди, чтобы видеть маску.
                 CameraDirector.begin(payload.duration() + 8, switch (payload.animation()) {
-                    case AnimationPayload.TOUCH_HANDLE -> new CameraDirector.Shot(65.0F, 100.0F, 12.0F, 3.4F);
-                    case AnimationPayload.EXECUTE -> new CameraDirector.Shot(70.0F, 105.0F, 10.0F, 4.2F);
-                    case AnimationPayload.SLASH -> new CameraDirector.Shot(-70.0F, -110.0F, 8.0F, 4.8F);
-                    case AnimationPayload.DREAM_PULL -> new CameraDirector.Shot(55.0F, 115.0F, 14.0F, 4.0F);
-                    case AnimationPayload.HOLLOW -> new CameraDirector.Shot(150.0F, 205.0F, 4.0F, 3.4F);
-                    default -> new CameraDirector.Shot(90.0F, 90.0F, 10.0F, 4.0F);
+                    case AnimationPayload.TOUCH_HANDLE -> new CameraDirector.Shot(60.0F, 90.0F, 14.0F, 4.0F, 1.2F);
+                    case AnimationPayload.EXECUTE -> new CameraDirector.Shot(65.0F, 95.0F, 10.0F, 4.6F, 1.3F);
+                    case AnimationPayload.SLASH -> new CameraDirector.Shot(-65.0F, -100.0F, 8.0F, 5.6F, 1.7F);
+                    case AnimationPayload.DREAM_PULL -> new CameraDirector.Shot(55.0F, 105.0F, 14.0F, 4.4F, 1.2F);
+                    case AnimationPayload.HOLLOW -> new CameraDirector.Shot(150.0F, 205.0F, 4.0F, 3.6F, 0.0F);
+                    default -> new CameraDirector.Shot(90.0F, 90.0F, 10.0F, 4.0F, 0.0F);
                 });
             }
         });

@@ -47,4 +47,4 @@ jobs:
 
       - name: Журнал игры
         if: always()
-        run: grep -E "ERROR|Exception|Caused by|Съёмка|Зангецу|zangetsu|Mixin" run-shots/logs/latest.log | head -300 || true
+        run: grep -E "ERROR|Exception|Caused by|Съёмка|ПРОВЕРК|Зангецу|zangetsu|Mixin" run-shots/logs/latest.log | head -300 || true

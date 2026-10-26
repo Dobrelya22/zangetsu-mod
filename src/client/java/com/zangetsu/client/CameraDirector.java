@@ -11,8 +11,8 @@ import net.minecraft.util.math.MathHelper;
  * {@link com.zangetsu.client.mixin.CameraMixin}.
  */
 public final class CameraDirector {
-    /** Ракурс: угол облёта (от взгляда игрока) в начале и в конце, наклон и расстояние. */
-    public record Shot(float yawFrom, float yawTo, float pitch, float distance) {
+    /** Ракурс: угол облёта (от взгляда игрока) в начале и в конце, наклон, расстояние и сдвиг центра вперёд (к цели). */
+    public record Shot(float yawFrom, float yawTo, float pitch, float distance, float forward) {
     }
 
     private static Perspective saved;
@@ -42,7 +42,7 @@ public final class CameraDirector {
         }
         float t = MathHelper.clamp((ClientState.ticks + tickDelta - start) / Math.max(1, until - start), 0.0F, 1.0F);
         float eased = t * t * (3.0F - 2.0F * t);
-        return new float[]{MathHelper.lerp(eased, shot.yawFrom(), shot.yawTo()), shot.pitch(), shot.distance()};
+        return new float[]{MathHelper.lerp(eased, shot.yawFrom(), shot.yawTo()), shot.pitch(), shot.distance(), shot.forward()};
     }
 
     static void tick(MinecraftClient client) {

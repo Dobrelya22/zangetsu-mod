@@ -8,7 +8,10 @@ import com.zangetsu.logic.Dream;
 import com.zangetsu.logic.Execution;
 import com.zangetsu.logic.HollowForm;
 import com.zangetsu.logic.Limbs;
+import com.zangetsu.logic.SwordStacks;
 import com.zangetsu.registry.ModAttachments;
+import net.minecraft.inventory.SimpleInventory;
+import net.minecraft.screen.slot.Slot;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -79,6 +82,12 @@ public class ZangetsuShots implements ClientModInitializer {
     private int shotIndex;
     private LivingEntity zombie;
     private LivingEntity enderman;
+    private LivingEntity attacker;
+    private float healthBefore;
+    private int bondBefore;
+    private int checksTotal;
+    private int checksPassed;
+    private final List<String> failed = new ArrayList<>();
 
     @Override
     public void onInitializeClient() {
@@ -276,6 +285,65 @@ public class ZangetsuShots implements ClientModInitializer {
         shot("ender_halves");
         pause(30);
 
+        // ---- Проверки в настоящем бою (не постановка).
+        look(180.0F, 10.0F);
+        onServer(s -> this.attacker = summonHostile(player(s), EntityType.ZOMBIE, 1.8));
+        pause(90);
+        shot("check_melee_parry");
+        onServer(s -> {
+            check("удар зомби парируется и рука отлетает", ModAttachments.limbs(this.attacker) != 0);
+            this.attacker.discard();
+        });
+        onServer(s -> Bond.change(player(s), Bond.THRESHOLDS[2] - ModAttachments.data(player(s)).bond));
+        pause(20);
+        onServer(s -> this.attacker = summonHostile(player(s), EntityType.ZOMBIE, 2.6));
+        pause(70);
+        shot("check_auto_attack");
+        onServer(s -> {
+            check("на III уровне меч сам бьёт зомби", !this.attacker.isAlive() || this.attacker.getHealth() < this.attacker.getMaxHealth());
+            this.attacker.discard();
+        });
+        onServer(s -> {
+            ServerPlayerEntity player = player(s);
+            this.healthBefore = player.getHealth();
+            this.attacker = summonHostile(player, EntityType.SKELETON, 9.0);
+            this.attacker.equipStack(EquipmentSlot.MAINHAND, new ItemStack(Items.BOW));
+        });
+        pause(120);
+        shot("check_skeleton");
+        onServer(s -> {
+            check("стрелы скелета не ранят (рассечены)", player(s).getHealth() >= this.healthBefore);
+            this.attacker.discard();
+        });
+        onServer(s -> {
+            ServerPlayerEntity player = player(s);
+            this.bondBefore = ModAttachments.data(player).bond;
+            LivingEntity cow = summon(player, EntityType.COW, 2.0);
+            cow.damage(player.getServerWorld().getDamageSources().playerAttack(player), 1000.0F);
+        });
+        pause(5);
+        onServer(s -> check("убийство коровы огорчает меч", ModAttachments.data(player(s)).bond < this.bondBefore));
+        onServer(s -> {
+            ServerPlayerEntity player = player(s);
+            player.dropSelectedItem(true);
+            check("Q не выбрасывает меч", SwordStacks.isHolding(player));
+            check("меч не кладётся в сундук", !new Slot(new SimpleInventory(1), 0, 0, 0).canInsert(SwordStacks.held(player)));
+        });
+        onServer(s -> player(s).kill());
+        waitFor("смерть", c -> c.player.isDead());
+        pause(10);
+        act(c -> c.player.requestRespawn());
+        waitFor("возрождение", c -> c.player.isAlive() && !c.player.isDead());
+        pause(30);
+        onServer(s -> {
+            ServerPlayerEntity player = player(s);
+            check("меч остаётся после смерти", !SwordStacks.find(player).isEmpty());
+            check("+10 здоровья остаются после смерти", player.getMaxHealth() >= 30.0F);
+        });
+        shot("check_after_death");
+        command("tp @p 0.5 -60 0.5 180 0");
+        pause(10);
+
         // ---- Форма Пустого, луна, Гецуга.
         onServer(s -> {
             ServerPlayerEntity player = player(s);
@@ -348,10 +416,44 @@ public class ZangetsuShots implements ClientModInitializer {
         view(Perspective.THIRD_PERSON_FRONT);
         pause(6);
         shot("woke_up_third_person");
+        onServer(s -> check("после сна меч снова в руке", SwordStacks.isHolding(player(s))));
+        pause(5);
         act(c -> {
             ZangetsuMod.LOGGER.info("Съёмка: готово, {} кадров", this.shotIndex);
+            ZangetsuMod.LOGGER.info("ПРОВЕРКИ: пройдено {} из {}{}", this.checksPassed, this.checksTotal,
+                    this.failed.isEmpty() ? "" : ", провалены: " + String.join("; ", this.failed));
             c.scheduleStop();
         });
+    }
+
+    /** Проверка поведения (выполняется на сервере); итог — в журнале строкой «ПРОВЕРКИ: …». */
+    private void check(String name, boolean ok) {
+        this.checksTotal++;
+        if (ok) {
+            this.checksPassed++;
+        } else {
+            this.failed.add(name);
+        }
+        ZangetsuMod.LOGGER.info("ПРОВЕРКА {} {}", ok ? "✔" : "✘", name);
+    }
+
+    /** Злой моб с включённым ИИ — нападает по-настоящему. */
+    private static LivingEntity summonHostile(ServerPlayerEntity player, EntityType<? extends MobEntity> type, double distance) {
+        ServerWorld world = player.getServerWorld();
+        MobEntity mob = type.create(world);
+        if (mob == null) {
+            return null;
+        }
+        Vec3d at = player.getPos().add(0, 0, -distance);
+        mob.refreshPositionAndAngles(at.x, at.y, at.z, 0.0F, 0.0F);
+        mob.initialize(world, world.getLocalDifficulty(BlockPos.ofFloored(at)), SpawnReason.COMMAND, null);
+        mob.setBaby(false);
+        for (EquipmentSlot slot : new EquipmentSlot[]{EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET}) {
+            mob.equipStack(slot, ItemStack.EMPTY);
+        }
+        mob.setTarget(player);
+        world.spawnEntity(mob);
+        return mob;
     }
 
     // ---------------------------------------------------------------- действия на сервере
