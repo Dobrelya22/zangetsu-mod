@@ -84,20 +84,22 @@ public static class ZangetsuTextures
     public static void Run(string assets, string preview)
     {
         previewDir = preview;
-        // Меч — слоями разной толщины; глаз — отдельные 3D-детали.
+        // Меч — объёмная модель со своим атласом; глаз — отдельные 3D-детали; плоская картинка — для частиц.
         SwordPaint sp = PaintSword();
-        Out(SwordLayer(sp, new[] { P_POMMEL, P_WRAP, P_COLLAR }, false, false), assets, "textures/item/zangetsu_hilt.png", 8);
-        Out(SwordLayer(sp, new[] { P_SPINE }, false, false), assets, "textures/item/zangetsu_spine.png", 8);
-        Out(SwordLayer(sp, new[] { P_CORE }, true, false), assets, "textures/item/zangetsu_core.png", 8);
-        Out(SwordLayer(sp, new[] { P_CORE }, true, true), assets, "textures/item/zangetsu_core_burning.png", 8);
-        Out(SwordLayer(sp, new[] { P_EDGE }, false, false), assets, "textures/item/zangetsu_edge.png", 8);
+        Out(SwordAtlas(), assets, "textures/entity/zangetsu_model.png", 6);
         Out(SwordIcon(sp), assets, "textures/item/zangetsu_icon.png", 8);
         Out(EyeParts(), assets, "textures/entity/zangetsu_eye.png", 16);
         Out(White(), assets, "textures/misc/white.png", 16);
         Out(Icon(), assets, "icon.png", 4);
         Out(Spirit(), assets, "textures/entity/spirit.png", 4);
         Out(SpiritEyes(), assets, "textures/entity/spirit_eyes.png", 4);
-        Out(HollowMask(), assets, "textures/entity/hollow_mask.png", 8);
+        for (int crack = 0; crack <= 3; crack++)
+        {
+            Out(HollowMask(crack), assets, "textures/entity/hollow_mask_" + crack + ".png", 8);
+        }
+        Out(MaskIcon(true), assets, "textures/gui/mask_full.png", 8);
+        Out(MaskIcon(false), assets, "textures/gui/mask_empty.png", 8);
+        Out(MaskIconCracks(), assets, "textures/gui/mask_cracks.png", 8);
         Out(HollowMaskEyes(), assets, "textures/entity/hollow_mask_eyes.png", 8);
         Out(CrescentMoon(), assets, "textures/environment/crescent_moon.png", 6);
         Out(EnderCut(), assets, "textures/entity/ender_cut.png", 16);
@@ -209,10 +211,11 @@ public static class ZangetsuTextures
     // ------------------------------------------------------------------ маска Пустого
 
     /**
-     * Маска Пустого (64×64) поверх головы игрока: шлем (0,10) с маской спереди, рога (32..58,10..26),
-     * длинные рыжие волосы (0,26) и дыра в груди (20,26).
+     * Маска Пустого (64×64) поверх головы игрока: шлем (0,10) с маской спереди и рога (32..58,10..26).
+     * {@code crack}: 0 — цела, 1 — первая трещина, 2 — скол, 3 — почти рассыпалась (прозрачные
+     * места — откололись, под ними видно лицо).
      */
-    static Canvas HollowMask()
+    static Canvas HollowMask(int crack)
     {
         var c = new Canvas(64, 64);
         Color bone = C(236, 232, 222), shade = C(200, 194, 182), red = C(178, 16, 24);
@@ -237,24 +240,37 @@ public static class ZangetsuTextures
         Gradient(c, 32, 10, 48, 18, bone, shade, 0.1, 4);
         Gradient(c, 32, 18, 48, 26, shade, C(150, 140, 128), 0.1, 5);
         Paint(c, 48, 10, 58, 15, C(40, 30, 28), 0.2, 6);
-        // Длинные рыжие волосы.
-        for (int y = 26; y < 49; y++)
-            for (int x = 0; x < 20; x++)
-            {
-                double strand = Hash(x, 0, 7);
-                Color col = Mix(C(244, 136, 44), C(186, 82, 20), strand);
-                if (y > 44 && Hash(x, y, 8) > 0.5) col = Color.FromArgb(0, 0, 0, 0);
-                c.Set(x, y, col.A == 0 ? col : Mul(col, 1.0 + (Hash(x, y, 9) - 0.5) * 0.15));
-            }
-        // Дыра Пустого в груди: чёрный круг с тёмно-красным ободком.
-        for (int y = 26; y < 30; y++)
-            for (int x = 20; x < 28; x++)
-            {
-                double fx = ((x - 20) % 4) - 1.5, fy = (y - 26) - 1.5;
-                double d = Math.Sqrt(fx * fx + fy * fy);
-                c.Set(x, y, d < 1.3 ? C(4, 2, 4) : (d < 2.1 ? C(60, 8, 12) : Color.FromArgb(0, 0, 0, 0)));
-            }
+
+        Color line = C(52, 40, 40);
+        Color gone = Color.FromArgb(0, 0, 0, 0);
+        if (crack >= 1)
+        {
+            // Первая трещина: через лоб к правому глазу и по макушке.
+            Dots(c, line, 14, 18, 14, 19, 13, 19);
+            Dots(c, line, 13, 10, 13, 11, 12, 12, 12, 13, 13, 14);
+        }
+        if (crack >= 2)
+        {
+            // Скол: отломился угол челюсти справа и край правой щеки.
+            Dots(c, gone, 15, 23, 15, 24, 15, 25, 14, 25, 16, 24, 16, 25, 17, 25);
+            Dots(c, line, 14, 22, 14, 23, 13, 23, 8, 19, 9, 20, 8, 20);
+            Dots(c, line, 18, 19, 19, 20, 19, 21, 20, 22, 3, 20, 3, 21, 4, 22);
+        }
+        if (crack >= 3)
+        {
+            // Почти рассыпалась: нет куска лба, половины оскала, части макушки.
+            Dots(c, gone, 8, 18, 9, 18, 8, 19, 12, 24, 13, 24, 12, 25, 13, 25, 14, 24);
+            Dots(c, gone, 13, 15, 14, 15, 13, 16, 14, 16, 15, 16, 13, 17, 14, 17, 15, 17);
+            Dots(c, gone, 21, 18, 22, 18, 22, 19, 0, 24, 0, 25, 1, 25, 28, 18, 29, 18, 29, 19);
+            Dots(c, line, 10, 22, 10, 23, 11, 23, 12, 18, 11, 19, 15, 21, 15, 22, 16, 20, 17, 21, 6, 18, 6, 19, 7, 20);
+        }
         return c;
+    }
+
+    /** Закрасить точки, заданные парами x, y. */
+    static void Dots(Canvas c, Color col, params int[] xy)
+    {
+        for (int i = 0; i + 1 < xy.Length; i += 2) c.Set(xy[i], xy[i + 1], col);
     }
 
     static Canvas HollowMaskEyes()
@@ -264,6 +280,141 @@ public static class ZangetsuTextures
         Color hot = C(255, 226, 70), warm = C(255, 170, 30), pupil = C(40, 10, 0);
         c.Set(10, 20, hot); c.Set(9, 21, warm); c.Set(10, 21, pupil); c.Set(11, 21, warm);
         c.Set(13, 20, hot); c.Set(12, 21, warm); c.Set(13, 21, pupil); c.Set(14, 21, warm);
+        return c;
+    }
+
+    // ------------------------------------------------------------------ маска в интерфейсе
+
+    /** Силуэт маски для значка: внутри ли точка (координаты значка 32×32). */
+    static bool MaskFace(double x, double y)
+    {
+        double dx = (x - 16.0) / 9.6, dy = (y - 17.0) / 11.0;
+        if (dy > 0) dx /= 1.0 - dy * 0.28;  // подбородок уже лба
+        return dx * dx + dy * dy < 1.0;
+    }
+
+    /** Рог значка: толстая дуга от виска вверх и в сторону; side = −1 — левый, 1 — правый. */
+    static double HornDistance(double x, double y, int side, out double along)
+    {
+        double best = 99;
+        along = 0;
+        for (int i = 0; i <= 40; i++)
+        {
+            double t = i / 40.0;
+            double hx = 16 + side * (7.0 + 5.5 * t + 1.5 * t * t), hy = 9.5 - 9.0 * t + 1.2 * t * t * t;
+            double r = 1.9 * (1.0 - t) + 0.35;
+            double d = Math.Sqrt((x - hx) * (x - hx) + (y - hy) * (y - hy)) - r;
+            if (d < best) { best = d; along = t; }
+        }
+        return best;
+    }
+
+    static bool MaskEyeHole(double x, double y, out bool iris)
+    {
+        iris = false;
+        foreach (int side in new[] { -1, 1 })
+        {
+            double cx = 16 + side * 4.6, cy = 14.6;
+            double dx = x - cx, dy = (y - cy) + side * dx * 0.28;   // косые прорези
+            double e = (dx / 3.2) * (dx / 3.2) + (dy / 1.75) * (dy / 1.75);
+            if (e < 1.0)
+            {
+                iris = Math.Abs(dx + side * 0.3) < 1.2 && Math.Abs(dy) < 1.2;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Значок маски: {@code full} — живая (белая кость, алые полосы, горящие глаза), иначе тёмный силуэт. */
+    static Canvas MaskIcon(bool full)
+    {
+        var c = new Canvas(32, 32);
+        var inside = new bool[32, 32];
+        for (int y = 0; y < 32; y++)
+            for (int x = 0; x < 32; x++)
+            {
+                double px = x + 0.5, py = y + 0.5;
+                double alongL, alongR;
+                bool face = MaskFace(px, py);
+                double hl = HornDistance(px, py, -1, out alongL);
+                double hr = HornDistance(px, py, 1, out alongR);
+                bool horn = !face && (hl < 0 || hr < 0);
+                double a = hl < 0 ? alongL : alongR;
+                if (!face && !horn) continue;
+                inside[x, y] = true;
+                Color col;
+                if (!full)
+                {
+                    col = Color.FromArgb(215, 40, 34, 38);
+                }
+                else if (horn)
+                {
+                    col = a > 0.78 ? C(46, 34, 32) : Mix(C(232, 226, 212), C(176, 166, 150), a);
+                }
+                else
+                {
+                    col = Mix(C(244, 240, 230), C(196, 188, 176), Sat((py - 6) / 24.0) * 0.6 + Math.Abs(px - 16) / 20.0);
+                    // Алые полосы на левой стороне лица (от лба до челюсти).
+                    if ((Math.Abs(px - 10.5) < 0.9 || Math.Abs(px - 13.0) < 0.7) && py > 6.5 && py < 22.5) col = C(184, 18, 26);
+                    // Оскал.
+                    if (py > 22.5 && py < 26.0 && px > 10 && px < 22) col = ((int)px % 2 == 0) ? C(236, 230, 218) : C(34, 24, 26);
+                    // Тень носа.
+                    if (Math.Abs(px - 16) < 1.0 && py > 17.5 && py < 19.5) col = C(170, 160, 150);
+                }
+                bool iris;
+                if (MaskEyeHole(px, py, out iris))
+                {
+                    col = full && iris ? C(255, 214, 50) : C(10, 6, 8);
+                }
+                c.Set(x, y, col);
+            }
+        // Тёмный контур по силуэту.
+        for (int y = 0; y < 32; y++)
+            for (int x = 0; x < 32; x++)
+            {
+                if (inside[x, y]) continue;
+                bool edge = (x > 0 && inside[x - 1, y]) || (x < 31 && inside[x + 1, y]) || (y > 0 && inside[x, y - 1]) || (y < 31 && inside[x, y + 1]);
+                if (edge) c.Set(x, y, Color.FromArgb(full ? 230 : 170, 12, 8, 10));
+            }
+        return c;
+    }
+
+    /** Скол на значке: круг выбитой кости (только в пределах лица). */
+    static void Chip(Canvas c, int o, double cx, double cy, double r, Color col)
+    {
+        for (int y = 0; y < 32; y++)
+            for (int x = 0; x < 32; x++)
+            {
+                double dx = x + 0.5 - cx, dy = y + 0.5 - cy;
+                double wobble = r * (0.8 + 0.35 * Hash(x, y, 61));
+                if (dx * dx + dy * dy < wobble * wobble && MaskFace(x + 0.5, y + 0.5)) c.Set(o + x, y, col);
+            }
+    }
+
+    /** Трещины значка: три кадра 32×32 подряд — трещина, скол, почти рассыпалась. */
+    static Canvas MaskIconCracks()
+    {
+        var c = new Canvas(96, 32);
+        Color line = C(48, 30, 30), chip = C(20, 14, 16);
+        for (int stage = 1; stage <= 3; stage++)
+        {
+            int o = (stage - 1) * 32;
+            Dots(c, line, o + 17, 6, o + 17, 7, o + 18, 8, o + 18, 9, o + 19, 10, o + 19, 11, o + 20, 12);
+            if (stage >= 2)
+            {
+                Chip(c, o, 22.5, 24.0, 2.6, chip);
+                Dots(c, line, o + 11, 18, o + 10, 19, o + 10, 20, o + 9, 21, o + 21, 17, o + 22, 18, o + 22, 19, o + 23, 20);
+                Dots(c, line, o + 14, 8, o + 13, 9, o + 13, 10);
+            }
+            if (stage >= 3)
+            {
+                Chip(c, o, 9.5, 9.0, 2.8, chip);
+                Chip(c, o, 14.5, 25.5, 2.2, chip);
+                Dots(c, line, o + 15, 12, o + 15, 13, o + 16, 14, o + 16, 15, o + 16, 16, o + 7, 16, o + 8, 17, o + 8, 18, o + 24, 13, o + 25, 14, o + 24, 15);
+                Dots(c, line, o + 12, 20, o + 13, 21, o + 13, 22, o + 19, 19, o + 18, 20, o + 19, 21);
+            }
+        }
         return c;
     }
 
@@ -521,6 +672,125 @@ public static class ZangetsuTextures
         var c = SwordLayer(sp, new[] { P_POMMEL, P_WRAP, P_COLLAR, P_SPINE, P_CORE, P_EDGE }, false, false);
         DrawEye(c, Math.Round(EyeX() * 2) / 2, Math.Round(EyeY() * 2) / 2, 1.0, EYE_OPEN, sp.Region);
         return c;
+    }
+
+    // ------------------------------------------------------------------ 3D-модель меча
+
+    /*
+     * Атлас объёмного Зангецу (128×128). Размеры клинка совпадают с ZangetsuModel (в пикселях модели):
+     * u — вдоль меча от навершия, v — поперёк (обух −2.3, начало скоса 1.1, лезвие 2.8).
+     *   клинок (0,0)-(112,40), горящий клинок (0,40)-(112,80): u 6.2..22 → x, v −2.3..2.8 → y;
+     *   оплётка (0,80)-(64,96), тёмный металл (64,80)-(96,96), латунь (96,80)-(128,96).
+     */
+    const double M_BLADE_U0 = 6.2, M_BLADE_U1 = 22.0, M_SPINE = -2.3, M_EDGE = 2.8, M_BEVEL = 1.1;
+    const double M_EYE_U = 10.6, M_EYE_V = -0.6;
+
+    static Canvas SwordAtlas()
+    {
+        var c = new Canvas(128, 128);
+        BladeTexture(c, 0, false);
+        BladeTexture(c, 40, true);
+        // Оплётка: белые ромбы ткани между перекрещенными чёрными шнурами.
+        for (int y = 0; y < 16; y++)
+            for (int x = 0; x < 64; x++)
+            {
+                double s = x + 0.5, a = y + 0.5;
+                double k = Math.Round((s - 8.0) / 16.0);
+                double sc = 8.0 + k * 16.0;
+                double d = Math.Abs(s - sc) / 8.0 + Math.Abs(a - 8.0) / 8.0;
+                Color col;
+                if (d < 0.74)
+                {
+                    col = Mix(C(240, 236, 224), C(178, 172, 160), Math.Abs(a - 8.0) / 8.0 * 0.8 + d * 0.3);
+                }
+                else
+                {
+                    bool lit = ((int)(s + a) % 4) < 2;
+                    col = lit ? C(58, 52, 62) : C(22, 20, 25);
+                }
+                c.Set(x, 80 + y, Mul(col, 1.0 + (Hash(x, y, 41) - 0.5) * 0.08));
+            }
+        for (int y = 0; y < 16; y++)
+            for (int x = 0; x < 32; x++)
+            {
+                c.Set(64 + x, 80 + y, Mul(Mix(C(86, 90, 102), C(30, 32, 38), y / 15.0), 1.0 + (Hash(x, y, 42) - 0.5) * 0.16));
+                c.Set(96 + x, 80 + y, Mul(Mix(C(250, 220, 130), C(130, 92, 34), y / 15.0), 1.0 + (Hash(x, y, 43) - 0.5) * 0.12));
+            }
+        return c;
+    }
+
+    static void BladeTexture(Canvas c, int y0, bool burning)
+    {
+        for (int ty = 0; ty < 40; ty++)
+        {
+            for (int tx = 0; tx < 112; tx++)
+            {
+                double u = M_BLADE_U0 + (tx + 0.5) / 112.0 * (M_BLADE_U1 - M_BLADE_U0);
+                double v = M_SPINE + (ty + 0.5) / 40.0 * (M_EDGE - M_SPINE);
+                double brushed = (Hash(tx / 6, ty, 51) - 0.5) * 0.12 + (Hash(tx, ty, 52) - 0.5) * 0.06;
+                double hamon = M_BEVEL + 0.22 * Math.Sin(u * 1.7) + 0.1 * Math.Sin(u * 4.3 + 1.0);
+                Color col;
+                if (v < M_SPINE + 0.16)
+                {
+                    col = C(92, 97, 110);                                      // блик по ребру обуха
+                }
+                else if (v < hamon - 0.12)
+                {
+                    double t = (v - M_SPINE) / (M_BEVEL - M_SPINE);
+                    col = Mul(Mix(C(24, 26, 31), C(54, 58, 67), t), 1.0 + brushed);
+                    // Дол — желобок вдоль клинка от глаза к острию.
+                    if (u > 13.8 && u < 19.4 && v > -1.85 && v < -1.55) col = C(14, 15, 19);
+                    else if (u > 13.8 && u < 19.4 && v >= -1.55 && v < -1.38) col = C(84, 90, 102);
+                }
+                else if (v < hamon + 0.12)
+                {
+                    col = Mix(C(150, 156, 168), C(205, 210, 220), Hash(tx, ty, 53));  // туманная линия хамона
+                }
+                else
+                {
+                    double t = (v - hamon) / (M_EDGE - hamon);
+                    col = Mul(Mix(C(136, 144, 158), C(230, 235, 243), t), 1.0 + brushed * 0.5);
+                    if (v > M_EDGE - 0.18) col = C(252, 253, 255);
+                }
+                // Гнездо глаза: тёмное углубление с багровым краем.
+                double ex = (u - M_EYE_U) / 2.5, ey = (v - M_EYE_V) / 1.42;
+                double e = ex * ex + ey * ey;
+                if (e < 1.0) col = Mix(C(34, 8, 10), C(12, 3, 4), 1.0 - e);
+                else if (e < 1.35) col = Mix(col, C(70, 6, 10), (1.35 - e) / 0.35 * 0.7);
+                if (burning)
+                {
+                    if (v < hamon - 0.12 && e >= 1.0) col = Mix(col, C(90, 10, 6), 0.25);
+                    double crack = BladeCrack(u, v);
+                    if (crack < 0.07) col = C(255, 226, 150);
+                    else if (crack < 0.16) col = C(255, 120, 30);
+                    else if (crack < 0.3) col = Mix(col, C(200, 40, 10), 0.6);
+                }
+                c.Set(tx, y0 + ty, col);
+            }
+        }
+    }
+
+    /** Расстояние (в пикселях модели) до ближайшей раскалённой трещины горящего клинка. */
+    static double BladeCrack(double u, double v)
+    {
+        double[][] paths = {
+            new[] { 13.0, -0.7, 14.6, -1.2, 16.2, -0.6, 17.8, -1.4, 19.6, -0.9, 21.0, -1.6 },
+            new[] { 12.9, 0.1, 14.4, 0.7, 15.8, 0.3, 17.2, 0.9 },
+            new[] { 8.2, -0.9, 7.4, -1.5, 6.6, -1.1 },
+            new[] { 8.3, 0.0, 7.5, 0.6, 6.7, 0.3 },
+            new[] { 10.6, -1.9, 11.4, -2.2 },
+        };
+        double best = 99;
+        foreach (var p in paths)
+            for (int i = 0; i + 3 < p.Length; i += 2)
+            {
+                double ax = p[i], ay = p[i + 1], bx = p[i + 2], by = p[i + 3];
+                double vx = bx - ax, vy = by - ay;
+                double t = Sat(((u - ax) * vx + (v - ay) * vy) / (vx * vx + vy * vy));
+                double qx = ax + vx * t - u, qy = ay + vy * t - v;
+                best = Math.Min(best, Math.Sqrt(qx * qx + qy * qy));
+            }
+        return best;
     }
 
     /**

@@ -17,14 +17,14 @@ import org.joml.Matrix4f;
 import org.joml.Vector3f;
 
 /**
- * Гецуга Теншо из света, а не из картинки: серп собран из лент вдоль дуги. Снаружи — широкое алое
- * свечение (складывается со светом), внутри — чёрное ядро, по выпуклой кромке — раскалённая нить;
- * за серпом тянутся гаснущие отпечатки, края мерцают.
+ * Гецуга Теншо из света, а не из картинки. Серп лежит горизонтально — изогнутая вперёд стена энергии:
+ * чёрное ядро, вокруг алое свечение (складывается со светом), по верхней и нижней кромке — раскалённые
+ * нити, позади — гаснущие отпечатки, а плашмя под волной — мягкий алый серп, видный сверху.
  */
 public class GetsugaRenderer extends EntityRenderer<GetsugaEntity> {
     private static final Identifier TEXTURE = ZangetsuMod.id("textures/misc/white.png");
     private static final int SEGMENTS = 90;
-    /** Ширина чёрного ядра (доля ширины серпа). */
+    /** Высота чёрного ядра (доля высоты волны). */
     private static final float CORE_WIDTH = 0.7F;
 
     public GetsugaRenderer(EntityRendererFactory.Context context) {
@@ -43,55 +43,58 @@ public class GetsugaRenderer extends EntityRenderer<GetsugaEntity> {
         matrices.multiply(GetsugaEntity.orientation(entity.getYaw(), entity.getPitch()));
         Matrix4f m = matrices.peek().getPositionMatrix();
 
-        // Отпечатки позади: тот же серп, всё прозрачнее.
+        // Отпечатки позади: тот же серп, всё прозрачнее (кольцом — иначе засветили бы чёрное ядро).
         for (int k = 3; k >= 1; k--) {
             float trailAlpha = alpha * (0.42F - k * 0.11F);
             float trailSize = size * (1.0F - k * 0.04F);
-            float back = -k * 0.75F * size;
-            // Тоже кольцом: шлейф ближе к стрелявшему и иначе засветил бы чёрное ядро.
+            float back = -k * 0.7F * size;
             ring(consumers.getBuffer(RenderLayer.getLightning()), m, trailSize, back, CORE_WIDTH, 1.9F, 255, 20, 12, trailAlpha * 0.6F, age, true);
             ring(consumers.getBuffer(RenderLayer.getLightning()), m, trailSize, back, CORE_WIDTH, 1.05F, 255, 40, 25, trailAlpha, age, false);
         }
-        // Свечение и алая кайма — кольцом вокруг ядра: свет складывается, и там, где ядро, его быть не должно.
-        ring(consumers.getBuffer(RenderLayer.getLightning()), m, size, 0.0F, CORE_WIDTH, 2.7F, 255, 18, 10, alpha * 0.6F, age, true);
+        // Плашмя: мягкий алый серп в горизонтальной плоскости — форма удара видна сверху и сбоку.
+        flat(consumers.getBuffer(RenderLayer.getLightning()), m, size, 255, 30, 18, alpha * 0.45F);
+        // Свечение и алая кайма вокруг ядра.
+        ring(consumers.getBuffer(RenderLayer.getLightning()), m, size, 0.0F, CORE_WIDTH, 2.6F, 255, 18, 10, alpha * 0.6F, age, true);
         ring(consumers.getBuffer(RenderLayer.getLightning()), m, size, 0.0F, CORE_WIDTH, 1.3F, 255, 50, 30, alpha * 0.95F, age, false);
-        // Чёрное ядро (обычное смешивание) чуть ближе к игроку, чтобы свечение позади его не засветило.
-        core(consumers.getBuffer(RenderLayer.getEntityTranslucent(TEXTURE)), matrices.peek(), size, 0.0F, CORE_WIDTH, 0.0F, alpha * 0.97F, age);
-        // Раскалённая нить по выпуклой кромке.
-        band(consumers.getBuffer(RenderLayer.getLightning()), m, size, 0.0F, 0.13F, CORE_WIDTH + 0.14F, 255, 215, 195, alpha, age, false);
+        // Чёрное ядро — обычный полупрозрачный слой, не светится.
+        core(consumers.getBuffer(RenderLayer.getEntityTranslucent(TEXTURE)), matrices.peek(), size, CORE_WIDTH, alpha * 0.97F, age);
+        // Раскалённые нити по верхней и нижней кромке ядра.
+        band(consumers.getBuffer(RenderLayer.getLightning()), m, size, 0.12F, CORE_WIDTH + 0.13F, 255, 215, 195, alpha, age);
+        band(consumers.getBuffer(RenderLayer.getLightning()), m, size, 0.1F, -(CORE_WIDTH + 0.13F), 255, 160, 130, alpha * 0.85F, age);
         matrices.pop();
         super.render(entity, yaw, tickDelta, matrices, consumers, light);
     }
 
-    /**
-     * Лента вдоль серпа: ширина = {@code width} от ширины серпа, сдвиг поперёк — {@code shift} (−1..1),
-     * вдоль полёта — {@code forward}. {@code soft} — края ленты гаснут до нуля (мягкое свечение).
-     */
-    private static void band(VertexConsumer vertices, Matrix4f m, float size, float forward, float width, float shift,
-            int r, int g, int b, float alpha, float age, boolean soft) {
-        if (alpha <= 0.01F) {
-            return;
-        }
+    private static float t(int i) {
+        return -1.0F + 2.0F * i / SEGMENTS;
+    }
+
+    /** Мерцание высоты — плавно вдоль серпа. */
+    private static float flicker(float t, float age) {
+        return 1.0F + 0.07F * MathHelper.sin(age * 2.3F + t * 9.0F) * MathHelper.sin(age * 0.9F + t * 4.0F);
+    }
+
+    /** Точка на волне: средняя линия, сдвиг по высоте {@code up} (в долях высоты) и вдоль полёта {@code forward}. */
+    private static Vector3f point(float t, float size, float up, float forward, float age) {
+        float h = GetsugaEntity.halfWidth(t, size) * flicker(t, age);
+        return GetsugaEntity.arc(t, size).add(GetsugaEntity.across(t).mul(h * up)).add(0.0F, 0.0F, forward);
+    }
+
+    /** Ровная лента по высоте от {@code center - width} до {@code center + width} (в долях высоты волны). */
+    private static void band(VertexConsumer v, Matrix4f m, float size, float width, float center, int r, int g, int b, float alpha, float age) {
         int a = (int) (MathHelper.clamp(alpha, 0.0F, 1.0F) * 255.0F);
         for (int i = 0; i < SEGMENTS; i++) {
-            float t0 = -1.0F + 2.0F * i / SEGMENTS, t1 = -1.0F + 2.0F * (i + 1) / SEGMENTS;
-            Vector3f[] s0 = section(t0, size, forward, width, shift, age, i);
-            Vector3f[] s1 = section(t1, size, forward, width, shift, age, i + 1);
-            if (soft) {
-                // Три полосы: прозрачный край → яркая середина → прозрачный край.
-                quad(vertices, m, s0[0], s1[0], s1[1], s0[1], r, g, b, 0, 0, a, a);
-                quad(vertices, m, s0[1], s1[1], s1[2], s0[2], r, g, b, a, a, 0, 0);
-            } else {
-                quad(vertices, m, s0[0], s1[0], s1[2], s0[2], r, g, b, a, a, a, a);
-            }
+            float t0 = t(i), t1 = t(i + 1);
+            quad(v, m, point(t0, size, center - width, 0.0F, age), point(t1, size, center - width, 0.0F, age),
+                    point(t1, size, center + width, 0.0F, age), point(t0, size, center + width, 0.0F, age), r, g, b, a, a, a, a);
         }
     }
 
     /**
-     * Кольцо вокруг ядра: от края ядра ({ inner}) до { outer} с обеих сторон. { soft} — к наружному
+     * Кольцо вокруг ядра: от края ядра ({@code inner}) до {@code outer} сверху и снизу. {@code soft} — к наружному
      * краю гаснет до нуля, иначе ровная кайма.
      */
-    private static void ring(VertexConsumer vertices, Matrix4f m, float size, float forward, float inner, float outer,
+    private static void ring(VertexConsumer v, Matrix4f m, float size, float forward, float inner, float outer,
             int r, int g, int b, float alpha, float age, boolean soft) {
         if (alpha <= 0.01F) {
             return;
@@ -99,23 +102,37 @@ public class GetsugaRenderer extends EntityRenderer<GetsugaEntity> {
         int a = (int) (MathHelper.clamp(alpha, 0.0F, 1.0F) * 255.0F);
         int edge = soft ? 0 : a;
         for (int i = 0; i < SEGMENTS; i++) {
-            float t0 = -1.0F + 2.0F * i / SEGMENTS, t1 = -1.0F + 2.0F * (i + 1) / SEGMENTS;
-            Vector3f[] in0 = section(t0, size, forward, inner, 0.0F, age, i), in1 = section(t1, size, forward, inner, 0.0F, age, i + 1);
-            Vector3f[] out0 = section(t0, size, forward, outer, 0.0F, age, i), out1 = section(t1, size, forward, outer, 0.0F, age, i + 1);
-            quad(vertices, m, out0[0], out1[0], in1[0], in0[0], r, g, b, edge, edge, a, a);
-            quad(vertices, m, in0[2], in1[2], out1[2], out0[2], r, g, b, a, a, edge, edge);
+            float t0 = t(i), t1 = t(i + 1);
+            quad(v, m, point(t0, size, outer, forward, age), point(t1, size, outer, forward, age),
+                    point(t1, size, inner, forward, age), point(t0, size, inner, forward, age), r, g, b, edge, edge, a, a);
+            quad(v, m, point(t0, size, -inner, forward, age), point(t1, size, -inner, forward, age),
+                    point(t1, size, -outer, forward, age), point(t0, size, -outer, forward, age), r, g, b, a, a, edge, edge);
         }
     }
 
-    /** Чёрное ядро серпа — обычный полупрозрачный слой сущностей, не светится. */
-    private static void core(VertexConsumer v, MatrixStack.Entry entry, float size, float forward, float width, float shift, float alpha, float age) {
+    /** Мягкий серп плашмя: от вогнутой стороны к выпуклой, яркий посередине. */
+    private static void flat(VertexConsumer v, Matrix4f m, float size, int r, int g, int b, float alpha) {
+        int a = (int) (MathHelper.clamp(alpha, 0.0F, 1.0F) * 255.0F);
+        for (int i = 0; i < SEGMENTS; i++) {
+            float t0 = t(i), t1 = t(i + 1);
+            float w0 = GetsugaEntity.halfWidth(t0, size) * 1.8F, w1 = GetsugaEntity.halfWidth(t1, size) * 1.8F;
+            Vector3f c0 = GetsugaEntity.arc(t0, size), c1 = GetsugaEntity.arc(t1, size);
+            Vector3f r0 = GetsugaEntity.radial(t0), r1 = GetsugaEntity.radial(t1);
+            Vector3f in0 = new Vector3f(c0).sub(new Vector3f(r0).mul(w0)), in1 = new Vector3f(c1).sub(new Vector3f(r1).mul(w1));
+            Vector3f out0 = new Vector3f(c0).add(new Vector3f(r0).mul(w0 * 0.6F)), out1 = new Vector3f(c1).add(new Vector3f(r1).mul(w1 * 0.6F));
+            quad(v, m, in0, in1, c1, c0, r, g, b, 0, 0, a, a);
+            quad(v, m, c0, c1, out1, out0, r, g, b, a, a, 0, 0);
+        }
+    }
+
+    /** Чёрное ядро серпа. */
+    private static void core(VertexConsumer v, MatrixStack.Entry entry, float size, float width, float alpha, float age) {
         int a = (int) (MathHelper.clamp(alpha, 0.0F, 1.0F) * 255.0F);
         Matrix4f m = entry.getPositionMatrix();
         for (int i = 0; i < SEGMENTS; i++) {
-            float t0 = -1.0F + 2.0F * i / SEGMENTS, t1 = -1.0F + 2.0F * (i + 1) / SEGMENTS;
-            Vector3f[] s0 = section(t0, size, forward, width, shift, age, i);
-            Vector3f[] s1 = section(t1, size, forward, width, shift, age, i + 1);
-            Vector3f[] quad = {s0[0], s1[0], s1[2], s0[2]};
+            float t0 = t(i), t1 = t(i + 1);
+            Vector3f[] quad = {point(t0, size, -width, 0.0F, age), point(t1, size, -width, 0.0F, age),
+                    point(t1, size, width, 0.0F, age), point(t0, size, width, 0.0F, age)};
             for (int side = 0; side < 2; side++) {
                 for (int k = 0; k < 4; k++) {
                     Vector3f p = quad[side == 0 ? k : 3 - k];
@@ -124,20 +141,6 @@ public class GetsugaRenderer extends EntityRenderer<GetsugaEntity> {
                 }
             }
         }
-    }
-
-    /** Края и середина ленты в точке t (с мерцанием ширины). */
-    private static Vector3f[] section(float t, float size, float forward, float width, float shift, float age, int i) {
-        float flicker = 1.0F + 0.07F * MathHelper.sin(age * 2.3F + t * 9.0F) * MathHelper.sin(age * 0.9F + t * 4.0F);
-        float hw = GetsugaEntity.halfWidth(t, size) * width * flicker;
-        Vector3f center = GetsugaEntity.arc(t, size);
-        Vector3f across = GetsugaEntity.across(t);
-        center.add(new Vector3f(across).mul(GetsugaEntity.halfWidth(t, size) * shift)).add(0.0F, 0.0F, forward);
-        return new Vector3f[]{
-                new Vector3f(center).sub(new Vector3f(across).mul(hw)),
-                new Vector3f(center),
-                new Vector3f(center).add(new Vector3f(across).mul(hw))
-        };
     }
 
     /** Четырёхугольник с двух сторон (свечение рисуется с отсечением задних граней). */

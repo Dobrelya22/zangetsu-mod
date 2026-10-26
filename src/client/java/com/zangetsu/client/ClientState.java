@@ -3,7 +3,6 @@ package com.zangetsu.client;
 import com.zangetsu.network.PlayerStatePayload;
 import it.unimi.dsi.fastutil.ints.Int2IntOpenHashMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
-import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
 import net.minecraft.entity.Entity;
 
 /** Что клиент знает о мече: своя связь, чужие отрубленные руки, анимации и маски Пустого. */
@@ -13,8 +12,8 @@ public final class ClientState {
     public static final Int2IntOpenHashMap LIMBS = new Int2IntOpenHashMap();
     /** id игрока → анимация, которую он сейчас играет. */
     public static final Int2ObjectOpenHashMap<Animation> ANIMATIONS = new Int2ObjectOpenHashMap<>();
-    /** id игроков в форме Пустого. */
-    public static final IntOpenHashSet HOLLOW = new IntOpenHashSet();
+    /** id игроков в форме Пустого → насколько треснула их маска (0–3). */
+    public static final Int2IntOpenHashMap HOLLOW = new Int2IntOpenHashMap();
 
     /** Счётчик клиентских тиков — по нему идут вспышки на экране. */
     public static int ticks;
@@ -47,7 +46,11 @@ public final class ClientState {
     }
 
     public static boolean isHollow(Entity entity) {
-        return HOLLOW.contains(entity.getId());
+        return HOLLOW.containsKey(entity.getId());
+    }
+
+    public static int maskCrack(Entity entity) {
+        return HOLLOW.getOrDefault(entity.getId(), 0);
     }
 
     public static void flash(int type, int duration) {

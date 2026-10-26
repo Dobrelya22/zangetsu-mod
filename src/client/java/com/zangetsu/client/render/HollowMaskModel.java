@@ -11,20 +11,21 @@ import net.minecraft.client.model.TexturedModelData;
 import net.minecraft.client.render.entity.model.EntityModelLayer;
 
 /**
- * Маска Пустого: костяной шлем с алыми полосами и прорезями глаз, длинные рога вперёд,
- * рыжие волосы до пояса и дыра в груди. Раскладка текстуры — в tools/textures.cs (HollowMask).
+ * Маска Пустого: костяной шлем с алыми полосами и прорезями глаз и длинные рога вперёд.
+ * Раскладка текстуры — в tools/textures.cs (HollowMask).
  */
 public class HollowMaskModel {
     public static final EntityModelLayer LAYER = new EntityModelLayer(ZangetsuMod.id("hollow_mask"), "main");
 
-    /** Всё, что крепится к голове (шлем, рога, волосы). */
+    /** Всё, что крепится к голове (шлем и рога). */
     public final ModelPart head;
-    /** Дыра в груди — крепится к туловищу. */
-    public final ModelPart chest;
+    public final ModelPart leftHorn;
+    public final ModelPart rightHorn;
 
     public HollowMaskModel(ModelPart root) {
         this.head = root.getChild("head");
-        this.chest = root.getChild("chest");
+        this.leftHorn = this.head.getChild("left_horn");
+        this.rightHorn = this.head.getChild("right_horn");
     }
 
     public static TexturedModelData getTexturedModelData() {
@@ -35,10 +36,6 @@ public class HollowMaskModel {
                 ModelTransform.NONE);
         addHorn(head, 1.0F);
         addHorn(head, -1.0F);
-        head.addChild("hair", ModelPartBuilder.create().uv(0, 26).cuboid(-4.5F, 0.0F, 0.0F, 9, 22, 1),
-                ModelTransform.of(0.0F, -7.5F, 4.4F, 0.08F, 0.0F, 0.0F));
-        root.addChild("chest", ModelPartBuilder.create().uv(20, 26).cuboid(-2.0F, 3.0F, -2.2F, 4, 4, 0, Dilation.NONE),
-                ModelTransform.NONE);
         return TexturedModelData.of(data, 64, 64);
     }
 

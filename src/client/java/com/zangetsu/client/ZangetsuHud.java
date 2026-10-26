@@ -1,6 +1,9 @@
 package com.zangetsu.client;
 
+import com.mojang.blaze3d.systems.RenderSystem;
+import com.zangetsu.ZangetsuMod;
 import com.zangetsu.logic.Bond;
+import com.zangetsu.logic.HollowForm;
 import com.zangetsu.logic.SwordStacks;
 import com.zangetsu.network.ClientFxPayload;
 import com.zangetsu.network.PlayerStatePayload;
@@ -12,12 +15,17 @@ import net.minecraft.client.render.RenderTickCounter;
 import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.item.ItemStack;
 import net.minecraft.text.Text;
+import net.minecraft.util.Identifier;
 import net.minecraft.util.math.MathHelper;
 
 /** Надписи на экране: уровень и дружба меча, время формы Пустого, подсказка казни и вспышки сцен. */
 public final class ZangetsuHud {
     private static final String[] ROMAN = {"I", "II", "III", "IV"};
     private static final ItemStack ICON = new ItemStack(ModItems.ZANGETSU);
+    private static final Identifier MASK_FULL = ZangetsuMod.id("textures/gui/mask_full.png");
+    private static final Identifier MASK_EMPTY = ZangetsuMod.id("textures/gui/mask_empty.png");
+    private static final Identifier MASK_CRACKS = ZangetsuMod.id("textures/gui/mask_cracks.png");
+    private static final int MASK_SIZE = 30;
 
     private ZangetsuHud() {
     }
@@ -67,19 +75,7 @@ public final class ZangetsuHud {
             line += 11;
         }
         if (level >= Bond.MAX_LEVEL) {
-            String time = formatTime(state.hollowLeft());
-            if (state.hollowActive()) {
-                int pulse = (int) (180 + 75 * Math.sin((ClientState.ticks + tickDelta) * 0.3));
-                context.drawTextWithShadow(font, Text.translatable("zangetsu.hud.hollow_active", time), x, line, 0xFF000000 | (pulse << 16) | 0x2020);
-                int w = Math.round(barW * state.hollowLeft() / (float) com.zangetsu.logic.HollowForm.BUDGET);
-                context.fill(x, line + 10, x + barW, line + 12, 0xAA000000);
-                context.fill(x, line + 10, x + w, line + 12, 0xFFD01010);
-            } else if (state.hollowLeft() > 0) {
-                context.drawTextWithShadow(font, Text.translatable("zangetsu.hud.hollow_ready",
-                        KeyBindings.hollow.getBoundKeyLocalizedText(), time), x, line, 0xE04040);
-            } else {
-                context.drawTextWithShadow(font, Text.translatable("zangetsu.hud.hollow_empty"), x, line, 0x888888);
-            }
+            renderMask(context, font, state, x, line, tickDelta);
         }
 
         // Подсказка казни под прицелом.
@@ -92,6 +88,63 @@ public final class ZangetsuHud {
             context.drawCenteredTextWithShadow(font, Text.translatable("zangetsu.hud.execute", KeyBindings.execute.getBoundKeyLocalizedText()),
                     0, 0, 0xFF2020);
             context.getMatrices().pop();
+        }
+    }
+
+    /**
+     * Маска Пустого вместо таймера: светлая часть маски — оставшееся время (тает сверху вниз), под ней —
+     * тёмный силуэт. Маска трескается вместе с настоящей: на 30, 15 и 5 секундах. В форме Пустого вокруг
+     * неё пульсирует алое свечение, а когда сила на сегодня кончилась — маска разбита и темна.
+     */
+    private static void renderMask(DrawContext context, TextRenderer font, PlayerStatePayload state, int x, int y, float tickDelta) {
+        int size = MASK_SIZE;
+        float fraction = MathHelper.clamp(state.hollowLeft() / (float) HollowForm.BUDGET, 0.0F, 1.0F);
+        int crack = state.hollowLeft() <= 0 ? 3 : HollowForm.crackFor(state.hollowLeft());
+        float time = ClientState.ticks + tickDelta;
+        RenderSystem.enableBlend();
+        context.getMatrices().push();
+        context.getMatrices().translate(x, y, 0);
+        context.getMatrices().scale(size / 32.0F, size / 32.0F, 1.0F);
+        if (state.hollowActive()) {
+            // Алое свечение — та же маска, крупнее и красная, пульсирует.
+            float pulse = 0.35F + 0.25F * MathHelper.sin(time * 0.25F) + (crack == 3 ? 0.25F * Math.abs(MathHelper.sin(time * 1.3F)) : 0.0F);
+            context.setShaderColor(1.0F, 0.1F, 0.08F, pulse);
+            context.getMatrices().push();
+            context.getMatrices().translate(16.0F, 16.0F, 0.0F);
+            context.getMatrices().scale(1.22F, 1.22F, 1.0F);
+            context.getMatrices().translate(-16.0F, -16.0F, 0.0F);
+            context.drawTexture(MASK_FULL, 0, 0, 0.0F, 0.0F, 32, 32, 32, 32);
+            context.getMatrices().pop();
+            context.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
+        }
+        context.drawTexture(MASK_EMPTY, 0, 0, 0.0F, 0.0F, 32, 32, 32, 32);
+        // Светлая часть — оставшееся время: тает сверху вниз.
+        int lit = Math.round(32.0F * fraction);
+        if (lit > 0) {
+            if (!state.hollowActive()) {
+                context.setShaderColor(0.62F, 0.6F, 0.6F, 1.0F);
+            }
+            context.drawTexture(MASK_FULL, 0, 32 - lit, 32, lit, 0.0F, 32 - lit, 32, lit, 32, 32);
+            context.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
+        }
+        if (crack > 0) {
+            context.drawTexture(MASK_CRACKS, 0, 0, (crack - 1) * 32.0F, 0.0F, 32, 32, 96, 32);
+        }
+        context.getMatrices().pop();
+
+        // Рядом — коротко: сколько осталось и какой клавишей.
+        int tx = x + size + 4, ty = y + size / 2 - 8;
+        if (state.hollowActive()) {
+            int color = crack >= 2 && ((int) (time / 4) % 2 == 0) ? 0xFFFFFF : 0xFF3030;
+            context.drawTextWithShadow(font, Text.translatable("zangetsu.hud.hollow_active", formatTime(state.hollowLeft())), tx, ty, color);
+            context.drawTextWithShadow(font, Text.translatable("zangetsu.hud.hollow_off", KeyBindings.hollow.getBoundKeyLocalizedText()),
+                    tx, ty + 10, 0x998888);
+        } else if (state.hollowLeft() > 0) {
+            context.drawTextWithShadow(font, Text.translatable("zangetsu.hud.hollow_ready", KeyBindings.hollow.getBoundKeyLocalizedText()),
+                    tx, ty, 0xE04040);
+            context.drawTextWithShadow(font, Text.literal(formatTime(state.hollowLeft())), tx, ty + 10, 0x998888);
+        } else {
+            context.drawTextWithShadow(font, Text.translatable("zangetsu.hud.hollow_empty"), tx, ty + 4, 0x888888);
         }
     }
 

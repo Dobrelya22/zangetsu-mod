@@ -110,8 +110,9 @@ public final class HollowForm {
             end(player, true);
             return;
         }
-        if (left == 200) {
-            player.sendMessage(Text.translatable("zangetsu.hollow.ending").formatted(Formatting.RED), true);
+        int crack = crackFor(left);
+        if (crack != crackFor(left + 1)) {
+            onCrack(player, crack);
         }
         if (player.age % 20 == 0) {
             applyBuffs(player);
@@ -124,6 +125,32 @@ public final class HollowForm {
         if (player.age % 5 == 0) {
             Fx.particles(world, Fx.REIATSU_BLACK, player.getPos().add(0.0, 0.15, 0.0), 2, 0.4, 0.0);
         }
+    }
+
+    /** Насколько треснула маска: 0 — цела, 1 — первая трещина (30 с), 2 — скол (15 с), 3 — почти рассыпалась (5 с). */
+    public static int crackFor(int ticksLeft) {
+        if (ticksLeft <= 5 * 20) {
+            return 3;
+        }
+        if (ticksLeft <= 15 * 20) {
+            return 2;
+        }
+        return ticksLeft <= 30 * 20 ? 1 : 0;
+    }
+
+    public static int crack(ServerPlayerEntity player) {
+        return crackFor(ticksLeft(player, ModAttachments.data(player)));
+    }
+
+    /** Маска треснула сильнее: звук, осколки кости и надпись. */
+    private static void onCrack(ServerPlayerEntity player, int crack) {
+        Sync.hollow(player, true);
+        ServerWorld world = player.getServerWorld();
+        Vec3d head = player.getEyePos();
+        Fx.particles(world, new BlockStateParticleEffect(ParticleTypes.BLOCK, Blocks.BONE_BLOCK.getDefaultState()), head, 8 + crack * 10, 0.25, 0.08);
+        Fx.sound(player, SoundEvents.BLOCK_BONE_BLOCK_BREAK, 0.9F, 1.3F - crack * 0.15F);
+        Fx.sound(player, SoundEvents.BLOCK_GLASS_BREAK, 0.3F + crack * 0.2F, 1.5F - crack * 0.2F);
+        player.sendMessage(Text.translatable("zangetsu.hollow.crack." + crack).formatted(crack == 3 ? Formatting.DARK_RED : Formatting.RED), true);
     }
 
     private static void applyBuffs(ServerPlayerEntity player) {

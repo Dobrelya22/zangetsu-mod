@@ -29,7 +29,6 @@ import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 import net.fabricmc.fabric.api.client.rendering.v1.LivingEntityFeatureRendererRegistrationCallback;
 import net.minecraft.client.MinecraftClient;
 import com.zangetsu.client.render.ZangetsuItemRenderer;
-import net.fabricmc.fabric.api.client.model.loading.v1.ModelLoadingPlugin;
 import net.fabricmc.fabric.api.client.rendering.v1.BuiltinItemRendererRegistry;
 import net.minecraft.client.render.entity.PlayerEntityRenderer;
 import net.minecraft.entity.Entity;
@@ -46,8 +45,7 @@ public class ZangetsuClient implements ClientModInitializer {
         EntityRendererRegistry.register(ModEntities.ARROW_HALF, ArrowHalfRenderer::new);
         EntityRendererRegistry.register(ModEntities.GETSUGA, GetsugaRenderer::new);
 
-        // Меч — объёмная модель со своим отрисовщиком (слои клинка и живой 3D-глаз).
-        ModelLoadingPlugin.register(context -> context.addModels(ZangetsuItemRenderer.MODELS));
+        // Меч — объёмная 3D-модель со своим отрисовщиком и живым глазом.
         BuiltinItemRendererRegistry.INSTANCE.register(ModItems.ZANGETSU, new ZangetsuItemRenderer());
 
         LivingEntityFeatureRendererRegistrationCallback.EVENT.register((type, renderer, helper, context) -> {
@@ -83,7 +81,7 @@ public class ZangetsuClient implements ClientModInitializer {
         });
         ClientPlayNetworking.registerGlobalReceiver(HollowPayload.ID, (payload, context) -> {
             if (payload.active()) {
-                ClientState.HOLLOW.add(payload.entityId());
+                ClientState.HOLLOW.put(payload.entityId(), payload.crack());
             } else {
                 ClientState.HOLLOW.remove(payload.entityId());
             }

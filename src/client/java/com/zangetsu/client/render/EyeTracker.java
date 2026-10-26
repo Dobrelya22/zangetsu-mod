@@ -53,10 +53,12 @@ public final class EyeTracker {
     }
 
     /**
-     * Смещение радужки {x, y} (в пикселях модели) для глаза в точке {@code eyeLocal} модели,
-     * которая рисуется с матрицей {@code model} в режиме {@code mode}.
+     * Смещение радужки {a, b} (в пикселях модели) вдоль осей глаза {@code axisA} и {@code axisB} для глаза в точке
+     * {@code eyeLocal} модели, которая рисуется с матрицей {@code model} в режиме {@code mode}. Смещение не больше
+     * {@code maxA} и {@code maxB}.
      */
-    public static float[] gaze(ModelTransformationMode mode, Matrix4f model, Vector3f eyeLocal) {
+    public static float[] gaze(ModelTransformationMode mode, Matrix4f model, Vector3f eyeLocal, Vector3f axisA, Vector3f axisB,
+            float maxA, float maxB) {
         MinecraftClient client = MinecraftClient.getInstance();
         Camera camera = client.gameRenderer.getCamera();
         Vector3f eye = model.transformPosition(new Vector3f(eyeLocal));
@@ -84,8 +86,8 @@ public final class EyeTracker {
             direction.set(0.0F, 0.0F, 1.0F);
         }
         direction.normalize();
-        float x = MathHelper.clamp(direction.x * 1.4F, -0.85F, 0.85F);
-        float y = MathHelper.clamp(direction.y * 1.0F, -0.36F, 0.36F);
+        float x = MathHelper.clamp(direction.dot(axisA) * maxA * 1.7F, -maxA, maxA);
+        float y = MathHelper.clamp(direction.dot(axisB) * maxB * 1.7F, -maxB, maxB);
         int key = key(mode);
         long ticks = client.world != null ? client.world.getTime() : 0L;
         if (idle) {
@@ -93,8 +95,8 @@ public final class EyeTracker {
             long phase = Math.floorMod(ticks + key * 37L, 70L);
             if (phase < 16) {
                 long glance = Math.floorDiv(ticks + key * 37L, 70L);
-                x = ((glance * 7919L) % 3 - 1) * 0.75F;
-                y = ((glance * 104729L) % 3 - 1) * 0.25F;
+                x = ((glance * 7919L) % 3 - 1) * maxA * 0.85F;
+                y = ((glance * 104729L) % 3 - 1) * maxB * 0.7F;
             }
         }
         // Плавно, независимо от частоты кадров.

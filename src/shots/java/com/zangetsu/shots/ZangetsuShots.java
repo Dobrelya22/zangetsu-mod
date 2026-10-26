@@ -24,6 +24,7 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.minecraft.client.MinecraftClient;
 import com.zangetsu.client.CameraDirector;
+import com.zangetsu.client.ClientState;
 import net.minecraft.client.gui.screen.TitleScreen;
 import net.minecraft.client.gui.screen.ingame.InventoryScreen;
 import net.minecraft.client.option.Perspective;
@@ -400,10 +401,38 @@ public class ZangetsuShots implements ClientModInitializer {
         shot("getsuga_1");
         pause(4);
         shot("getsuga_2");
-        onServer(s -> HollowForm.end(player(s), false));
+        pause(30);
+        // Гецуга сбоку и сверху — видно, что серп лежит горизонтально.
+        act(c -> CameraDirector.begin(60, new CameraDirector.Shot(95.0F, 95.0F, 32.0F, 7.0F, 3.0F)));
+        pause(2);
+        onServer(s -> HollowForm.tryGetsuga(player(s)));
+        pause(5);
+        shot("getsuga_side");
+        pause(30);
+
+        // Маска трескается: 30 с — трещина, 15 с — скол, 5 с — почти рассыпалась, потом ломается.
+        view(Perspective.THIRD_PERSON_FRONT);
+        onServer(s -> ModAttachments.data(player(s)).hollowUsed = HollowForm.BUDGET - 31 * 20);
+        pause(30);
+        shot("mask_crack1");
+        onServer(s -> {
+            check("на 30 секундах маска треснула", HollowForm.crack(player(s)) == 1);
+            ModAttachments.data(player(s)).hollowUsed = HollowForm.BUDGET - 16 * 20;
+        });
+        pause(30);
+        shot("mask_crack2");
+        onServer(s -> ModAttachments.data(player(s)).hollowUsed = HollowForm.BUDGET - 6 * 20);
+        pause(30);
+        shot("mask_crack3");
+        view(Perspective.FIRST_PERSON);
         pause(4);
+        shot("mask_crack3_hud");
+        waitFor("маска сломалась", c -> !ClientState.isHollow(c.player));
+        pause(6);
         shot("mask_shatter");
+        onServer(s -> check("через 2 минуты маска ломается сама", !ModAttachments.data(player(s)).hollowActive));
         pause(20);
+        shot("mask_hud_tomorrow");
 
         // ---- Сон с мечами.
         onServer(s -> Dream.forceBegin(player(s)));

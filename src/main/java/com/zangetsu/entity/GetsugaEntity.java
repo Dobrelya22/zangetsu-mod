@@ -28,14 +28,13 @@ import org.joml.Vector3f;
 
 /**
  * Гецуга Теншо — огромный серп энергии: чёрное ядро, алое свечение и раскалённая кромка. Срывается
- * с клинка в форме Пустого, растёт, летит прямо, проходит сквозь злых мобов и рубит каждого один раз.
+ * с клинка горизонтальным ударом: серп лежит плашмя, дугой вперёд, как волна от взмаха. Растёт, летит
+ * прямо, проходит сквозь злых мобов и рубит каждого один раз.
  * Форма серпа задана здесь ({@link #arc}), чтобы отрисовка и частицы совпадали.
  */
 public class GetsugaEntity extends Entity {
     public static final int LIFETIME = 26;
     public static final float DAMAGE = 18.0F;
-    /** Наклон серпа — как у косого удара клинком. */
-    public static final float ROLL = -28.0F;
     private static final double SPEED = 1.35;
     private static final double SPAN = Math.toRadians(74.0);
 
@@ -76,32 +75,36 @@ public class GetsugaEntity extends Entity {
     }
 
     /**
-     * Точка середины серпа в его собственных координатах (x — вбок, y — вверх, z — вперёд по полёту);
-     * t от −1 до 1 — от кончика до кончика. Серп выгнут дугой и середина его чуть впереди кончиков.
+     * Точка средней линии серпа в его собственных координатах (x — вбок, y — вверх, z — вперёд по полёту);
+     * t от −1 до 1 — от кончика до кончика. Серп лежит горизонтально: дуга выгнута вперёд, кончики
+     * отстают, как у волны от горизонтального взмаха.
      */
     public static Vector3f arc(float t, float size) {
         double phi = t * SPAN;
-        double r = 2.9 * size;
-        return new Vector3f((float) (r * Math.sin(phi)), (float) (r * (Math.cos(phi) - 0.6)),
-                (float) (0.9 * size * (Math.cos(phi) - Math.cos(SPAN))));
+        double r = 3.0 * size;
+        return new Vector3f((float) (r * Math.sin(phi)), 0.0F, (float) (0.55 * r * (Math.cos(phi) - Math.cos(SPAN))));
     }
 
-    /** Направление поперёк серпа (от вогнутой стороны к выпуклой) в той же точке. */
+    /** Направление «толщины» серпа — вертикаль: волна — изогнутая стена энергии, видная и со спины. */
     public static Vector3f across(float t) {
+        return new Vector3f(0.0F, 1.0F, 0.0F);
+    }
+
+    /** Направление от вогнутой стороны дуги к выпуклой (в горизонтальной плоскости). */
+    public static Vector3f radial(float t) {
         double phi = t * SPAN;
-        return new Vector3f((float) Math.sin(phi), (float) Math.cos(phi), 0.0F);
+        return new Vector3f((float) Math.sin(phi), 0.0F, (float) (Math.cos(phi) * 0.55)).normalize();
     }
 
-    /** Половина ширины серпа: толще в середине, острые кончики. */
+    /** Половина высоты волны: выше в середине, острые кончики. */
     public static float halfWidth(float t, float size) {
-        return (float) (0.55 * size * Math.pow(1.0 - Math.abs(t), 0.7));
+        return (float) (0.45 * size * Math.pow(1.0 - Math.abs(t), 0.6));
     }
 
-    /** Поворот из координат серпа в мировые — тот же, что у отрисовщика. */
+    /** Поворот из координат серпа в мировые — тот же, что у отрисовщика (по взгляду игрока, без крена). */
     public static Quaternionf orientation(float yaw, float pitch) {
         return new Quaternionf(RotationAxis.POSITIVE_Y.rotationDegrees(-yaw))
-                .mul(RotationAxis.POSITIVE_X.rotationDegrees(pitch))
-                .mul(RotationAxis.POSITIVE_Z.rotationDegrees(ROLL));
+                .mul(RotationAxis.POSITIVE_X.rotationDegrees(pitch));
     }
 
     @Override
@@ -139,7 +142,7 @@ public class GetsugaEntity extends Entity {
             this.discard();
             return;
         }
-        Box area = this.getBoundingBox().expand(3.0 * size, 1.6 * size, 3.0 * size);
+        Box area = this.getBoundingBox().expand(3.2 * size, 1.2 * size, 3.2 * size);
         for (MobEntity mob : world.getEntitiesByClass(MobEntity.class, area,
                 m -> m.isAlive() && !this.hit.contains(m.getUuid()) && Abilities.isFoe(m, player))) {
             this.hit.add(mob.getUuid());

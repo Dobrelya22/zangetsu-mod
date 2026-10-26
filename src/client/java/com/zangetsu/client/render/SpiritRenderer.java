@@ -62,7 +62,7 @@ public class SpiritRenderer extends EntityRenderer<ZangetsuSpiritEntity> {
                 ColorHelper.Argb.getArgb(255, alpha, alpha, alpha));
 
         if (time < ZangetsuSpiritEntity.RELEASE_TICK) {
-            // Меч в правой руке продолжает руку: рукоять в кулаке, клинок дальше по руке (над головой при замахе).
+            // Меч в правой руке продолжает руку: середина рукояти (центр модели) — в кулаке, клинок дальше по руке.
             matrices.push();
             this.model.body.rotate(matrices);
             this.model.rightArm.rotate(matrices);
@@ -70,8 +70,6 @@ public class SpiritRenderer extends EntityRenderer<ZangetsuSpiritEntity> {
             // Диагональ картинки (остриё вверху справа) поворачиваем вдоль руки.
             matrices.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(45.0F));
             matrices.scale(HELD_SWORD_SCALE, HELD_SWORD_SCALE, HELD_SWORD_SCALE);
-            // Рукоять (примерно 0,42 от центра картинки по диагонали) — в кулак.
-            matrices.translate(0.42F * 0.7071F, 0.42F * 0.7071F, 0.0F);
             net.minecraft.entity.Entity previous = EyeTracker.push(entity);
             this.itemRenderer.renderItem(this.sword, ModelTransformationMode.NONE, fullBright, OverlayTexture.DEFAULT_UV,
                     matrices, consumers, entity.getWorld(), entity.getId());

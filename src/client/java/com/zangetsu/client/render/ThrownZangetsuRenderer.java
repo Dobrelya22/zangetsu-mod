@@ -25,9 +25,9 @@ import net.minecraft.util.math.Vec3d;
  */
 public class ThrownZangetsuRenderer extends EntityRenderer<ThrownZangetsuEntity> {
     /** Во сколько раз меч больше обычного предмета. */
-    private static final float SCALE = 1.6F;
-    /** Расстояние от центра картинки до острия (в долях предмета, вдоль диагонали). */
-    private static final float TIP = 0.684F;
+    private static final float SCALE = 1.5F;
+    /** Расстояние от середины рукояти (центра модели) до острия, в блоках при масштабе 1. */
+    private static final float TIP = 1.181F;
     /** На сколько блоков остриё уходит в землю. */
     private static final float SINK = 0.45F;
     private static final int SPINS = 3;

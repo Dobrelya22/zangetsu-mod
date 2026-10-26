@@ -54,7 +54,7 @@ public final class ServerEvents {
                 ServerPlayNetworking.send(viewer, new LimbPayload(living.getId(), ModAttachments.limbs(living)));
             }
             if (entity instanceof ServerPlayerEntity other && ModAttachments.data(other).hollowActive) {
-                ServerPlayNetworking.send(viewer, new HollowPayload(other.getId(), true));
+                ServerPlayNetworking.send(viewer, new HollowPayload(other.getId(), true, HollowForm.crack(other)));
             }
         });
 

@@ -15,10 +15,19 @@ import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.MathHelper;
 
-/** Рисует маску Пустого на игроке, который принял эту форму. Во время превращения маска нарастает. */
+/**
+ * Рисует маску Пустого на игроке, который принял эту форму. Во время превращения маска нарастает,
+ * к концу трескается: трещина, скол (обломан кончик рога), почти рассыпалась (рога сломаны).
+ */
 public class HollowFeatureRenderer extends FeatureRenderer<AbstractClientPlayerEntity, PlayerEntityModel<AbstractClientPlayerEntity>> {
-    private static final Identifier TEXTURE = ZangetsuMod.id("textures/entity/hollow_mask.png");
+    private static final Identifier[] TEXTURES = new Identifier[4];
     private static final Identifier EYES = ZangetsuMod.id("textures/entity/hollow_mask_eyes.png");
+
+    static {
+        for (int i = 0; i < TEXTURES.length; i++) {
+            TEXTURES[i] = ZangetsuMod.id("textures/entity/hollow_mask_" + i + ".png");
+        }
+    }
 
     private final HollowMaskModel mask;
 
@@ -42,20 +51,22 @@ public class HollowFeatureRenderer extends FeatureRenderer<AbstractClientPlayerE
         if (grow <= 0.0F) {
             return;
         }
+        int crack = MathHelper.clamp(ClientState.maskCrack(player), 0, 3);
+        // Обломки рогов: скол — кончик левого, почти рассыпалась — левый до основания и кончик правого.
+        this.mask.leftHorn.getChild("mid").getChild("tip").visible = crack < 2;
+        this.mask.leftHorn.getChild("mid").visible = crack < 3;
+        this.mask.rightHorn.getChild("mid").getChild("tip").visible = crack < 3;
+
         PlayerEntityModel<AbstractClientPlayerEntity> model = this.getContextModel();
         int alpha = (int) (grow * 255.0F);
-        int color = (alpha << 24) | 0xFFFFFF;
-
+        // У почти рассыпавшейся маски свечение глаз дрожит.
+        int glow = crack == 3 ? (int) (alpha * (0.55F + 0.45F * Math.abs(MathHelper.sin(animationProgress * 0.9F)))) : alpha;
         matrices.push();
         model.head.rotate(matrices);
-        this.mask.head.render(matrices, consumers.getBuffer(RenderLayer.getEntityTranslucent(TEXTURE)), light, OverlayTexture.DEFAULT_UV, color);
+        this.mask.head.render(matrices, consumers.getBuffer(RenderLayer.getEntityTranslucent(TEXTURES[crack])), light, OverlayTexture.DEFAULT_UV,
+                (alpha << 24) | 0xFFFFFF);
         this.mask.head.render(matrices, consumers.getBuffer(RenderLayer.getEyes(EYES)), 0xF000F0, OverlayTexture.DEFAULT_UV,
-                (255 << 24) | (alpha << 16) | (alpha << 8) | alpha);
-        matrices.pop();
-
-        matrices.push();
-        model.body.rotate(matrices);
-        this.mask.chest.render(matrices, consumers.getBuffer(RenderLayer.getEntityTranslucent(TEXTURE)), light, OverlayTexture.DEFAULT_UV, color);
+                (255 << 24) | (glow << 16) | (glow << 8) | glow);
         matrices.pop();
     }
 }
