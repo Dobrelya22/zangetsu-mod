@@ -61,7 +61,7 @@ public final class Execution {
 
         Fx.sound(player, SoundEvents.BLOCK_BEACON_POWER_SELECT, 0.8F, 0.5F);
         Fx.sound(player, SoundEvents.ENTITY_EVOKER_PREPARE_ATTACK, 0.6F, 0.6F);
-        Fx.particles(world, Fx.REIATSU_BLACK, player.getPos().add(0, 1, 0), 30, 0.4, 0.02);
+        Fx.particles(world, Fx.REIATSU_BLACK, target.getPos().add(0, 0.1, 0), 12, 0.5, 0.02);
 
         Scheduler.later(HIT_TICK, () -> {
             if (!player.isAlive() || !target.isAlive() || target.getWorld() != player.getWorld()) {
@@ -117,7 +117,7 @@ public final class Execution {
             mob.setAiDisabled(false);
         }
         target.timeUntilRegen = 0;
-        target.damage(world.getDamageSources().playerAttack(player), Float.MAX_VALUE);
+        target.damage(world.getDamageSources().playerAttack(player), 100000.0F);
     }
 
     private static void finish(ServerPlayerEntity player, LivingEntity target) {

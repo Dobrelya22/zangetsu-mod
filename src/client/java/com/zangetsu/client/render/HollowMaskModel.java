@@ -50,10 +50,10 @@ public class HollowMaskModel {
             base.mirrored();
         }
         ModelPartData h1 = head.addChild(name, base.cuboid(-1.0F, -1.0F, -6.0F, 2, 2, 6),
-                ModelTransform.of(3.4F * side, -7.0F, -2.5F, -0.45F, -0.25F * side, 0.0F));
+                ModelTransform.of(3.4F * side, -7.0F, -2.5F, -0.2F, -0.25F * side, 0.0F));
         ModelPartData h2 = h1.addChild("mid", ModelPartBuilder.create().uv(32, 18).cuboid(-0.75F, -0.75F, -6.0F, 1.5F, 1.5F, 6.0F),
-                ModelTransform.of(0.0F, 0.0F, -5.6F, 0.2F, 0.15F * side, 0.0F));
+                ModelTransform.of(0.0F, 0.0F, -5.6F, 0.05F, 0.15F * side, 0.0F));
         h2.addChild("tip", ModelPartBuilder.create().uv(48, 10).cuboid(-0.5F, -0.5F, -4.0F, 1, 1, 4),
-                ModelTransform.of(0.0F, 0.0F, -5.6F, 0.3F, 0.1F * side, 0.0F));
+                ModelTransform.of(0.0F, 0.0F, -5.6F, 0.15F, 0.1F * side, 0.0F));
     }
 }

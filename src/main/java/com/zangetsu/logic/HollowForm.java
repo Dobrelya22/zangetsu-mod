@@ -89,8 +89,8 @@ public final class HollowForm {
         Vec3d chest = player.getPos().add(0.0, 1.2, 0.0);
         Fx.sound(player, SoundEvents.ENTITY_WARDEN_ROAR, 1.0F, 0.9F);
         Fx.sound(player, SoundEvents.ENTITY_WITHER_SPAWN, 0.5F, 1.4F);
-        Fx.particles(world, Fx.REIATSU_BLACK, chest, 80, 0.6, 0.05);
-        Fx.particles(world, Fx.REIATSU_RED, chest, 60, 0.8, 0.05);
+        Fx.particles(world, Fx.REIATSU_BLACK, chest, 30, 0.7, 0.05);
+        Fx.particles(world, Fx.REIATSU_RED, chest, 30, 0.9, 0.05);
         Fx.particles(world, ParticleTypes.SONIC_BOOM, chest, 1, 0.0, 0.0);
         Fx.ring(world, ParticleTypes.LARGE_SMOKE, player.getPos().add(0, 0.2, 0), 2.5, 30);
         player.sendMessage(Text.translatable("zangetsu.hollow.on").formatted(Formatting.DARK_RED, Formatting.BOLD), true);
@@ -117,11 +117,12 @@ public final class HollowForm {
             applyBuffs(player);
         }
         ServerWorld world = player.getServerWorld();
-        if (player.age % 2 == 0) {
-            Fx.particles(world, Fx.REIATSU_RED, player.getPos().add(0.0, 1.0, 0.0), 3, 0.4, 0.0);
+        // Алая и чёрная аура — у пояса и ног, чтобы не застилать вид от первого лица.
+        if (player.age % 3 == 0) {
+            Fx.particles(world, Fx.REIATSU_RED, player.getPos().add(0.0, 0.6, 0.0), 2, 0.45, 0.0);
         }
         if (player.age % 5 == 0) {
-            Fx.particles(world, Fx.REIATSU_BLACK, player.getPos().add(0.0, 0.3, 0.0), 2, 0.35, 0.0);
+            Fx.particles(world, Fx.REIATSU_BLACK, player.getPos().add(0.0, 0.15, 0.0), 2, 0.4, 0.0);
         }
     }
 

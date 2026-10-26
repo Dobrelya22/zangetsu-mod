@@ -310,9 +310,12 @@ public static class ZangetsuTextures
                 }
                 else
                 {
+                    // Ореол гаснет к краям картинки, чтобы не было видно квадрата.
+                    double r = Math.Sqrt((px - 32) * (px - 32) + (py - 32) * (py - 32));
+                    double edge = Sat((31.0 - r) / 6.0);
                     double glow = Math.Exp(band / 3.2);
                     col = C(255, 70, 50);
-                    a = glow * 0.75;
+                    a = glow * 0.75 * edge;
                 }
                 c.Set(x, y, Color.FromArgb(Cl(a * 255), col.R, col.G, col.B));
             }

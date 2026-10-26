@@ -59,7 +59,7 @@ public class GetsugaEntity extends Entity {
         super.tick();
         this.setPosition(this.getPos().add(this.getVelocity()));
         if (this.getWorld().isClient) {
-            for (int i = 0; i < 3; i++) {
+            for (int i = 0; i < 3 && this.age > 2; i++) {
                 double side = (this.random.nextDouble() - 0.5) * 3.0;
                 Vec3d v = this.getVelocity();
                 Vec3d across = new Vec3d(-v.z, 0, v.x).normalize().multiply(side);

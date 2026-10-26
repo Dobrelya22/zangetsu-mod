@@ -14,8 +14,8 @@ import org.joml.Vector3f;
 public final class Fx {
     public static final DustParticleEffect BLOOD = new DustParticleEffect(new Vector3f(0.62F, 0.02F, 0.04F), 1.3F);
     public static final DustParticleEffect ENDER_BLOOD = new DustParticleEffect(new Vector3f(0.55F, 0.1F, 0.75F), 1.3F);
-    public static final DustParticleEffect REIATSU_RED = new DustParticleEffect(new Vector3f(0.85F, 0.05F, 0.05F), 1.6F);
-    public static final DustParticleEffect REIATSU_BLACK = new DustParticleEffect(new Vector3f(0.05F, 0.02F, 0.04F), 2.0F);
+    public static final DustParticleEffect REIATSU_RED = new DustParticleEffect(new Vector3f(0.85F, 0.05F, 0.05F), 0.9F);
+    public static final DustParticleEffect REIATSU_BLACK = new DustParticleEffect(new Vector3f(0.05F, 0.02F, 0.04F), 1.0F);
     public static final DustParticleEffect EYE_GOLD = new DustParticleEffect(new Vector3f(1.0F, 0.8F, 0.15F), 0.9F);
 
     private Fx() {

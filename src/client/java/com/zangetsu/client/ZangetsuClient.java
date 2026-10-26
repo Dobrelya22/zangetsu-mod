@@ -29,7 +29,6 @@ import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 import net.fabricmc.fabric.api.client.rendering.v1.LivingEntityFeatureRendererRegistrationCallback;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.item.ModelPredicateProviderRegistry;
-import net.minecraft.client.option.Perspective;
 import net.minecraft.client.render.entity.PlayerEntityRenderer;
 import net.minecraft.entity.Entity;
 import net.minecraft.item.ItemStack;
@@ -97,9 +96,15 @@ public class ZangetsuClient implements ClientModInitializer {
             }
             ClientState.ANIMATIONS.put(payload.entityId(), new ClientState.Animation(payload.animation(), entity.age, payload.duration()));
             if (entity == client.player) {
-                // У себя — камера со стороны: превращение видно спереди, остальное из-за спины.
-                Perspective view = payload.animation() == AnimationPayload.HOLLOW ? Perspective.THIRD_PERSON_FRONT : Perspective.THIRD_PERSON_BACK;
-                CameraDirector.begin(payload.duration() + 8, view);
+                // У себя — камера облетает сбоку; превращение — спереди, чтобы видеть маску.
+                CameraDirector.begin(payload.duration() + 8, switch (payload.animation()) {
+                    case AnimationPayload.TOUCH_HANDLE -> new CameraDirector.Shot(65.0F, 100.0F, 12.0F, 3.4F);
+                    case AnimationPayload.EXECUTE -> new CameraDirector.Shot(70.0F, 105.0F, 10.0F, 4.2F);
+                    case AnimationPayload.SLASH -> new CameraDirector.Shot(-70.0F, -110.0F, 8.0F, 4.8F);
+                    case AnimationPayload.DREAM_PULL -> new CameraDirector.Shot(55.0F, 115.0F, 14.0F, 4.0F);
+                    case AnimationPayload.HOLLOW -> new CameraDirector.Shot(150.0F, 205.0F, 4.0F, 3.4F);
+                    default -> new CameraDirector.Shot(90.0F, 90.0F, 10.0F, 4.0F);
+                });
             }
         });
         ClientPlayNetworking.registerGlobalReceiver(ClientFxPayload.ID, (payload, context) -> {

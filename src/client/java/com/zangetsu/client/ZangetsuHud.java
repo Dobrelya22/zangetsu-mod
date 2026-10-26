@@ -61,7 +61,8 @@ public final class ZangetsuHud {
         context.drawTextWithShadow(font, bondText, barX, barY + 5, 0xBBBBBB);
 
         int line = barY + 16;
-        if (state.lost()) {
+        boolean dreaming = client.world != null && client.world.getRegistryKey() == com.zangetsu.logic.Dream.WORLD;
+        if (state.lost() && !dreaming) {
             context.drawTextWithShadow(font, Text.translatable("zangetsu.hud.lost"), x, line, 0xAAAAAA);
             line += 11;
         }
@@ -82,7 +83,7 @@ public final class ZangetsuHud {
         }
 
         // Подсказка казни под прицелом.
-        if (KeyBindings.executionTarget(client) != null) {
+        if (ClientState.animation(client.player) == null && KeyBindings.executionTarget(client) != null) {
             int cx = context.getScaledWindowWidth() / 2, cy = context.getScaledWindowHeight() / 2;
             float pulse = 0.75F + 0.25F * (float) Math.sin((ClientState.ticks + tickDelta) * 0.4);
             context.getMatrices().push();
