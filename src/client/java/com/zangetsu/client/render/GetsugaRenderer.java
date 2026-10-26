@@ -50,8 +50,8 @@ public class GetsugaRenderer extends EntityRenderer<GetsugaEntity> {
         // Свечение и алая лента.
         band(consumers.getBuffer(RenderLayer.getLightning()), m, size, 0.0F, 2.6F, 0.0F, 255, 18, 10, alpha * 0.55F, age, true);
         band(consumers.getBuffer(RenderLayer.getLightning()), m, size, 0.0F, 1.35F, 0.0F, 255, 45, 28, alpha * 0.95F, age, false);
-        // Чёрное ядро (обычное смешивание, поверх свечения).
-        band(consumers.getBuffer(RenderLayer.getDebugQuads()), m, size, 0.02F, 0.72F, -0.05F, 10, 0, 3, alpha * 0.93F, age, false);
+        // Чёрное ядро (обычное смешивание) чуть ближе к игроку, чтобы свечение позади его не засветило.
+        band(consumers.getBuffer(RenderLayer.getDebugQuads()), m, size, -0.12F, 0.72F, -0.05F, 10, 0, 3, alpha * 0.95F, age, false);
         // Раскалённая нить по выпуклой кромке.
         band(consumers.getBuffer(RenderLayer.getLightning()), m, size, 0.04F, 0.16F, 0.9F, 255, 210, 190, alpha, age, false);
         matrices.pop();

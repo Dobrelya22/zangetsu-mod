@@ -59,7 +59,6 @@ public class GetsugaEntity extends Entity {
         Fx.sound(player, SoundEvents.ENTITY_WITHER_SHOOT, 0.9F, 0.55F);
         Fx.sound(player, SoundEvents.ENTITY_PLAYER_ATTACK_SWEEP, 1.2F, 0.45F);
         Fx.sound(player, SoundEvents.ENTITY_WARDEN_SONIC_BOOM, 0.5F, 1.6F);
-        Fx.particles(world, ParticleTypes.SWEEP_ATTACK, start, 3, 0.6, 0.0);
         com.zangetsu.logic.Sync.fx(player, ClientFxPayload.SHAKE, 6);
     }
 
@@ -82,7 +81,7 @@ public class GetsugaEntity extends Entity {
      */
     public static Vector3f arc(float t, float size) {
         double phi = t * SPAN;
-        double r = 2.3 * size;
+        double r = 2.9 * size;
         return new Vector3f((float) (r * Math.sin(phi)), (float) (r * (Math.cos(phi) - 0.6)),
                 (float) (0.9 * size * (Math.cos(phi) - Math.cos(SPAN))));
     }
@@ -95,7 +94,7 @@ public class GetsugaEntity extends Entity {
 
     /** Половина ширины серпа: толще в середине, острые кончики. */
     public static float halfWidth(float t, float size) {
-        return (float) (0.42 * size * Math.pow(1.0 - Math.abs(t), 0.7));
+        return (float) (0.55 * size * Math.pow(1.0 - Math.abs(t), 0.7));
     }
 
     /** Поворот из координат серпа в мировые — тот же, что у отрисовщика. */
@@ -140,7 +139,7 @@ public class GetsugaEntity extends Entity {
             this.discard();
             return;
         }
-        Box area = this.getBoundingBox().expand(2.4 * size, 1.4 * size, 2.4 * size);
+        Box area = this.getBoundingBox().expand(3.0 * size, 1.6 * size, 3.0 * size);
         for (MobEntity mob : world.getEntitiesByClass(MobEntity.class, area,
                 m -> m.isAlive() && !this.hit.contains(m.getUuid()) && Abilities.isFoe(m, player))) {
             this.hit.add(mob.getUuid());

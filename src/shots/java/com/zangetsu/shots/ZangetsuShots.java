@@ -426,6 +426,13 @@ public class ZangetsuShots implements ClientModInitializer {
         look(-90.0F, 8.0F);
         pause(3);
         shot("dream_far");
+        onServer(s -> {
+            ServerPlayerEntity player = player(s);
+            long swords = player.getServerWorld().getEntitiesByClass(ThrownZangetsuEntity.class, player.getBoundingBox().expand(40.0, 30.0, 40.0),
+                    e -> e.isDream()).size();
+            ZangetsuMod.LOGGER.info("Съёмка: мечей вокруг во сне после пробежки: {}", swords);
+            check("во сне вокруг много мечей и после пробежки", swords >= 60);
+        });
         look(90.0F, 8.0F);
         pause(3);
         shot("dream_far_back");

@@ -87,8 +87,13 @@ public final class Dream {
             player.changeGameMode(GameMode.ADVENTURE);
         }
         LAST_POS.put(player.getUuid(), new Vec3d(c.x, y, c.z));
-        spawnFirst(dream, player.getUuid(), c);
-        maintain(player, dream, true);
+        // Мечи — когда мир вокруг игрока прогрузится (через полсекунды).
+        Scheduler.later(10, () -> {
+            if (inDream(player)) {
+                spawnFirst(dream, player.getUuid(), player.getPos());
+                maintain(player, dream, true);
+            }
+        });
 
         player.networkHandler.sendPacket(new TitleFadeS2CPacket(30, 80, 30));
         player.networkHandler.sendPacket(new SubtitleS2CPacket(Text.translatable("zangetsu.dream.subtitle").formatted(Formatting.GRAY)));
@@ -116,14 +121,16 @@ public final class Dream {
         }
     }
 
-    private static void plant(ServerWorld dream, UUID owner, double x, double z) {
-        if (!dream.isChunkLoaded(MathHelper.floor(x) >> 4, MathHelper.floor(z) >> 4)) {
-            return;
+    private static boolean plant(ServerWorld dream, UUID owner, double x, double z) {
+        // Только там, где мир вокруг игрока уже живёт: иначе меч пропадёт вместе с выгруженным куском.
+        if (!dream.shouldTickEntity(BlockPos.ofFloored(x, 64, z))) {
+            return false;
         }
         Random random = dream.getRandom();
         double y = groundY(dream, x, z);
         ThrownZangetsuEntity.plant(dream, new Vec3d(x, y, z), owner, random.nextFloat() * 360.0F,
                 (random.nextFloat() - 0.5F) * 24.0F, (random.nextFloat() - 0.5F) * 24.0F);
+        return true;
     }
 
     /**
@@ -151,14 +158,15 @@ public final class Dream {
         boolean moving = moved.horizontalLengthSquared() > 0.01;
         double heading = Math.atan2(moved.z, moved.x);
         Random random = dream.getRandom();
-        int budget = fill ? SWORDS_NEAR : 12;
+        int budget = fill ? SWORDS_NEAR * 2 : 24;
         for (int i = 0; i < budget && near < SWORDS_NEAR; i++) {
             double angle = moving && random.nextFloat() < 0.75F
                     ? heading + random.nextGaussian() * 0.9
                     : random.nextDouble() * Math.PI * 2.0;
             double distance = fill ? 4.0 + Math.sqrt(random.nextDouble()) * (NEAR - 4.0) : 18.0 + random.nextDouble() * (NEAR - 18.0);
-            plant(dream, owner, here.x + Math.cos(angle) * distance, here.z + Math.sin(angle) * distance);
-            near++;
+            if (plant(dream, owner, here.x + Math.cos(angle) * distance, here.z + Math.sin(angle) * distance)) {
+                near++;
+            }
         }
     }
 

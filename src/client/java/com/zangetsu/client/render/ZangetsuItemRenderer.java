@@ -49,7 +49,7 @@ public class ZangetsuItemRenderer implements BuiltinItemRendererRegistry.Dynamic
     private static final float EYE_W = 1.85F;
     private static final float EYE_H = 1.1F;
     private static final int ROWS = 9;
-    private static final float RIM = 0.45F;
+    private static final float RIM = 0.38F;
     private static final float RIM_HEIGHT = 0.3F;
     private static final Direction[] FACES = {null, Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST, Direction.UP, Direction.DOWN};
 
@@ -170,9 +170,10 @@ public class ZangetsuItemRenderer implements BuiltinItemRendererRegistry.Dynamic
                 lid(f, EYE_X - hw, EYE_Y + y0, EYE_X + visibleFrom, EYE_Y + y1, true);
             }
         }
-        // Верх и низ обода — сплошные полосы.
-        f.box(EYE_X - EYE_W - RIM, EYE_Y + EYE_H, EYE_X + EYE_W + RIM, EYE_Y + EYE_H + RIM * 0.8F, RIM_HEIGHT, 16.0F, 16.0F, 24.0F, 20.0F);
-        f.box(EYE_X - EYE_W - RIM, EYE_Y - EYE_H - RIM * 0.8F, EYE_X + EYE_W + RIM, EYE_Y - EYE_H, RIM_HEIGHT, 16.0F, 16.0F, 24.0F, 20.0F);
+        // Верх и низ обода — короткие перемычки у острых уголков миндалины (не шире самого глаза).
+        float tip = halfWidth(EYE_H - rowH / 2.0F) + RIM;
+        f.box(EYE_X - tip, EYE_Y + EYE_H, EYE_X + tip, EYE_Y + EYE_H + RIM * 0.7F, RIM_HEIGHT, 16.0F, 16.0F, 24.0F, 20.0F);
+        f.box(EYE_X - tip, EYE_Y - EYE_H - RIM * 0.7F, EYE_X + tip, EYE_Y - EYE_H, RIM_HEIGHT, 16.0F, 16.0F, 24.0F, 20.0F);
     }
 
     private static void lid(Face f, float x0, float y0, float x1, float y1, boolean lashes) {

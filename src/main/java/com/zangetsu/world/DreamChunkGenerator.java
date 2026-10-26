@@ -68,9 +68,9 @@ public class DreamChunkGenerator extends ChunkGenerator {
     /** Высота поверхности (верхний сплошной блок) в точке. */
     public int surfaceY(int x, int z) {
         double h = BASE
-                + 7.0 * this.hills.sample(x / 96.0, z / 96.0)
-                + 3.2 * this.hills.sample(x / 37.0 + 100.0, z / 37.0 - 50.0)
-                + 1.1 * this.detail.sample(x / 11.0, z / 11.0);
+                + 6.5 * this.hills.sample(x / 110.0, z / 110.0)
+                + 2.6 * this.hills.sample(x / 42.0 + 100.0, z / 42.0 - 50.0)
+                + 0.55 * this.detail.sample(x / 13.0, z / 13.0);
         // Редкие крутые бугры.
         double bump = this.detail.sample(x / 23.0 + 300.0, z / 23.0 + 300.0);
         if (bump > 0.55) {
