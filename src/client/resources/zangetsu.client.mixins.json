@@ -1,0 +1,16 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "com.zangetsu.client.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "BipedEntityModelMixin",
+    "ClientPlayerEntityMixin",
+    "EndermanEntityModelMixin",
+    "LivingEntityRendererMixin",
+    "WorldRendererMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

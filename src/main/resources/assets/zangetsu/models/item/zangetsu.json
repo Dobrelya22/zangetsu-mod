@@ -1,0 +1,9 @@
+{
+  "parent": "zangetsu:item/zangetsu_base",
+  "textures": {"layer0": "zangetsu:item/zangetsu_closed"},
+  "overrides": [
+    {"predicate": {"zangetsu:eye": 0.25}, "model": "zangetsu:item/zangetsu_open"},
+    {"predicate": {"zangetsu:eye": 0.5}, "model": "zangetsu:item/zangetsu_burning"},
+    {"predicate": {"zangetsu:eye": 0.9}, "model": "zangetsu:item/zangetsu_angry"}
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "id": "zangetsu",
+  "version": "${version}",
+  "name": "Зангецу",
+  "description": "Меч Зангецу из «Блича» с живым глазом: появляется, когда у тебя остаётся одно сердце, растёт вместе с тобой, рубит стрелы и конечности, а на последнем уровне превращает тебя в Пустого.",
+  "authors": ["Dobrelya22"],
+  "contact": {
+    "sources": "https://github.com/Dobrelya22/zangetsu-mod"
+  },
+  "license": "MIT",
+  "icon": "assets/zangetsu/icon.png",
+  "environment": "*",
+  "entrypoints": {
+    "main": ["com.zangetsu.ZangetsuMod"],
+    "client": ["com.zangetsu.client.ZangetsuClient"]
+  },
+  "mixins": [
+    "zangetsu.mixins.json",
+    {
+      "config": "zangetsu.client.mixins.json",
+      "environment": "client"
+    }
+  ],
+  "depends": {
+    "fabricloader": ">=0.16.0",
+    "minecraft": "1.21.1",
+    "java": ">=21",
+    "fabric-api": "*"
+  }
+}
