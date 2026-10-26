@@ -150,9 +150,10 @@ public class SpiritModel extends EntityModel<ZangetsuSpiritEntity> {
         this.head.yaw = 0.0F;
 
         float flap = MathHelper.sin(time * 0.22F);
-        this.rightWing.yaw = 0.55F + 0.12F * flap;
-        this.rightWing.roll = -0.25F - 0.35F * flap;
-        this.rightWingTip.roll = 0.45F + 0.25F * MathHelper.sin(time * 0.22F - 0.7F);
+        // Крылья подняты: кость уходит вверх и в сторону, кончик загибается, всё вместе взмахивает.
+        this.rightWing.yaw = 0.3F + 0.08F * flap;
+        this.rightWing.roll = 0.75F + 0.22F * flap;
+        this.rightWingTip.roll = -0.55F + 0.2F * MathHelper.sin(time * 0.22F - 0.7F);
         this.leftWing.yaw = -this.rightWing.yaw;
         this.leftWing.roll = -this.rightWing.roll;
         this.leftWingTip.roll = -this.rightWingTip.roll;

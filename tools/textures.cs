@@ -219,14 +219,16 @@ public static class ZangetsuTextures
         for (int y = 18; y < 26; y++) { c.Set(24 + 1, y, red); c.Set(24 + 2, y, red); }  // затылок
         for (int y = 10; y < 18; y++) { c.Set(10, y, red); c.Set(11, y, red); }        // макушка
         for (int y = 18; y < 26; y++) { c.Set(1, y, red); c.Set(2, y, red); c.Set(5, y, red); }  // правый бок
-        // Лицо маски (8..16 × 18..26).
+        // Лицо маски (8..16 × 18..26): две алые полосы над левым глазом до самой челюсти,
+        // косые прорези глаз, тень носа и оскал.
         Paint(c, 8, 18, 16, 26, bone, 0.06, 3);
-        for (int y = 18; y < 24; y++) c.Set(10, y, red);
-        for (int y = 18; y < 22; y++) c.Set(11, y, red);
-        c.Set(9, 20, C(10, 6, 8)); c.Set(10, 20, C(10, 6, 8)); c.Set(9, 21, C(10, 6, 8)); c.Set(10, 21, C(10, 6, 8));
-        c.Set(13, 20, C(10, 6, 8)); c.Set(14, 20, C(10, 6, 8)); c.Set(13, 21, C(10, 6, 8)); c.Set(14, 21, C(10, 6, 8));
+        Color hole = C(10, 6, 8);
+        for (int y = 18; y < 24; y++) { c.Set(9, y, red); c.Set(11, y, red); }
+        c.Set(10, 20, hole); c.Set(9, 21, hole); c.Set(10, 21, hole); c.Set(11, 21, hole);
+        c.Set(13, 20, hole); c.Set(12, 21, hole); c.Set(13, 21, hole); c.Set(14, 21, hole);
         c.Set(11, 22, shade); c.Set(12, 22, shade);
         for (int x = 8; x < 16; x++) { c.Set(x, 24, x % 2 == 0 ? bone : C(30, 22, 24)); c.Set(x, 25, x % 2 == 1 ? shade : C(30, 22, 24)); }
+        c.Set(8, 24, shade); c.Set(15, 24, shade);
         // Рога: кость с тёмными кончиками.
         Gradient(c, 32, 10, 48, 18, bone, shade, 0.1, 4);
         Gradient(c, 32, 18, 48, 26, shade, C(150, 140, 128), 0.1, 5);
@@ -254,11 +256,10 @@ public static class ZangetsuTextures
     static Canvas HollowMaskEyes()
     {
         var c = new Canvas(64, 64);
-        // Жёлтые глаза в прорезях маски (лицо шлема — 8..16 × 18..26).
-        c.Set(9, 20, C(255, 222, 60)); c.Set(10, 20, C(60, 20, 0));
-        c.Set(9, 21, C(255, 180, 30)); c.Set(10, 21, C(255, 200, 40));
-        c.Set(14, 20, C(255, 222, 60)); c.Set(13, 20, C(60, 20, 0));
-        c.Set(14, 21, C(255, 180, 30)); c.Set(13, 21, C(255, 200, 40));
+        // Жёлтые глаза с чёрным зрачком в прорезях маски (лицо шлема — 8..16 × 18..26).
+        Color hot = C(255, 226, 70), warm = C(255, 170, 30), pupil = C(40, 10, 0);
+        c.Set(10, 20, hot); c.Set(9, 21, warm); c.Set(10, 21, pupil); c.Set(11, 21, warm);
+        c.Set(13, 20, hot); c.Set(12, 21, warm); c.Set(13, 21, pupil); c.Set(14, 21, warm);
         return c;
     }
 

@@ -24,6 +24,8 @@ import net.minecraft.util.math.RotationAxis;
 public class SpiritRenderer extends EntityRenderer<ZangetsuSpiritEntity> {
     private static final Identifier TEXTURE = ZangetsuMod.id("textures/entity/spirit.png");
     private static final Identifier EYES = ZangetsuMod.id("textures/entity/spirit_eyes.png");
+    /** Меч в руке фигуры (в масштабе самой фигуры). */
+    private static final float HELD_SWORD_SCALE = 1.5F;
 
     private final SpiritModel model;
     private final ItemRenderer itemRenderer;
@@ -60,14 +62,17 @@ public class SpiritRenderer extends EntityRenderer<ZangetsuSpiritEntity> {
                 ColorHelper.Argb.getArgb(255, alpha, alpha, alpha));
 
         if (time < ZangetsuSpiritEntity.RELEASE_TICK) {
-            // Меч в правой руке — так же, как предметы в руках у мобов, только рука длиннее.
+            // Меч в правой руке продолжает руку: рукоять в кулаке, клинок дальше по руке (над головой при замахе).
             matrices.push();
             this.model.body.rotate(matrices);
             this.model.rightArm.rotate(matrices);
-            matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(-90.0F));
-            matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(180.0F));
-            matrices.translate(1.0F / 16.0F, 0.125F, -1.125F);
-            this.itemRenderer.renderItem(this.sword, ModelTransformationMode.THIRD_PERSON_RIGHT_HAND, fullBright, OverlayTexture.DEFAULT_UV,
+            matrices.translate(0.0F, 17.0F / 16.0F, 0.0F);
+            // Диагональ картинки (остриё вверху справа) поворачиваем вдоль руки.
+            matrices.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(45.0F));
+            matrices.scale(HELD_SWORD_SCALE, HELD_SWORD_SCALE, HELD_SWORD_SCALE);
+            // Рукоять (примерно 0,42 от центра картинки по диагонали) — в кулак.
+            matrices.translate(0.42F * 0.7071F, 0.42F * 0.7071F, 0.0F);
+            this.itemRenderer.renderItem(this.sword, ModelTransformationMode.NONE, fullBright, OverlayTexture.DEFAULT_UV,
                     matrices, consumers, entity.getWorld(), entity.getId());
             matrices.pop();
         }

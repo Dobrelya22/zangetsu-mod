@@ -104,8 +104,9 @@ public final class Awakening {
         float yaw = (float) Math.toDegrees(Math.atan2(toPlayer.z, toPlayer.x)) - 90.0F;
         ZangetsuSpiritEntity.summon(world, spot, yaw, scale, player.getUuid(), landing);
 
-        Cinematic.face(player, spot.add(0.0, 1.6 * scale, 0.0));
-        player.networkHandler.sendPacket(new TitleFadeS2CPacket(20, 60, 20));
+        // Смотрим чуть ниже ног фигуры — тогда она целиком над заголовком.
+        Cinematic.face(player, spot.add(0.0, -1.5, 0.0));
+        player.networkHandler.sendPacket(new TitleFadeS2CPacket(10, 40, 15));
         player.networkHandler.sendPacket(new SubtitleS2CPacket(Text.translatable("zangetsu.awaken.subtitle").formatted(Formatting.GRAY)));
         player.networkHandler.sendPacket(new TitleS2CPacket(Text.translatable("zangetsu.awaken.title").formatted(Formatting.DARK_RED)));
         Fx.sound(player, SoundEvents.AMBIENT_CAVE.value(), 1.0F, 0.6F);

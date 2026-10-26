@@ -13,15 +13,19 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.TitleScreen;
 import net.minecraft.client.option.Perspective;
 import net.minecraft.client.util.ScreenshotRecorder;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityType;
+import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.SpawnReason;
 import net.minecraft.entity.mob.MobEntity;
@@ -34,6 +38,8 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Box;
+import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.Difficulty;
 import net.minecraft.world.GameMode;
@@ -47,20 +53,29 @@ import net.minecraft.world.level.LevelInfo;
  * стрелы, руки зомби, казнь, колени эндермена, форма Пустого, луна, Гецуга, сон с мечами) и делает
  * скриншоты в run-shots/screenshots. Включается флагом -Dzangetsu.shots=true (./gradlew runShots),
  * в jar мода не попадает.
+ *
+ * <p>Сценарий — очередь шагов. Паузы отсчитываются по тикам сервера (в CI он может отставать от
+ * клиента), а там, где важен момент (меч вонзился, игрок во сне), шаг ждёт само событие.
  */
 public class ZangetsuShots implements ClientModInitializer {
     private static final boolean ENABLED = Boolean.getBoolean("zangetsu.shots");
     private static final int WARMUP = 100;
-    private static final float TICK_RATE = 10.0F;
+    /** Сколько тиков сервера ждать условие, прежде чем сдаться и идти дальше. */
+    private static final int WAIT_LIMIT = 400;
 
-    private record Step(int tick, Consumer<MinecraftClient> action) {
+    /** Шаг сценария: вернул false — шаг ещё не готов, повторить на следующем тике. */
+    private interface Action {
+        boolean run(MinecraftClient client);
     }
 
-    private final List<Step> script = new ArrayList<>();
+    private static final AtomicLong SERVER_TICKS = new AtomicLong();
+
+    private final List<Action> queue = new ArrayList<>();
+    private int index;
+    private long resumeAt;
+    private long waitStarted = -1;
     private boolean worldRequested;
     private int warmup;
-    private int tick = -1;
-    private int end;
     private int shotIndex;
     private LivingEntity zombie;
     private LivingEntity enderman;
@@ -71,137 +86,275 @@ public class ZangetsuShots implements ClientModInitializer {
             return;
         }
         this.write();
+        ServerTickEvents.END_SERVER_TICK.register(server -> SERVER_TICKS.incrementAndGet());
         ClientTickEvents.END_CLIENT_TICK.register(this::onTick);
     }
 
-    private void at(int tick, Consumer<MinecraftClient> action) {
-        this.script.add(new Step(tick, action));
-        this.end = Math.max(this.end, tick + 20);
+    // ---------------------------------------------------------------- построение сценария
+
+    private void then(Action action) {
+        this.queue.add(action);
+    }
+
+    private void act(Consumer<MinecraftClient> action) {
+        this.queue.add(c -> {
+            action.accept(c);
+            return true;
+        });
+    }
+
+    private void pause(int serverTicks) {
+        this.queue.add(c -> {
+            this.resumeAt = SERVER_TICKS.get() + serverTicks;
+            return true;
+        });
+    }
+
+    private void waitFor(String what, Predicate<MinecraftClient> condition) {
+        this.queue.add(c -> {
+            if (this.waitStarted < 0) {
+                this.waitStarted = SERVER_TICKS.get();
+            }
+            boolean ok = condition.test(c);
+            if (!ok && SERVER_TICKS.get() - this.waitStarted < WAIT_LIMIT) {
+                return false;
+            }
+            if (!ok) {
+                ZangetsuMod.LOGGER.warn("Съёмка: не дождались «{}»", what);
+            }
+            this.waitStarted = -1;
+            return true;
+        });
+    }
+
+    private void shot(String name) {
+        act(c -> {
+            String file = String.format(Locale.ROOT, "%02d_%s.png", this.shotIndex++, name);
+            ScreenshotRecorder.saveScreenshot(c.runDirectory, file, c.getFramebuffer(), text -> {
+            });
+            ZangetsuMod.LOGGER.info("Съёмка: кадр {}", file);
+        });
+    }
+
+    private void onServer(Consumer<MinecraftServer> action) {
+        act(c -> server(c, action));
+    }
+
+    private void command(String... commands) {
+        onServer(s -> {
+            for (String command : commands) {
+                s.getCommandManager().executeWithPrefix(s.getCommandSource(), command);
+            }
+        });
+    }
+
+    private void view(Perspective perspective) {
+        act(c -> c.options.setPerspective(perspective));
+    }
+
+    private void look(float yaw, float pitch) {
+        act(c -> look(c, yaw, pitch));
     }
 
     private void write() {
-        // Пробуждение днём.
-        at(0, c -> {
-            command(c, "time set 6000", "weather clear", "gamerule doDaylightCycle false", "gamerule doMobSpawning false",
-                    "gamerule sendCommandFeedback false", "tp @p 0.5 -60 0.5 180 0", String.format(Locale.ROOT, "tick rate %.1f", TICK_RATE));
-            look(c, 180.0F, 0.0F);
-        });
-        at(12, c -> shot(c, "start"));
-        at(20, c -> server(c, s -> {
+        // ---- Пробуждение днём.
+        command("time set 6000", "weather clear", "gamerule doDaylightCycle false", "gamerule doMobSpawning false",
+                "tp @p 0.5 -60 0.5 180 0");
+        look(180.0F, 0.0F);
+        pause(20);
+        shot("start");
+        onServer(s -> {
             ServerPlayerEntity player = player(s);
             player.setHealth(2.0F);
             Awakening.start(player);
-        }));
-        at(34, c -> shot(c, "spirit_appears"));
-        at(56, c -> shot(c, "spirit_windup"));
-        at(68, c -> shot(c, "sword_thrown"));
-        at(78, c -> shot(c, "sword_flying"));
-        at(88, c -> shot(c, "sword_falling"));
-        at(102, c -> shot(c, "sword_stuck"));
-        at(106, c -> server(c, s -> {
+        });
+        pause(14);
+        shot("spirit_appears");
+        pause(30);
+        shot("spirit_hold");
+        pause(16);
+        shot("spirit_windup");
+        pause(6);
+        shot("spirit_throw");
+        pause(7);
+        shot("sword_flying_1");
+        pause(9);
+        shot("sword_flying_2");
+        waitFor("меч вонзился", c -> stuckSword(c) != null);
+        act(c -> {
+            ThrownZangetsuEntity sword = stuckSword(c);
+            if (sword != null) {
+                lookAt(c, sword.getPos().add(0.0, 0.9, 0.0));
+            }
+        });
+        pause(6);
+        shot("sword_stuck");
+        onServer(s -> {
             ServerPlayerEntity player = player(s);
-            ThrownZangetsuEntity sword = nearest(player.getServerWorld(), ThrownZangetsuEntity.class, player.getPos(), 12.0);
+            ThrownZangetsuEntity sword = nearest(player.getServerWorld(), ThrownZangetsuEntity.class, player.getPos(), 16.0);
             if (sword != null) {
                 Awakening.pickUp(player, sword);
-            } else {
-                ZangetsuMod.LOGGER.warn("Съёмка: меч не найден");
             }
-        }));
-        at(114, c -> shot(c, "touch_reach"));
-        at(126, c -> shot(c, "touch_flash"));
-        at(134, c -> shot(c, "floating_sword"));
-        at(162, c -> shot(c, "bonded_hud_day"));
-        at(166, c -> c.options.setPerspective(Perspective.THIRD_PERSON_FRONT));
-        at(172, c -> shot(c, "third_person_day"));
-        at(176, c -> c.options.setPerspective(Perspective.FIRST_PERSON));
+        });
+        pause(10);
+        shot("touch_reach");
+        pause(13);
+        shot("touch_flash");
+        pause(6);
+        shot("floating_sword");
+        waitFor("меч в руке", c -> com.zangetsu.logic.SwordStacks.isHolding(c.player));
+        pause(30);
+        look(180.0F, 10.0F);
+        pause(4);
+        shot("bonded_hud_day");
+        view(Perspective.THIRD_PERSON_FRONT);
+        pause(6);
+        shot("third_person_day");
+        view(Perspective.FIRST_PERSON);
 
-        // Ночь: глаз открывается, стрелы рассекаются.
-        at(180, c -> command(c, "time set 18000"));
-        at(192, c -> shot(c, "night_eye_open"));
-        at(196, c -> c.options.setPerspective(Perspective.THIRD_PERSON_FRONT));
-        at(202, c -> shot(c, "night_third_person"));
-        at(206, c -> c.options.setPerspective(Perspective.FIRST_PERSON));
-        at(210, c -> server(c, s -> Bond.change(player(s), Bond.THRESHOLDS[1] - ModAttachments.data(player(s)).bond)));
-        at(220, c -> shot(c, "level_up"));
-        at(240, c -> server(c, s -> shootArrows(player(s))));
-        at(243, c -> shot(c, "arrows_parry_1"));
-        at(246, c -> shot(c, "arrows_parry_2"));
-        at(252, c -> shot(c, "arrow_halves"));
+        // ---- Ночь: глаз открывается, стрелы рассекаются.
+        command("time set 18000");
+        pause(16);
+        shot("night_eye_open");
+        view(Perspective.THIRD_PERSON_FRONT);
+        pause(6);
+        shot("night_third_person");
+        view(Perspective.FIRST_PERSON);
+        onServer(s -> Bond.change(player(s), Bond.THRESHOLDS[1] - ModAttachments.data(player(s)).bond));
+        pause(12);
+        shot("level_up");
+        look(180.0F, 0.0F);
+        pause(30);
+        onServer(s -> shootArrows(player(s)));
+        pause(3);
+        shot("arrows_parry_1");
+        pause(3);
+        shot("arrows_parry_2");
+        pause(6);
+        shot("arrow_halves");
 
-        // Зомби: левая рука, правая рука, казнь.
-        at(270, c -> server(c, s -> this.zombie = summon(player(s), EntityType.ZOMBIE, 2.3)));
-        at(280, c -> server(c, s -> Limbs.cut(this.zombie, player(s), Limbs.LEFT_ARM)));
-        at(290, c -> shot(c, "zombie_left_arm"));
-        at(298, c -> server(c, s -> Limbs.cut(this.zombie, player(s), Limbs.RIGHT_ARM)));
-        at(308, c -> shot(c, "zombie_no_arms_prompt"));
-        at(314, c -> server(c, s -> Execution.request(player(s), this.zombie.getId())));
-        at(322, c -> shot(c, "execute_windup"));
-        at(328, c -> shot(c, "execute_strike"));
-        at(333, c -> shot(c, "execute_head_off"));
-        at(342, c -> shot(c, "execute_after"));
+        // ---- Зомби: левая рука, правая рука, казнь.
+        onServer(s -> this.zombie = summon(player(s), EntityType.ZOMBIE, 2.3));
+        look(180.0F, 12.0F);
+        pause(12);
+        shot("zombie");
+        onServer(s -> Limbs.cut(this.zombie, player(s), Limbs.LEFT_ARM));
+        pause(8);
+        shot("zombie_left_arm");
+        onServer(s -> Limbs.cut(this.zombie, player(s), Limbs.RIGHT_ARM));
+        pause(12);
+        shot("zombie_no_arms_prompt");
+        onServer(s -> Execution.request(player(s), this.zombie.getId()));
+        pause(8);
+        shot("execute_windup");
+        pause(6);
+        shot("execute_strike");
+        pause(4);
+        shot("execute_head_off");
+        pause(10);
+        shot("execute_after");
+        pause(20);
 
-        // Эндермен: левое колено, правое колено, рассечение пополам.
-        at(370, c -> server(c, s -> this.enderman = summon(player(s), EntityType.ENDERMAN, 3.2)));
-        at(380, c -> server(c, s -> Limbs.cut(this.enderman, player(s), Limbs.LEFT_KNEE)));
-        at(390, c -> shot(c, "ender_one_knee"));
-        at(398, c -> server(c, s -> Limbs.cut(this.enderman, player(s), Limbs.RIGHT_KNEE)));
-        at(410, c -> shot(c, "ender_kneeling"));
-        at(416, c -> server(c, s -> Execution.request(player(s), this.enderman.getId())));
-        at(431, c -> shot(c, "ender_slash"));
-        at(436, c -> shot(c, "ender_split"));
-        at(446, c -> shot(c, "ender_halves"));
+        // ---- Эндермен: левое колено, правое колено, рассечение пополам.
+        onServer(s -> this.enderman = summon(player(s), EntityType.ENDERMAN, 3.4));
+        look(180.0F, -8.0F);
+        pause(12);
+        shot("enderman");
+        onServer(s -> Limbs.cut(this.enderman, player(s), Limbs.LEFT_KNEE));
+        pause(8);
+        shot("ender_one_knee");
+        onServer(s -> Limbs.cut(this.enderman, player(s), Limbs.RIGHT_KNEE));
+        look(180.0F, 12.0F);
+        pause(12);
+        shot("ender_kneeling");
+        onServer(s -> Execution.request(player(s), this.enderman.getId()));
+        pause(13);
+        shot("ender_slash");
+        pause(4);
+        shot("ender_split");
+        pause(10);
+        shot("ender_halves");
+        pause(30);
 
-        // Форма Пустого, луна, Гецуга.
-        at(470, c -> server(c, s -> {
+        // ---- Форма Пустого, луна, Гецуга.
+        onServer(s -> {
             ServerPlayerEntity player = player(s);
             Bond.change(player, Bond.THRESHOLDS[3] - ModAttachments.data(player).bond);
             ModAttachments.data(player).hollowUsed = 0;
-        }));
-        at(490, c -> server(c, s -> HollowForm.toggle(player(s))));
-        at(498, c -> shot(c, "hollow_transform"));
-        at(510, c -> shot(c, "hollow_roar"));
-        at(530, c -> c.options.setPerspective(Perspective.THIRD_PERSON_FRONT));
-        at(536, c -> shot(c, "hollow_mask"));
-        at(540, c -> {
-            c.options.setPerspective(Perspective.FIRST_PERSON);
-            look(c, -150.0F, -48.0F);
         });
-        at(548, c -> shot(c, "crescent_moon"));
-        at(552, c -> look(c, 180.0F, 5.0F));
-        at(556, c -> server(c, s -> HollowForm.tryGetsuga(player(s))));
-        at(559, c -> shot(c, "getsuga_1"));
-        at(563, c -> shot(c, "getsuga_2"));
-        at(580, c -> server(c, s -> HollowForm.end(player(s), false)));
-        at(584, c -> shot(c, "mask_shatter"));
+        pause(40);
+        onServer(s -> HollowForm.toggle(player(s)));
+        pause(8);
+        shot("hollow_transform");
+        pause(12);
+        shot("hollow_roar");
+        pause(20);
+        view(Perspective.THIRD_PERSON_FRONT);
+        pause(6);
+        shot("hollow_mask");
+        view(Perspective.THIRD_PERSON_BACK);
+        pause(4);
+        shot("hollow_back");
+        view(Perspective.FIRST_PERSON);
+        look(-150.0F, -48.0F);
+        pause(10);
+        shot("crescent_moon");
+        look(180.0F, 5.0F);
+        pause(4);
+        onServer(s -> HollowForm.tryGetsuga(player(s)));
+        pause(3);
+        shot("getsuga_1");
+        pause(4);
+        shot("getsuga_2");
+        onServer(s -> HollowForm.end(player(s), false));
+        pause(4);
+        shot("mask_shatter");
+        pause(20);
 
-        // Сон с мечами.
-        at(600, c -> server(c, s -> Dream.forceBegin(player(s))));
-        at(630, c -> {
-            look(c, 90.0F, 12.0F);
-            shot(c, "dream_field");
+        // ---- Сон с мечами.
+        onServer(s -> Dream.forceBegin(player(s)));
+        waitFor("сон", c -> c.world != null && c.world.getRegistryKey() == Dream.WORLD);
+        pause(40);
+        look(90.0F, 14.0F);
+        pause(3);
+        shot("dream_field");
+        look(0.0F, 22.0F);
+        pause(3);
+        shot("dream_field_2");
+        act(c -> {
+            ThrownZangetsuEntity sword = nearestClient(c);
+            if (sword != null) {
+                lookAt(c, sword.getPos().add(0.0, 0.9, 0.0));
+            }
         });
-        at(636, c -> {
-            look(c, 0.0F, 20.0F);
-            shot(c, "dream_field_2");
-        });
-        at(642, c -> server(c, s -> {
+        pause(4);
+        shot("dream_sword_close");
+        onServer(s -> {
             ServerPlayerEntity player = player(s);
-            ThrownZangetsuEntity sword = nearest(player.getServerWorld(), ThrownZangetsuEntity.class, player.getPos(), 20.0);
+            ThrownZangetsuEntity sword = nearest(player.getServerWorld(), ThrownZangetsuEntity.class, player.getPos(), 24.0);
             if (sword != null) {
                 Dream.pull(player, sword);
             }
-        }));
-        at(652, c -> shot(c, "dream_reach"));
-        at(664, c -> shot(c, "dream_rise"));
-        at(680, c -> shot(c, "dream_white"));
-        at(708, c -> shot(c, "woke_up"));
-        at(725, c -> {
-            c.options.setPerspective(Perspective.THIRD_PERSON_FRONT);
         });
-        at(730, c -> shot(c, "woke_up_third_person"));
+        pause(10);
+        shot("dream_reach");
+        pause(14);
+        shot("dream_rise");
+        pause(16);
+        shot("dream_white");
+        waitFor("пробуждение", c -> c.world != null && c.world.getRegistryKey() != Dream.WORLD);
+        pause(30);
+        shot("woke_up");
+        view(Perspective.THIRD_PERSON_FRONT);
+        pause(6);
+        shot("woke_up_third_person");
+        act(c -> {
+            ZangetsuMod.LOGGER.info("Съёмка: готово, {} кадров", this.shotIndex);
+            c.scheduleStop();
+        });
     }
 
-    // ---------------------------------------------------------------- действия
+    // ---------------------------------------------------------------- действия на сервере
 
     private static void shootArrows(ServerPlayerEntity player) {
         ServerWorld world = player.getServerWorld();
@@ -223,19 +376,40 @@ public class ZangetsuShots implements ClientModInitializer {
         }
         Vec3d at = player.getPos().add(0, 0, -distance);
         mob.refreshPositionAndAngles(at.x, at.y, at.z, 0.0F, 0.0F);
+        mob.initialize(world, world.getLocalDifficulty(BlockPos.ofFloored(at)), SpawnReason.COMMAND, null);
         mob.setHeadYaw(0.0F);
         mob.setBodyYaw(0.0F);
         mob.setAiDisabled(true);
         mob.setPersistent();
-        mob.initialize(world, world.getLocalDifficulty(BlockPos.ofFloored(at)), SpawnReason.COMMAND, null);
-        mob.equipStack(net.minecraft.entity.EquipmentSlot.MAINHAND, ItemStack.EMPTY);
+        mob.setBaby(false);
+        mob.equipStack(EquipmentSlot.MAINHAND, ItemStack.EMPTY);
+        for (EquipmentSlot slot : new EquipmentSlot[]{EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET}) {
+            mob.equipStack(slot, ItemStack.EMPTY);
+        }
         world.spawnEntity(mob);
         return mob;
     }
 
     private static <T extends Entity> T nearest(ServerWorld world, Class<T> type, Vec3d around, double radius) {
-        return world.getEntitiesByClass(type, new net.minecraft.util.math.Box(around, around).expand(radius), e -> true).stream()
+        return world.getEntitiesByClass(type, new Box(around, around).expand(radius), e -> true).stream()
                 .min(Comparator.comparingDouble(e -> e.squaredDistanceTo(around))).orElse(null);
+    }
+
+    private static ThrownZangetsuEntity stuckSword(MinecraftClient client) {
+        if (client.world == null || client.player == null) {
+            return null;
+        }
+        return client.world.getEntitiesByClass(ThrownZangetsuEntity.class, client.player.getBoundingBox().expand(16.0),
+                s -> s.getState() == ThrownZangetsuEntity.STUCK).stream().findFirst().orElse(null);
+    }
+
+    private static ThrownZangetsuEntity nearestClient(MinecraftClient client) {
+        if (client.world == null || client.player == null) {
+            return null;
+        }
+        Vec3d at = client.player.getPos();
+        return client.world.getEntitiesByClass(ThrownZangetsuEntity.class, client.player.getBoundingBox().expand(24.0), s -> true)
+                .stream().min(Comparator.comparingDouble(e -> e.squaredDistanceTo(at))).orElse(null);
     }
 
     // ---------------------------------------------------------------- тик
@@ -254,22 +428,19 @@ public class ZangetsuShots implements ClientModInitializer {
             client.getToastManager().clear();
             return;
         }
-        this.tick++;
-        for (Step step : this.script) {
-            if (step.tick() == this.tick) {
-                try {
-                    step.action().accept(client);
-                } catch (RuntimeException e) {
-                    ZangetsuMod.LOGGER.error("Съёмка: шаг {} упал", this.tick, e);
-                }
+        while (this.index < this.queue.size() && SERVER_TICKS.get() >= this.resumeAt) {
+            Action action = this.queue.get(this.index);
+            boolean done;
+            try {
+                done = action.run(client);
+            } catch (RuntimeException e) {
+                ZangetsuMod.LOGGER.error("Съёмка: шаг {} упал", this.index, e);
+                done = true;
             }
-        }
-        if (this.tick % 50 == 0) {
-            ZangetsuMod.LOGGER.info("Съёмка: тик {} из {}, {} кадров/с", this.tick, this.end, client.getCurrentFps());
-        }
-        if (this.tick >= this.end) {
-            ZangetsuMod.LOGGER.info("Съёмка: готово, {} кадров", this.shotIndex);
-            client.scheduleStop();
+            if (!done) {
+                return;
+            }
+            this.index++;
         }
     }
 
@@ -289,13 +460,6 @@ public class ZangetsuShots implements ClientModInitializer {
                 client.currentScreen);
     }
 
-    private void shot(MinecraftClient client, String name) {
-        String file = String.format(Locale.ROOT, "%02d_%s.png", this.shotIndex++, name);
-        ScreenshotRecorder.saveScreenshot(client.runDirectory, file, client.getFramebuffer(), text -> {
-        });
-        ZangetsuMod.LOGGER.info("Съёмка: кадр {}", file);
-    }
-
     private static void look(MinecraftClient client, float yaw, float pitch) {
         client.player.setYaw(yaw);
         client.player.setPitch(pitch);
@@ -303,6 +467,14 @@ public class ZangetsuShots implements ClientModInitializer {
         client.player.prevPitch = pitch;
         client.player.setHeadYaw(yaw);
         client.player.setBodyYaw(yaw);
+    }
+
+    private static void lookAt(MinecraftClient client, Vec3d target) {
+        Vec3d eye = client.player.getEyePos();
+        double dx = target.x - eye.x, dy = target.y - eye.y, dz = target.z - eye.z;
+        float yaw = (float) (MathHelper.atan2(dz, dx) * (180.0 / Math.PI)) - 90.0F;
+        float pitch = (float) -(MathHelper.atan2(dy, Math.sqrt(dx * dx + dz * dz)) * (180.0 / Math.PI));
+        look(client, yaw, pitch);
     }
 
     private static ServerPlayerEntity player(MinecraftServer server) {
@@ -320,13 +492,5 @@ public class ZangetsuShots implements ClientModInitializer {
                 }
             });
         }
-    }
-
-    private static void command(MinecraftClient client, String... commands) {
-        server(client, server -> {
-            for (String command : commands) {
-                server.getCommandManager().executeWithPrefix(server.getCommandSource(), command);
-            }
-        });
     }
 }
