@@ -102,15 +102,16 @@ public class ZangetsuItemRenderer implements BuiltinItemRendererRegistry.Dynamic
         // Зрачок: шире в темноте, тоньше, когда глаз горит или злится.
         float pupil = state == Eye.BURNING ? 0.14F : (state == Eye.ANGRY ? 0.12F : 0.24F);
         float irisU = state == Eye.BURNING ? 8.0F : (state == Eye.ANGRY ? 16.0F : 0.0F);
+        // Буфер берём заново перед каждым слоем: смена слоя закрывает предыдущий.
         VertexConsumer vertices = consumers.getBuffer(RenderLayer.getEntityCutoutNoCull(EYE_TEXTURE));
         for (int side = 0; side < 2; side++) {
-            boolean front = side == 0;
-            Face f = new Face(matrices.peek(), vertices, front, surface, light, overlay);
-            eyeSide(f, gaze, openness, state == Eye.ANGRY, pupil, irisU);
-            if (state == Eye.OPEN || state == Eye.BURNING) {
-                // Радужка светится в темноте.
-                Face glow = new Face(matrices.peek(), consumers.getBuffer(RenderLayer.getEyes(EYE_TEXTURE)), front, surface,
-                        LightmapTextureManager.MAX_LIGHT_COORDINATE, overlay);
+            eyeSide(new Face(matrices.peek(), vertices, side == 0, surface, light, overlay), gaze, openness, state == Eye.ANGRY, pupil, irisU);
+        }
+        if (state == Eye.OPEN || state == Eye.BURNING) {
+            // Радужка светится в темноте.
+            VertexConsumer glowing = consumers.getBuffer(RenderLayer.getEyes(EYE_TEXTURE));
+            for (int side = 0; side < 2; side++) {
+                Face glow = new Face(matrices.peek(), glowing, side == 0, surface, LightmapTextureManager.MAX_LIGHT_COORDINATE, overlay);
                 glow.quad(EYE_X + gaze[0] - 0.75F, EYE_Y + gaze[1] - 0.75F, EYE_X + gaze[0] + 0.75F, EYE_Y + gaze[1] + 0.75F, 0.06F,
                         irisU / 32.0F, 8.0F / 32.0F, (irisU + 8.0F) / 32.0F, 16.0F / 32.0F, state == Eye.BURNING ? 0xFFFFFFFF : 0xFF9A7A3A);
             }
