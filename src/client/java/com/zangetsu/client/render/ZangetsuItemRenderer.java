@@ -47,7 +47,7 @@ public class ZangetsuItemRenderer implements BuiltinItemRendererRegistry.Dynamic
     private static final float EDGE_T = 0.05F;
     private static final float HILT_V = -0.5F;
     private static final int TIP_SEGMENTS = 10;
-    private static final float FIRST_PERSON_LEAN = 18.0F;
+    private static final float FIRST_PERSON_LEAN = -24.0F;
 
     // ---- глаз
     private static final float EYE_U = 10.6F;

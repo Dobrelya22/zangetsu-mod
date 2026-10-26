@@ -241,6 +241,10 @@ public class ZangetsuShots implements ClientModInitializer {
         command("time set 18000");
         pause(16);
         shot("night_eye_open");
+        act(c -> c.player.swingHand(net.minecraft.util.Hand.MAIN_HAND));
+        pause(2);
+        shot("first_person_swing");
+        pause(10);
         view(Perspective.THIRD_PERSON_FRONT);
         pause(6);
         shot("night_third_person");
