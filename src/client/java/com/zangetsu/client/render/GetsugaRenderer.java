@@ -23,7 +23,9 @@ import org.joml.Vector3f;
  */
 public class GetsugaRenderer extends EntityRenderer<GetsugaEntity> {
     private static final Identifier TEXTURE = ZangetsuMod.id("textures/misc/white.png");
-    private static final int SEGMENTS = 30;
+    private static final int SEGMENTS = 90;
+    /** Ширина чёрного ядра (доля ширины серпа). */
+    private static final float CORE_WIDTH = 0.7F;
 
     public GetsugaRenderer(EntityRendererFactory.Context context) {
         super(context);
@@ -46,16 +48,17 @@ public class GetsugaRenderer extends EntityRenderer<GetsugaEntity> {
             float trailAlpha = alpha * (0.42F - k * 0.11F);
             float trailSize = size * (1.0F - k * 0.04F);
             float back = -k * 0.75F * size;
-            band(consumers.getBuffer(RenderLayer.getLightning()), m, trailSize, back, 1.9F, 0.0F, 255, 20, 12, trailAlpha * 0.6F, age, true);
-            band(consumers.getBuffer(RenderLayer.getLightning()), m, trailSize, back, 1.0F, 0.0F, 255, 40, 25, trailAlpha, age, false);
+            // Тоже кольцом: шлейф ближе к стрелявшему и иначе засветил бы чёрное ядро.
+            ring(consumers.getBuffer(RenderLayer.getLightning()), m, trailSize, back, CORE_WIDTH, 1.9F, 255, 20, 12, trailAlpha * 0.6F, age, true);
+            ring(consumers.getBuffer(RenderLayer.getLightning()), m, trailSize, back, CORE_WIDTH, 1.05F, 255, 40, 25, trailAlpha, age, false);
         }
-        // Свечение и алая лента.
-        band(consumers.getBuffer(RenderLayer.getLightning()), m, size, 0.0F, 2.6F, 0.0F, 255, 18, 10, alpha * 0.55F, age, true);
-        band(consumers.getBuffer(RenderLayer.getLightning()), m, size, 0.0F, 1.35F, 0.0F, 255, 45, 28, alpha * 0.95F, age, false);
+        // Свечение и алая кайма — кольцом вокруг ядра: свет складывается, и там, где ядро, его быть не должно.
+        ring(consumers.getBuffer(RenderLayer.getLightning()), m, size, 0.0F, CORE_WIDTH, 2.7F, 255, 18, 10, alpha * 0.6F, age, true);
+        ring(consumers.getBuffer(RenderLayer.getLightning()), m, size, 0.0F, CORE_WIDTH, 1.3F, 255, 50, 30, alpha * 0.95F, age, false);
         // Чёрное ядро (обычное смешивание) чуть ближе к игроку, чтобы свечение позади его не засветило.
-        core(consumers.getBuffer(RenderLayer.getEntityTranslucent(TEXTURE)), matrices.peek(), size, -0.12F, 0.72F, -0.05F, alpha * 0.96F, age);
+        core(consumers.getBuffer(RenderLayer.getEntityTranslucent(TEXTURE)), matrices.peek(), size, 0.0F, CORE_WIDTH, 0.0F, alpha * 0.97F, age);
         // Раскалённая нить по выпуклой кромке.
-        band(consumers.getBuffer(RenderLayer.getLightning()), m, size, 0.04F, 0.16F, 0.9F, 255, 210, 190, alpha, age, false);
+        band(consumers.getBuffer(RenderLayer.getLightning()), m, size, 0.0F, 0.13F, CORE_WIDTH + 0.14F, 255, 215, 195, alpha, age, false);
         matrices.pop();
         super.render(entity, yaw, tickDelta, matrices, consumers, light);
     }
@@ -84,6 +87,26 @@ public class GetsugaRenderer extends EntityRenderer<GetsugaEntity> {
         }
     }
 
+    /**
+     * Кольцо вокруг ядра: от края ядра ({ inner}) до { outer} с обеих сторон. { soft} — к наружному
+     * краю гаснет до нуля, иначе ровная кайма.
+     */
+    private static void ring(VertexConsumer vertices, Matrix4f m, float size, float forward, float inner, float outer,
+            int r, int g, int b, float alpha, float age, boolean soft) {
+        if (alpha <= 0.01F) {
+            return;
+        }
+        int a = (int) (MathHelper.clamp(alpha, 0.0F, 1.0F) * 255.0F);
+        int edge = soft ? 0 : a;
+        for (int i = 0; i < SEGMENTS; i++) {
+            float t0 = -1.0F + 2.0F * i / SEGMENTS, t1 = -1.0F + 2.0F * (i + 1) / SEGMENTS;
+            Vector3f[] in0 = section(t0, size, forward, inner, 0.0F, age, i), in1 = section(t1, size, forward, inner, 0.0F, age, i + 1);
+            Vector3f[] out0 = section(t0, size, forward, outer, 0.0F, age, i), out1 = section(t1, size, forward, outer, 0.0F, age, i + 1);
+            quad(vertices, m, out0[0], out1[0], in1[0], in0[0], r, g, b, edge, edge, a, a);
+            quad(vertices, m, in0[2], in1[2], out1[2], out0[2], r, g, b, a, a, edge, edge);
+        }
+    }
+
     /** Чёрное ядро серпа — обычный полупрозрачный слой сущностей, не светится. */
     private static void core(VertexConsumer v, MatrixStack.Entry entry, float size, float forward, float width, float shift, float alpha, float age) {
         int a = (int) (MathHelper.clamp(alpha, 0.0F, 1.0F) * 255.0F);
@@ -105,7 +128,7 @@ public class GetsugaRenderer extends EntityRenderer<GetsugaEntity> {
 
     /** Края и середина ленты в точке t (с мерцанием ширины). */
     private static Vector3f[] section(float t, float size, float forward, float width, float shift, float age, int i) {
-        float flicker = 1.0F + 0.08F * MathHelper.sin(age * 2.3F + i * 1.7F) * MathHelper.sin(age * 0.9F + i * 0.6F);
+        float flicker = 1.0F + 0.07F * MathHelper.sin(age * 2.3F + t * 9.0F) * MathHelper.sin(age * 0.9F + t * 4.0F);
         float hw = GetsugaEntity.halfWidth(t, size) * width * flicker;
         Vector3f center = GetsugaEntity.arc(t, size);
         Vector3f across = GetsugaEntity.across(t);
