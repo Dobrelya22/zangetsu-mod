@@ -3,6 +3,8 @@ package com.zangetsu.client.render;
 import com.zangetsu.ZangetsuMod;
 import com.zangetsu.entity.GetsugaEntity;
 import net.minecraft.client.render.Frustum;
+import net.minecraft.client.render.LightmapTextureManager;
+import net.minecraft.client.render.OverlayTexture;
 import net.minecraft.client.render.RenderLayer;
 import net.minecraft.client.render.VertexConsumer;
 import net.minecraft.client.render.VertexConsumerProvider;
@@ -51,7 +53,7 @@ public class GetsugaRenderer extends EntityRenderer<GetsugaEntity> {
         band(consumers.getBuffer(RenderLayer.getLightning()), m, size, 0.0F, 2.6F, 0.0F, 255, 18, 10, alpha * 0.55F, age, true);
         band(consumers.getBuffer(RenderLayer.getLightning()), m, size, 0.0F, 1.35F, 0.0F, 255, 45, 28, alpha * 0.95F, age, false);
         // Чёрное ядро (обычное смешивание) чуть ближе к игроку, чтобы свечение позади его не засветило.
-        band(consumers.getBuffer(RenderLayer.getDebugQuads()), m, size, -0.12F, 0.72F, -0.05F, 10, 0, 3, alpha * 0.95F, age, false);
+        core(consumers.getBuffer(RenderLayer.getEntityTranslucent(TEXTURE)), matrices.peek(), size, -0.12F, 0.72F, -0.05F, alpha * 0.96F, age);
         // Раскалённая нить по выпуклой кромке.
         band(consumers.getBuffer(RenderLayer.getLightning()), m, size, 0.04F, 0.16F, 0.9F, 255, 210, 190, alpha, age, false);
         matrices.pop();
@@ -82,9 +84,28 @@ public class GetsugaRenderer extends EntityRenderer<GetsugaEntity> {
         }
     }
 
+    /** Чёрное ядро серпа — обычный полупрозрачный слой сущностей, не светится. */
+    private static void core(VertexConsumer v, MatrixStack.Entry entry, float size, float forward, float width, float shift, float alpha, float age) {
+        int a = (int) (MathHelper.clamp(alpha, 0.0F, 1.0F) * 255.0F);
+        Matrix4f m = entry.getPositionMatrix();
+        for (int i = 0; i < SEGMENTS; i++) {
+            float t0 = -1.0F + 2.0F * i / SEGMENTS, t1 = -1.0F + 2.0F * (i + 1) / SEGMENTS;
+            Vector3f[] s0 = section(t0, size, forward, width, shift, age, i);
+            Vector3f[] s1 = section(t1, size, forward, width, shift, age, i + 1);
+            Vector3f[] quad = {s0[0], s1[0], s1[2], s0[2]};
+            for (int side = 0; side < 2; side++) {
+                for (int k = 0; k < 4; k++) {
+                    Vector3f p = quad[side == 0 ? k : 3 - k];
+                    v.vertex(m, p.x, p.y, p.z).color(8, 0, 3, a).texture(0.5F, 0.5F).overlay(OverlayTexture.DEFAULT_UV)
+                            .light(LightmapTextureManager.MAX_LIGHT_COORDINATE).normal(entry, 0.0F, 0.0F, side == 0 ? -1.0F : 1.0F);
+                }
+            }
+        }
+    }
+
     /** Края и середина ленты в точке t (с мерцанием ширины). */
     private static Vector3f[] section(float t, float size, float forward, float width, float shift, float age, int i) {
-        float flicker = 1.0F + 0.14F * MathHelper.sin(age * 2.3F + i * 1.7F) * MathHelper.sin(age * 0.9F + i * 0.6F);
+        float flicker = 1.0F + 0.08F * MathHelper.sin(age * 2.3F + i * 1.7F) * MathHelper.sin(age * 0.9F + i * 0.6F);
         float hw = GetsugaEntity.halfWidth(t, size) * width * flicker;
         Vector3f center = GetsugaEntity.arc(t, size);
         Vector3f across = GetsugaEntity.across(t);
