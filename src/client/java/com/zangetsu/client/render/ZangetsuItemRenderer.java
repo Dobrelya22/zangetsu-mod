@@ -13,8 +13,10 @@ import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.MathHelper;
-import net.minecraft.util.math.RotationAxis;
+
+import org.joml.Matrix3f;
 import org.joml.Matrix4f;
+import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
 /**
@@ -47,7 +49,11 @@ public class ZangetsuItemRenderer implements BuiltinItemRendererRegistry.Dynamic
     private static final float EDGE_T = 0.05F;
     private static final float HILT_V = -0.5F;
     private static final int TIP_SEGMENTS = 10;
-    private static final float FIRST_PERSON_LEAN = -24.0F;
+    // ---- от первого лица (в пространстве руки: x — вправо, y — вверх, z — к камере)
+    private static final Vector3f FP_BLADE = new Vector3f(-0.5F, 0.75F, -0.45F);
+    private static final Vector3f FP_FACE = new Vector3f(0.35F, 0.15F, 0.92F);
+    private static final Vector3f FP_GRIP = new Vector3f(0.11F, -0.1F, -0.02F);
+    private static final float FP_SCALE = 0.78F;
 
     // ---- глаз
     private static final float EYE_U = 10.6F;
@@ -70,11 +76,7 @@ public class ZangetsuItemRenderer implements BuiltinItemRendererRegistry.Dynamic
         int eye = stack.getOrDefault(ModComponents.EYE, Eye.CLOSED);
         matrices.push();
         if (mode == ModelTransformationMode.FIRST_PERSON_RIGHT_HAND || mode == ModelTransformationMode.FIRST_PERSON_LEFT_HAND) {
-            // От первого лица клинок наклонён к середине экрана, чтобы был виден целиком, а не столбом у края.
-            float lean = mode == ModelTransformationMode.FIRST_PERSON_RIGHT_HAND ? FIRST_PERSON_LEAN : -FIRST_PERSON_LEAN;
-            matrices.translate(0.5F, 0.5F, 0.5F);
-            matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(lean));
-            matrices.translate(-0.5F, -0.5F, -0.5F);
+            firstPerson(matrices, mode == ModelTransformationMode.FIRST_PERSON_RIGHT_HAND);
         }
         Mesh mesh = new Mesh(matrices.peek(), consumers.getBuffer(RenderLayer.getEntityCutoutNoCull(TEXTURE)), light, overlay);
         pommel(mesh);
@@ -83,6 +85,28 @@ public class ZangetsuItemRenderer implements BuiltinItemRendererRegistry.Dynamic
         blade(mesh, eye == Eye.BURNING);
         renderEye(eye, mode, matrices, consumers, light, overlay);
         matrices.pop();
+    }
+
+    /**
+     * От первого лица меч ставится не стандартными поворотами предмета, а прямо по осям экрана: рукоять
+     * в кулаке, клинок уходит вверх и к середине экрана, плоскость с глазом повёрнута к камере. Левая рука —
+     * зеркально. (В модели предмета для этих режимов стоят нулевые повороты.)
+     */
+    private static void firstPerson(MatrixStack matrices, boolean right) {
+        float side = right ? 1.0F : -1.0F;
+        Vector3f blade = new Vector3f(FP_BLADE.x * side, FP_BLADE.y, FP_BLADE.z).normalize();
+        Vector3f face = new Vector3f(FP_FACE.x * side, FP_FACE.y, FP_FACE.z);
+        face.sub(new Vector3f(blade).mul(face.dot(blade))).normalize();
+        Vector3f edge = new Vector3f(face).cross(blade);
+        // Оси меча (вдоль, к лезвию, толщина) → оси руки.
+        Matrix3f hand = new Matrix3f(blade, edge, face);
+        Matrix3f item = new Matrix3f(AXIS_U, AXIS_V, new Vector3f(0.0F, 0.0F, 1.0F));
+        Quaternionf rotation = new Quaternionf().setFromNormalized(hand.mul(item.transpose()));
+        matrices.translate(0.5F, 0.5F, 0.5F);
+        matrices.translate(FP_GRIP.x * side, FP_GRIP.y, FP_GRIP.z);
+        matrices.multiply(rotation);
+        matrices.scale(FP_SCALE, FP_SCALE, FP_SCALE);
+        matrices.translate(-0.5F, -0.5F, -0.5F);
     }
 
     /** Точка меча (u, v, w) → координаты предмета в блоках (середина рукояти — в центре предмета). */
