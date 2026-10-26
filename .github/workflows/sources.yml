@@ -1,0 +1,50 @@
+name: sources
+
+# Декомпилированные исходники Minecraft и Fabric API — справка для разработки.
+# Запускается вручную: Actions → sources → Run workflow.
+on:
+  workflow_dispatch:
+
+jobs:
+  sources:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Исходники Minecraft
+        run: ./gradlew genSources --stacktrace
+
+      - name: Сбор
+        run: |
+          mkdir -p out
+          find . ~/.gradle -name '*-sources.jar' | grep -i minecraft | grep -v fabric-loom | tee /dev/stderr | while read -r f; do cp "$f" out/; done
+          ver=$(grep '^fabric_version=' gradle.properties | cut -d= -f2)
+          base=https://maven.fabricmc.net/net/fabricmc/fabric-api
+          curl -sSfL "$base/fabric-api/$ver/fabric-api-$ver.pom" -o pom.xml
+          python3 - <<'PY' > deps.txt
+          import re
+          pom = open("pom.xml").read()
+          for dep in re.findall(r"<dependency>(.*?)</dependency>", pom, re.S):
+              a = re.search(r"<artifactId>(.*?)</artifactId>", dep).group(1)
+              v = re.search(r"<version>(.*?)</version>", dep).group(1)
+              print(a, v)
+          PY
+          mkdir -p out/fabric
+          while read -r a v; do
+            curl -sSfL "$base/$a/$v/$a-$v-sources.jar" -o "out/fabric/$a-$v-sources.jar" || echo "нет $a"
+          done < deps.txt
+          ls -la out out/fabric
+          echo "--- Fabric API для 1.21.1:"
+          curl -s "$base/fabric-api/maven-metadata.xml" | grep -o '<version>[^<]*1\.21\.1</version>' | tail -5
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sources
+          path: out/

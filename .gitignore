@@ -1,0 +1,29 @@
+# Gradle
+.gradle/
+build/
+out/
+classes/
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.classpath
+.project
+.settings/
+bin/
+
+# Запуски Minecraft
+run/
+run-shots/
+remappedSrc/
+
+# Исходники Minecraft для справки (не в репозиторий)
+ref/
+
+# Системное
+.DS_Store
+Thumbs.db
+__pycache__/
