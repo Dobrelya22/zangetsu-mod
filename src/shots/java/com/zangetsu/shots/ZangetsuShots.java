@@ -408,7 +408,7 @@ public class ZangetsuShots implements ClientModInitializer {
         onServer(s -> HollowForm.tryGetsuga(player(s)));
         pause(5);
         shot("getsuga_side");
-        pause(30);
+        pause(60);
 
         // Маска трескается: 30 с — трещина, 15 с — скол, 5 с — почти рассыпалась, потом ломается.
         view(Perspective.THIRD_PERSON_FRONT);

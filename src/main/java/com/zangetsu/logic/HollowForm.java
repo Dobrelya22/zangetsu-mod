@@ -146,8 +146,9 @@ public final class HollowForm {
     private static void onCrack(ServerPlayerEntity player, int crack) {
         Sync.hollow(player, true);
         ServerWorld world = player.getServerWorld();
-        Vec3d head = player.getEyePos();
-        Fx.particles(world, new BlockStateParticleEffect(ParticleTypes.BLOCK, Blocks.BONE_BLOCK.getDefaultState()), head, 8 + crack * 10, 0.25, 0.08);
+        // Осколки — перед лицом, а не в самой камере.
+        Vec3d face = player.getEyePos().add(player.getRotationVector().multiply(0.7));
+        Fx.particles(world, new BlockStateParticleEffect(ParticleTypes.BLOCK, Blocks.BONE_BLOCK.getDefaultState()), face, 6 + crack * 6, 0.2, 0.08);
         Fx.sound(player, SoundEvents.BLOCK_BONE_BLOCK_BREAK, 0.9F, 1.3F - crack * 0.15F);
         Fx.sound(player, SoundEvents.BLOCK_GLASS_BREAK, 0.3F + crack * 0.2F, 1.5F - crack * 0.2F);
         player.sendMessage(Text.translatable("zangetsu.hollow.crack." + crack).formatted(crack == 3 ? Formatting.DARK_RED : Formatting.RED), true);
@@ -170,9 +171,9 @@ public final class HollowForm {
         }
         Sync.hollow(player, false);
         ServerWorld world = player.getServerWorld();
-        Vec3d head = player.getEyePos();
-        // Маска раскалывается.
-        Fx.particles(world, new BlockStateParticleEffect(ParticleTypes.BLOCK, Blocks.BONE_BLOCK.getDefaultState()), head, 50, 0.3, 0.1);
+        Vec3d face = player.getEyePos().add(player.getRotationVector().multiply(0.8));
+        // Маска раскалывается — осколки разлетаются перед лицом.
+        Fx.particles(world, new BlockStateParticleEffect(ParticleTypes.BLOCK, Blocks.BONE_BLOCK.getDefaultState()), face, 30, 0.3, 0.1);
         Fx.sound(player, SoundEvents.BLOCK_GLASS_BREAK, 1.0F, 0.6F);
         Fx.sound(player, SoundEvents.BLOCK_BONE_BLOCK_BREAK, 1.0F, 0.8F);
         if (timeUp) {

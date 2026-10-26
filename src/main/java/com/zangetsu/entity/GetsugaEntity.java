@@ -98,7 +98,7 @@ public class GetsugaEntity extends Entity {
 
     /** Половина высоты волны: выше в середине, острые кончики. */
     public static float halfWidth(float t, float size) {
-        return (float) (0.45 * size * Math.pow(1.0 - Math.abs(t), 0.6));
+        return (float) (0.62 * size * Math.pow(1.0 - Math.abs(t), 0.6));
     }
 
     /** Поворот из координат серпа в мировые — тот же, что у отрисовщика (по взгляду игрока, без крена). */

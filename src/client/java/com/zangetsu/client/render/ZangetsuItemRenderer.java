@@ -13,6 +13,7 @@ import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.MathHelper;
+import net.minecraft.util.math.RotationAxis;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 
@@ -46,6 +47,7 @@ public class ZangetsuItemRenderer implements BuiltinItemRendererRegistry.Dynamic
     private static final float EDGE_T = 0.05F;
     private static final float HILT_V = -0.5F;
     private static final int TIP_SEGMENTS = 10;
+    private static final float FIRST_PERSON_LEAN = 18.0F;
 
     // ---- глаз
     private static final float EYE_U = 10.6F;
@@ -66,12 +68,21 @@ public class ZangetsuItemRenderer implements BuiltinItemRendererRegistry.Dynamic
     @Override
     public void render(ItemStack stack, ModelTransformationMode mode, MatrixStack matrices, VertexConsumerProvider consumers, int light, int overlay) {
         int eye = stack.getOrDefault(ModComponents.EYE, Eye.CLOSED);
+        matrices.push();
+        if (mode == ModelTransformationMode.FIRST_PERSON_RIGHT_HAND || mode == ModelTransformationMode.FIRST_PERSON_LEFT_HAND) {
+            // От первого лица клинок наклонён к середине экрана, чтобы был виден целиком, а не столбом у края.
+            float lean = mode == ModelTransformationMode.FIRST_PERSON_RIGHT_HAND ? FIRST_PERSON_LEAN : -FIRST_PERSON_LEAN;
+            matrices.translate(0.5F, 0.5F, 0.5F);
+            matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(lean));
+            matrices.translate(-0.5F, -0.5F, -0.5F);
+        }
         Mesh mesh = new Mesh(matrices.peek(), consumers.getBuffer(RenderLayer.getEntityCutoutNoCull(TEXTURE)), light, overlay);
         pommel(mesh);
         hilt(mesh);
         collar(mesh);
         blade(mesh, eye == Eye.BURNING);
         renderEye(eye, mode, matrices, consumers, light, overlay);
+        matrices.pop();
     }
 
     /** Точка меча (u, v, w) → координаты предмета в блоках (середина рукояти — в центре предмета). */

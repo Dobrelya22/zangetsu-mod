@@ -88,7 +88,7 @@ public static class ZangetsuTextures
         SwordPaint sp = PaintSword();
         Out(SwordAtlas(), assets, "textures/entity/zangetsu_model.png", 6);
         Out(SwordIcon(sp), assets, "textures/item/zangetsu_icon.png", 8);
-        Out(EyeParts(), assets, "textures/entity/zangetsu_eye.png", 16);
+        Out(EyeParts(), assets, "textures/entity/zangetsu_eye.png", 4);
         Out(White(), assets, "textures/misc/white.png", 16);
         Out(Icon(), assets, "icon.png", 4);
         Out(Spirit(), assets, "textures/entity/spirit.png", 4);
@@ -794,44 +794,59 @@ public static class ZangetsuTextures
     }
 
     /**
-     * Детали 3D-глаза (32×32): белок с прожилками (0,0)-(16,8), радужки — обычная (0,8), горящая (8,8),
+     * Детали 3D-глаза (128×128, раскладка в долях как у 32×32): белок (0,0)-(16,8), радужки — обычная (0,8), горящая (8,8),
      * сердитая (16,8) по 8×8 (круг, вне круга прозрачно), веки (0,16)-(16,20), обод (16,16)-(24,20),
      * чёрный (24,16)-(28,20), блик (28,16)-(32,20).
      */
     static Canvas EyeParts()
     {
-        var c = new Canvas(32, 32);
-        for (int y = 0; y < 8; y++)
-            for (int x = 0; x < 16; x++)
+        // Раскладка та же, что у прежней текстуры 32×32, только в 4 раза подробнее (128×128).
+        const int K = 4;
+        var c = new Canvas(32 * K, 32 * K);
+        // Белок (0,0)-(64,32): чёрно-багровый, с ветвистыми алыми прожилками от уголков.
+        for (int y = 0; y < 8 * K; y++)
+            for (int x = 0; x < 16 * K; x++)
             {
-                double vein = Hash(x / 2, y, 31);
-                Color col = vein > 0.8 ? C(110, 12, 16) : Mix(C(28, 8, 10), C(12, 4, 6), Math.Abs(y - 3.5) / 4.0);
-                c.Set(x, y, col);
+                double fy = Math.Abs(y + 0.5 - 4 * K) / (4.0 * K), fx = Math.Abs(x + 0.5 - 8 * K) / (8.0 * K);
+                Color col = Mix(C(34, 9, 12), C(10, 3, 5), fy * 0.8 + fx * 0.3);
+                double vein = Math.Abs(Math.Sin(x * 0.21 + Math.Sin(y * 0.37) * 2.0 + Hash(x / 9, y / 9, 31) * 3.0));
+                if (vein < 0.06 + fx * 0.05) col = Mix(col, C(150, 16, 22), 0.75);
+                c.Set(x, y, Mul(col, 1.0 + (Hash(x, y, 32) - 0.5) * 0.1));
             }
-        Iris(c, 0, 8, C(255, 244, 140), C(255, 200, 36), C(230, 132, 0), C(84, 40, 0));
-        Iris(c, 8, 8, C(255, 255, 236), C(255, 228, 90), C(255, 120, 20), C(190, 30, 6));
-        Iris(c, 16, 8, C(255, 200, 60), C(240, 110, 16), C(190, 50, 8), C(70, 12, 6));
-        for (int y = 16; y < 20; y++)
-            for (int x = 0; x < 16; x++)
-                c.Set(x, y, Mul(Mix(C(96, 70, 74), C(50, 34, 38), (y - 16) / 3.0), 1.0 + (Hash(x, y, 33) - 0.5) * 0.15));
-        Paint(c, 16, 16, 24, 20, C(128, 18, 22), 0.2, 34);
-        Paint(c, 24, 16, 28, 20, C(6, 3, 3), 0, 0);
-        Paint(c, 28, 16, 32, 20, C(255, 255, 255), 0, 0);
+        Iris(c, 0, 8 * K, 8 * K, C(255, 246, 150), C(255, 202, 40), C(232, 132, 0), C(84, 40, 0));
+        Iris(c, 8 * K, 8 * K, 8 * K, C(255, 255, 238), C(255, 230, 96), C(255, 122, 20), C(190, 30, 6));
+        Iris(c, 16 * K, 8 * K, 8 * K, C(255, 204, 64), C(240, 112, 16), C(190, 50, 8), C(70, 12, 6));
+        // Веки (0,64)-(64,80): кожистые, светлее к краю, с тёмной каймой ресниц снизу.
+        for (int y = 0; y < 4 * K; y++)
+            for (int x = 0; x < 16 * K; x++)
+            {
+                Color col = Mix(C(104, 76, 80), C(48, 32, 36), y / (4.0 * K - 1));
+                if (Math.Abs(Math.Sin(x * 0.5 + y * 0.2)) < 0.12) col = Mul(col, 0.8);   // складки
+                c.Set(x, 16 * K + y, Mul(col, 1.0 + (Hash(x, y, 33) - 0.5) * 0.12));
+            }
+        // Обод (64,64)-(96,80): багровый, с бликом сверху.
+        for (int y = 0; y < 4 * K; y++)
+            for (int x = 0; x < 8 * K; x++)
+                c.Set(16 * K + x, 16 * K + y, Mul(Mix(C(176, 30, 34), C(92, 10, 14), y / (4.0 * K - 1)), 1.0 + (Hash(x, y, 34) - 0.5) * 0.16));
+        Paint(c, 24 * K, 16 * K, 28 * K, 20 * K, C(6, 3, 3), 0, 0);
+        Paint(c, 28 * K, 16 * K, 32 * K, 20 * K, C(255, 255, 255), 0, 0);
         return c;
     }
 
-    static void Iris(Canvas c, int x0, int y0, Color center, Color mid, Color outer, Color limbal)
+    /** Радужка: светлое кольцо у зрачка, лучистые волокна, тёмный лимб по краю. */
+    static void Iris(Canvas c, int x0, int y0, int size, Color center, Color mid, Color outer, Color limbal)
     {
-        for (int y = 0; y < 8; y++)
-            for (int x = 0; x < 8; x++)
+        double half = size / 2.0;
+        for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
             {
-                double dx = x + 0.5 - 4, dy = y + 0.5 - 4;
-                double r = Math.Sqrt(dx * dx + dy * dy) / 4.0;
+                double dx = x + 0.5 - half, dy = y + 0.5 - half;
+                double r = Math.Sqrt(dx * dx + dy * dy) / half;
                 if (r > 1.0) continue;
                 double ang = Math.Atan2(dy, dx);
-                double streak = 0.9 + 0.1 * Math.Cos(ang * 7 + 0.5);
-                Color col = r < 0.35 ? center : (r < 0.68 ? mid : (r < 0.88 ? outer : limbal));
-                c.Set(x0 + x, y0 + y, Mul(col, streak));
+                double fibers = 0.86 + 0.14 * Math.Cos(ang * 23 + Math.Sin(ang * 5) * 2) + (Hash(x, y, 35) - 0.5) * 0.1;
+                Color col = r < 0.32 ? center : (r < 0.62 ? Mix(center, mid, (r - 0.32) / 0.3) : (r < 0.86 ? Mix(mid, outer, (r - 0.62) / 0.24) : Mix(outer, limbal, (r - 0.86) / 0.14)));
+                c.Set(x0 + x, y0 + y, Mul(col, fibers));
             }
     }
 
