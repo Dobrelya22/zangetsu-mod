@@ -11,11 +11,35 @@ base {
 
 loom {
     splitEnvironmentSourceSets()
+}
 
+// Проверочная съёмка живёт отдельно и в jar мода не попадает.
+sourceSets {
+    shots {
+        compileClasspath += sourceSets.client.compileClasspath + sourceSets.main.output + sourceSets.client.output
+        runtimeClasspath += sourceSets.client.runtimeClasspath + sourceSets.main.output + sourceSets.client.output
+    }
+}
+// Классы и fabric.mod.json съёмки в одной папке: так Fabric видит её отдельным модом.
+sourceSets.shots.output.resourcesDir = sourceSets.shots.java.destinationDirectory.get().asFile
+
+loom {
     mods {
         'zangetsu' {
             sourceSet sourceSets.main
             sourceSet sourceSets.client
+        }
+    }
+
+    runs {
+        // Проверочная съёмка: ./gradlew runShots (игра сама проходит сцены мода и делает скриншоты)
+        shots {
+            client()
+            name 'Shots'
+            source sourceSets.shots
+            vmArg '-Dzangetsu.shots=true'
+            programArgs '--width', '1280', '--height', '720'
+            runDir 'run-shots'
         }
     }
 }

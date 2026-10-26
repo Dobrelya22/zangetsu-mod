@@ -25,3 +25,6 @@ jobs:
         with:
           name: zangetsu
           path: build/libs/zangetsu-*.jar
+
+      - name: Сценарий съёмки
+        run: ./gradlew shotsClasses --stacktrace

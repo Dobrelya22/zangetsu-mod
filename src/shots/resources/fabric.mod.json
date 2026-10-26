@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "zangetsu_shots",
+  "version": "1.0.0",
+  "name": "Zangetsu — shots",
+  "environment": "client",
+  "entrypoints": {
+    "client": ["com.zangetsu.shots.ZangetsuShots"]
+  },
+  "depends": {
+    "zangetsu": "*"
+  }
+}

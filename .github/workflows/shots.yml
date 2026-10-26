@@ -1,0 +1,50 @@
+name: shots
+
+# Проверочная съёмка: настоящий клиент Minecraft на виртуальном экране сам проходит все сцены мода
+# и делает скриншоты. Запуск вручную: Actions → shots → Run workflow. Кадры — в артефакте «shots».
+on:
+  workflow_dispatch:
+
+jobs:
+  shots:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Пакеты для экрана
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb libgl1-mesa-dri mesa-utils
+
+      - name: Съёмка
+        run: |
+          mkdir -p run-shots
+          rm -rf run-shots/saves/zangetsu-shots run-shots/screenshots
+          cp tools/shots/options.txt run-shots/options.txt
+          ./gradlew --no-daemon downloadAssets shotsClasses
+          export DISPLAY=:99
+          export LIBGL_ALWAYS_SOFTWARE=1
+          Xvfb :99 -screen 0 1280x720x24 -nolisten tcp &
+          sleep 2
+          timeout 1800 ./gradlew --no-daemon runShots || echo "runShots завершился с ошибкой"
+          ls -la run-shots/screenshots || true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: shots
+          path: |
+            run-shots/screenshots/
+            run-shots/logs/latest.log
+
+      - name: Журнал игры
+        if: always()
+        run: grep -E "ERROR|Exception|Caused by|Съёмка|Зангецу|zangetsu|Mixin" run-shots/logs/latest.log | head -300 || true
