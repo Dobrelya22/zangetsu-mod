@@ -1,4 +1,0 @@
-{
-  "parent": "zangetsu:item/zangetsu_base",
-  "textures": {"layer0": "zangetsu:item/zangetsu_burning"}
-}

@@ -5,7 +5,11 @@ import com.zangetsu.entity.ThrownZangetsuEntity;
 import com.zangetsu.network.AnimationPayload;
 import com.zangetsu.network.ClientFxPayload;
 import com.zangetsu.registry.ModAttachments;
+import com.zangetsu.registry.ModEntities;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import net.minecraft.item.ItemStack;
@@ -21,25 +25,27 @@ import net.minecraft.sound.SoundEvents;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
 import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Box;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.util.math.random.Random;
 import net.minecraft.world.GameMode;
+import net.minecraft.world.Heightmap;
 import net.minecraft.world.World;
 
 /**
- * Сон с мечами. Если меч потерян, достаточно лечь спать: игроку снится поле, где в землю воткнуты
- * сотни одинаковых Зангецу. Он берёт любой — и просыпается с мечом и всей его прокачкой.
+ * Сон с мечами. Если меч потерян, достаточно лечь спать: игроку снится бескрайняя холмистая земля,
+ * где в землю воткнуты сотни одинаковых Зангецу — куда ни иди, впереди появляются новые. Игрок берёт
+ * любой — и просыпается с мечом и всей его прокачкой.
  */
 public final class Dream {
     public static final RegistryKey<World> WORLD = RegistryKey.of(RegistryKeys.WORLD, ZangetsuMod.id("dream"));
-    /** Высота поверхности поля во сне (см. data/zangetsu/dimension/dream.json). */
-    public static final double GROUND_Y = 5.0;
     public static final int PULL_DURATION = 60;
-    private static final int SWORDS = 170;
-    private static final double FIELD_RADIUS = 34.0;
+    /** Сколько мечей держать вокруг игрока и на каком расстоянии. */
+    private static final int SWORDS_NEAR = 110;
+    private static final double NEAR = 40.0;
+    private static final double FAR = 62.0;
     private static final Set<UUID> PULLING = new HashSet<>();
+    private static final Map<UUID, Vec3d> LAST_POS = new HashMap<>();
 
     private Dream() {
     }
@@ -50,7 +56,11 @@ public final class Dream {
 
     /** У каждого игрока своё поле, чтобы сны не пересекались. */
     private static Vec3d center(UUID uuid) {
-        return new Vec3d(Math.floorMod(uuid.hashCode(), 64) * 2000 + 0.5, GROUND_Y, 0.5);
+        return new Vec3d(Math.floorMod(uuid.hashCode(), 64) * 4000 + 0.5, 0.0, 0.5);
+    }
+
+    private static double groundY(ServerWorld world, double x, double z) {
+        return world.getTopPosition(Heightmap.Type.MOTION_BLOCKING_NO_LEAVES, BlockPos.ofFloored(x, 0, z)).getY();
     }
 
     public static boolean shouldBegin(ServerPlayerEntity player, ZangetsuData data) {
@@ -71,11 +81,14 @@ public final class Dream {
                 player.getZ(), player.getYaw(), player.getPitch(), player.interactionManager.getGameMode().asString());
         Vec3d c = center(player.getUuid());
         loadField(dream, c);
-        player.teleport(dream, c.x, c.y, c.z, 0.0F, 10.0F);
+        double y = groundY(dream, c.x, c.z);
+        player.teleport(dream, c.x, y, c.z, 0.0F, 10.0F);
         if (player.interactionManager.getGameMode() != GameMode.SPECTATOR) {
             player.changeGameMode(GameMode.ADVENTURE);
         }
-        spawnSwords(dream, player.getUuid(), c);
+        LAST_POS.put(player.getUuid(), new Vec3d(c.x, y, c.z));
+        spawnFirst(dream, player.getUuid(), c);
+        maintain(player, dream, true);
 
         player.networkHandler.sendPacket(new TitleFadeS2CPacket(30, 80, 30));
         player.networkHandler.sendPacket(new SubtitleS2CPacket(Text.translatable("zangetsu.dream.subtitle").formatted(Formatting.GRAY)));
@@ -94,21 +107,58 @@ public final class Dream {
         }
     }
 
-    /** Сотни одинаковых мечей, воткнутых в землю под разными углами. */
-    private static void spawnSwords(ServerWorld dream, UUID owner, Vec3d c) {
+    /** Первые мечи — совсем рядом и прямо перед игроком, чтобы было за что взяться сразу. */
+    private static void spawnFirst(ServerWorld dream, UUID owner, Vec3d c) {
+        for (int i = 0; i < 6; i++) {
+            double angle = Math.PI / 2.0 + (i - 2.5) * 0.35;
+            double distance = 2.5 + i * 0.6;
+            plant(dream, owner, c.x + Math.cos(angle) * distance, c.z + Math.sin(angle) * distance);
+        }
+    }
+
+    private static void plant(ServerWorld dream, UUID owner, double x, double z) {
+        if (!dream.isChunkLoaded(MathHelper.floor(x) >> 4, MathHelper.floor(z) >> 4)) {
+            return;
+        }
         Random random = dream.getRandom();
-        for (int i = 0; i < SWORDS; i++) {
-            double angle = random.nextDouble() * Math.PI * 2.0;
-            // Первые мечи — совсем рядом и прямо перед игроком, чтобы было за что взяться сразу.
-            double distance = i < 6 ? 2.5 + i * 0.6 : 3.5 + Math.sqrt(random.nextDouble()) * (FIELD_RADIUS - 3.5);
-            if (i < 6) {
-                angle = Math.PI / 2.0 + (i - 2.5) * 0.35;
+        double y = groundY(dream, x, z);
+        ThrownZangetsuEntity.plant(dream, new Vec3d(x, y, z), owner, random.nextFloat() * 360.0F,
+                (random.nextFloat() - 0.5F) * 24.0F, (random.nextFloat() - 0.5F) * 24.0F);
+    }
+
+    /**
+     * Мечи вокруг игрока: сотня-другая в радиусе 40 блоков, новые появляются впереди по ходу движения,
+     * далеко позади исчезают. Так поле не кончается, куда ни беги.
+     */
+    private static void maintain(ServerPlayerEntity player, ServerWorld dream, boolean fill) {
+        UUID owner = player.getUuid();
+        Vec3d here = player.getPos();
+        List<? extends ThrownZangetsuEntity> mine = dream.getEntitiesByType(ModEntities.THROWN_ZANGETSU,
+                s -> owner.equals(s.getOwner()) && s.isDream());
+        int near = 0;
+        for (ThrownZangetsuEntity sword : mine) {
+            double dx = sword.getX() - here.x, dz = sword.getZ() - here.z;
+            double d = Math.sqrt(dx * dx + dz * dz);
+            if (d > FAR && sword.getState() == ThrownZangetsuEntity.STUCK) {
+                sword.discard();
+            } else if (d <= NEAR) {
+                near++;
             }
-            Vec3d at = new Vec3d(c.x + Math.cos(angle) * distance, GROUND_Y, c.z + Math.sin(angle) * distance);
-            float yaw = random.nextFloat() * 360.0F;
-            float tiltX = (random.nextFloat() - 0.5F) * 24.0F;
-            float tiltZ = (random.nextFloat() - 0.5F) * 24.0F;
-            ThrownZangetsuEntity.plant(dream, at, owner, yaw, tiltX, tiltZ);
+        }
+        Vec3d last = LAST_POS.getOrDefault(owner, here);
+        Vec3d moved = here.subtract(last);
+        LAST_POS.put(owner, here);
+        boolean moving = moved.horizontalLengthSquared() > 0.01;
+        double heading = Math.atan2(moved.z, moved.x);
+        Random random = dream.getRandom();
+        int budget = fill ? SWORDS_NEAR : 12;
+        for (int i = 0; i < budget && near < SWORDS_NEAR; i++) {
+            double angle = moving && random.nextFloat() < 0.75F
+                    ? heading + random.nextGaussian() * 0.9
+                    : random.nextDouble() * Math.PI * 2.0;
+            double distance = fill ? 4.0 + Math.sqrt(random.nextDouble()) * (NEAR - 4.0) : 18.0 + random.nextDouble() * (NEAR - 18.0);
+            plant(dream, owner, here.x + Math.cos(angle) * distance, here.z + Math.sin(angle) * distance);
+            near++;
         }
     }
 
@@ -140,6 +190,7 @@ public final class Dream {
         ZangetsuData.DreamReturn back = data.dream;
         data.dream = null;
         clearSwords(player);
+        LAST_POS.remove(player.getUuid());
 
         ServerWorld target = null;
         if (back != null) {
@@ -176,8 +227,7 @@ public final class Dream {
             return;
         }
         UUID owner = player.getUuid();
-        Box field = Box.of(center(owner), FIELD_RADIUS * 2 + 16, 32, FIELD_RADIUS * 2 + 16);
-        for (ThrownZangetsuEntity sword : dream.getEntitiesByClass(ThrownZangetsuEntity.class, field, s -> owner.equals(s.getOwner()))) {
+        for (ThrownZangetsuEntity sword : dream.getEntitiesByType(ModEntities.THROWN_ZANGETSU, s -> owner.equals(s.getOwner()))) {
             sword.discard();
         }
     }
@@ -188,9 +238,9 @@ public final class Dream {
         player.teleport(overworld, spawn.getX() + 0.5, spawn.getY(), spawn.getZ() + 0.5, 0.0F, 0.0F);
     }
 
-    /** Каждый тик: игрок во сне после перезахода снова видит мечи; случайно попавший сюда — уходит домой. */
+    /** Каждые полсекунды: мечи появляются вокруг идущего игрока; случайно попавший сюда уходит домой. */
     static void tick(ServerPlayerEntity player, ZangetsuData data) {
-        if (!inDream(player) || PULLING.contains(player.getUuid()) || player.age % 40 != 0) {
+        if (!inDream(player) || PULLING.contains(player.getUuid()) || player.age % 10 != 0) {
             return;
         }
         if (data.dream == null) {
@@ -200,15 +250,7 @@ public final class Dream {
             sendHome(player);
             return;
         }
-        ServerWorld dream = player.getServerWorld();
-        UUID owner = player.getUuid();
-        boolean hasSwords = !dream.getEntitiesByClass(ThrownZangetsuEntity.class, player.getBoundingBox().expand(48.0),
-                s -> owner.equals(s.getOwner())).isEmpty();
-        if (!hasSwords) {
-            Vec3d c = center(owner);
-            loadField(dream, c);
-            spawnSwords(dream, owner, c);
-        }
+        maintain(player, player.getServerWorld(), false);
     }
 
     /** Сразу отправить игрока в сон (команда для проверки). */

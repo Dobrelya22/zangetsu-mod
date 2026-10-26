@@ -1,9 +1,15 @@
 {
-  "parent": "zangetsu:item/zangetsu_base",
-  "textures": {"layer0": "zangetsu:item/zangetsu_closed"},
-  "overrides": [
-    {"predicate": {"zangetsu:eye": 0.25}, "model": "zangetsu:item/zangetsu_open"},
-    {"predicate": {"zangetsu:eye": 0.5}, "model": "zangetsu:item/zangetsu_burning"},
-    {"predicate": {"zangetsu:eye": 0.9}, "model": "zangetsu:item/zangetsu_angry"}
-  ]
+  "parent": "builtin/entity",
+  "gui_light": "front",
+  "textures": {"particle": "zangetsu:item/zangetsu_icon"},
+  "display": {
+    "thirdperson_righthand": {"rotation": [0, -90, 55], "translation": [0, 6.7, 0.05], "scale": [1.25, 1.25, 1.25]},
+    "thirdperson_lefthand": {"rotation": [0, 90, -55], "translation": [0, 6.7, 0.05], "scale": [1.25, 1.25, 1.25]},
+    "firstperson_righthand": {"rotation": [0, -90, 25], "translation": [1.13, 3.2, 1.13], "scale": [0.7, 0.7, 0.7]},
+    "firstperson_lefthand": {"rotation": [0, 90, -25], "translation": [1.13, 3.2, 1.13], "scale": [0.7, 0.7, 0.7]},
+    "gui": {"rotation": [0, 0, 0], "translation": [0, 0, 0], "scale": [1, 1, 1]},
+    "ground": {"rotation": [0, 0, 0], "translation": [0, 2, 0], "scale": [0.5, 0.5, 0.5]},
+    "fixed": {"rotation": [0, 180, 0], "translation": [0, 0, 0], "scale": [1, 1, 1]},
+    "head": {"rotation": [0, 180, 0], "translation": [0, 13, 7], "scale": [1, 1, 1]}
+  }
 }

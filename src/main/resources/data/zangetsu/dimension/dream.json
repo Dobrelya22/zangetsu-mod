@@ -1,18 +1,7 @@
 {
   "type": "zangetsu:dream",
   "generator": {
-    "type": "minecraft:flat",
-    "settings": {
-      "biome": "zangetsu:dream_field",
-      "features": false,
-      "lakes": false,
-      "layers": [
-        {"block": "minecraft:bedrock", "height": 1},
-        {"block": "minecraft:stone", "height": 2},
-        {"block": "minecraft:dirt", "height": 1},
-        {"block": "minecraft:coarse_dirt", "height": 1}
-      ],
-      "structure_overrides": []
-    }
+    "type": "zangetsu:dream",
+    "biome": "zangetsu:dream_field"
   }
 }

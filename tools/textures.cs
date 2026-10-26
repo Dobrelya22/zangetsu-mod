@@ -84,17 +84,21 @@ public static class ZangetsuTextures
     public static void Run(string assets, string preview)
     {
         previewDir = preview;
-        string[] names = { "zangetsu_closed", "zangetsu_open", "zangetsu_burning", "zangetsu_angry" };
-        for (int state = 0; state < names.Length; state++)
-        {
-            Out(Sword(state), assets, "textures/item/" + names[state] + ".png", 8);
-        }
+        // Меч — слоями разной толщины; глаз — отдельные 3D-детали.
+        SwordPaint sp = PaintSword();
+        Out(SwordLayer(sp, new[] { P_POMMEL, P_WRAP, P_COLLAR }, false, false), assets, "textures/item/zangetsu_hilt.png", 8);
+        Out(SwordLayer(sp, new[] { P_SPINE }, false, false), assets, "textures/item/zangetsu_spine.png", 8);
+        Out(SwordLayer(sp, new[] { P_CORE }, true, false), assets, "textures/item/zangetsu_core.png", 8);
+        Out(SwordLayer(sp, new[] { P_CORE }, true, true), assets, "textures/item/zangetsu_core_burning.png", 8);
+        Out(SwordLayer(sp, new[] { P_EDGE }, false, false), assets, "textures/item/zangetsu_edge.png", 8);
+        Out(SwordIcon(sp), assets, "textures/item/zangetsu_icon.png", 8);
+        Out(EyeParts(), assets, "textures/entity/zangetsu_eye.png", 16);
+        Out(White(), assets, "textures/misc/white.png", 16);
         Out(Icon(), assets, "icon.png", 4);
         Out(Spirit(), assets, "textures/entity/spirit.png", 4);
         Out(SpiritEyes(), assets, "textures/entity/spirit_eyes.png", 4);
         Out(HollowMask(), assets, "textures/entity/hollow_mask.png", 8);
         Out(HollowMaskEyes(), assets, "textures/entity/hollow_mask_eyes.png", 8);
-        Out(Getsuga(), assets, "textures/entity/getsuga.png", 8);
         Out(CrescentMoon(), assets, "textures/environment/crescent_moon.png", 6);
         Out(EnderCut(), assets, "textures/entity/ender_cut.png", 16);
     }
@@ -305,7 +309,7 @@ public static class ZangetsuTextures
                 double a;
                 if (band > 0)
                 {
-                    col = Mix(C(255, 236, 200), C(255, 255, 250), Sat(band / 4));
+                    col = Mix(C(220, 16, 20), C(255, 120, 90), Sat(band / 5));
                     a = 1;
                 }
                 else
@@ -314,12 +318,19 @@ public static class ZangetsuTextures
                     double r = Math.Sqrt((px - 32) * (px - 32) + (py - 32) * (py - 32));
                     double edge = Sat((31.0 - r) / 6.0);
                     double glow = Math.Exp(band / 3.2);
-                    col = C(255, 70, 50);
-                    a = glow * 0.75 * edge;
+                    col = C(190, 0, 8);
+                    a = glow * 0.8 * edge;
                 }
                 c.Set(x, y, Color.FromArgb(Cl(a * 255), col.R, col.G, col.B));
             }
         }
+        return c;
+    }
+
+    static Canvas White()
+    {
+        var c = new Canvas(4, 4);
+        c.Fill(0, 0, 4, 4, C(255, 255, 255));
         return c;
     }
 
@@ -344,53 +355,60 @@ public static class ZangetsuTextures
     /**
      * Зангецу (шикай): широкий клинок-тесак без гарды, тёмная сердцевина с серебряной кромкой и волнистым
      * хамоном, рукоять в чёрной оплётке поверх белой ткани. Меч лежит по диагонали, как ванильные мечи:
-     * навершие внизу слева, остриё вверху справа. Рисуем в координатах клинка: u — вдоль, v — поперёк
-     * (v &lt; 0 — обух сверху слева, v &gt; 0 — лезвие снизу справа).
+     * навершие внизу слева, остриё вверху справа. Рисуем в координатах клинка: u — вдоль, v — поперёк;
+     * лезвие (v &gt; 0) — сверху слева, обух (v &lt; 0) — снизу справа: так в руке от третьего лица лезвие
+     * смотрит вниз, как у настоящего тесака.
+     *
+     * <p>Меч объёмный: каждая часть — свой слой, и в игре слои выдавливаются на разную толщину
+     * (рукоять и обух толще, кромка тоньше). Глаз — отдельная 3D-деталь, на клинке под ним только гнездо.
      */
-    static Canvas Sword(int state)
+    const int P_POMMEL = 1, P_WRAP = 2, P_COLLAR = 3, P_SPINE = 5, P_CORE = 6, P_EDGE = 7;
+    const double EYE_U = 37.0, EYE_V = -0.8;
+    const double SW_S = 0.70710678, SW_X0 = 5.0, SW_Y0 = 59.0;
+
+    /** Центр глаза на картинке меча (в пикселях 64×64). */
+    static double EyeX() { return SW_X0 + (EYE_U - EYE_V) * SW_S; }
+    static double EyeY() { return SW_Y0 - (EYE_U + EYE_V) * SW_S; }
+
+    class SwordPaint
+    {
+        public Color[,] Col = new Color[64, 64];
+        public int[,] Part = new int[64, 64];
+        public int[,] Region = new int[64, 64];
+    }
+
+    static SwordPaint PaintSword()
     {
         const int N = 64;
-        var c = new Canvas(N, N);
-        double s = Math.Sqrt(0.5);
-        double px0 = 5.0, py0 = 59.0;
-        var region = new int[N, N];
+        var sp = new SwordPaint();
         for (int y = 0; y < N; y++)
         {
             for (int x = 0; x < N; x++)
             {
-                double X = x + 0.5 - px0, Y = y + 0.5 - py0;
-                double u = (X - Y) * s;
-                double v = (X + Y) * s;
+                double X = x + 0.5 - SW_X0, Y = y + 0.5 - SW_Y0;
+                double u = (X - Y) * SW_S;
+                double v = -(X + Y) * SW_S;
                 double n = Hash(x, y, 7) - 0.5;
                 Color col = Color.Empty;
+                int part = 0;
                 if (u >= 0 && u < 2.4 && Math.Abs(v) <= 3.3)
                 {
-                    // Навершие.
-                    col = v < -1.6 ? C(118, 122, 134) : (v > 1.6 ? C(26, 27, 32) : C(52, 55, 63));
-                    region[x, y] = 1;
+                    col = v > 1.6 ? C(118, 122, 134) : (v < -1.6 ? C(26, 27, 32) : C(52, 55, 63));
+                    part = P_POMMEL;
                 }
                 else if (u >= 2.4 && u < 19.6 && Math.Abs(v) <= 2.7)
                 {
-                    // Оплётка: белые «ромбы» ткани между перекрещенными чёрными шнурами.
                     double p = 4.3;
                     double k = Math.Round((u - 2.4 - p / 2) / p);
                     double uc = 2.4 + p / 2 + k * p;
                     bool cloth = Math.Abs(u - uc) + Math.Abs(v) * 0.9 < p / 2 - 0.25;
-                    if (cloth)
-                    {
-                        col = Mix(C(236, 232, 220), C(168, 162, 150), (v + 2.7) / 5.4);
-                    }
-                    else
-                    {
-                        col = v < -1.4 ? C(66, 60, 70) : C(22, 20, 25);
-                    }
-                    region[x, y] = 2;
+                    col = cloth ? Mix(C(236, 232, 220), C(168, 162, 150), (2.7 - v) / 5.4) : (v > 1.4 ? C(66, 60, 70) : C(22, 20, 25));
+                    part = P_WRAP;
                 }
                 else if (u >= 19.6 && u < 22.6 && Math.Abs(v) <= 3.8)
                 {
-                    // Муфта у основания клинка (хабаки).
-                    col = v < -2.0 ? C(246, 214, 122) : (v > 1.8 ? C(112, 80, 30) : C(190, 148, 60));
-                    region[x, y] = 3;
+                    col = v > 2.0 ? C(246, 214, 122) : (v < -1.8 ? C(112, 80, 30) : C(190, 148, 60));
+                    part = P_COLLAR;
                 }
                 else if (u >= 22.6 && u <= 82.5)
                 {
@@ -399,56 +417,152 @@ public static class ZangetsuTextures
                     {
                         double hamon = 4.1 + 0.9 * Math.Sin(u * 0.55) + 0.35 * Math.Sin(u * 1.37 + 1.0);
                         hamon = Math.Min(hamon, edge - 1.6);
-                        if (v < -5.1)
+                        if (v < -4.4)
                         {
-                            col = C(84, 89, 100);           // блик на обухе
-                        }
-                        else if (v < -4.4)
-                        {
-                            col = C(16, 17, 21);            // тёмный обух
+                            col = v < -5.1 ? C(12, 13, 16) : C(46, 49, 58);    // обух: тень снаружи, блик внутри
+                            part = P_SPINE;
                         }
                         else if (v < hamon - 0.45)
                         {
-                            col = Mix(C(50, 53, 62), C(28, 30, 36), (v + 4.4) / 9.0);
+                            col = Mix(C(28, 30, 36), C(52, 55, 64), (v + 4.4) / 9.0);
                             col = Mul(col, 1.0 + n * 0.10);
                             // Дол (желобок) вдоль клинка — от глаза до острия.
                             if (u > 47 && u < 64 && v > -2.6 && v < -1.5) col = C(17, 18, 23);
                             else if (u > 47 && u < 64 && v >= -1.5 && v < -0.8) col = C(70, 75, 86);
-                        }
-                        else if (v < hamon + 0.45)
-                        {
-                            col = C(176, 182, 194);         // туманная линия хамона
+                            part = P_CORE;
                         }
                         else
                         {
-                            double t = (v - hamon) / Math.Max(0.5, edge - hamon);
-                            col = Mix(C(140, 147, 160), C(226, 231, 239), t);
-                            if (v > edge - 0.95) col = C(252, 253, 255);
-                            col = Mul(col, 1.0 + n * 0.05);
+                            if (v < hamon + 0.45) col = C(176, 182, 194);        // туманная линия хамона
+                            else
+                            {
+                                double t = (v - hamon) / Math.Max(0.5, edge - hamon);
+                                col = Mix(C(140, 147, 160), C(226, 231, 239), t);
+                                if (v > edge - 0.95) col = C(252, 253, 255);
+                                col = Mul(col, 1.0 + n * 0.05);
+                            }
+                            part = P_EDGE;
                         }
-                        region[x, y] = 4;
                     }
                 }
-                if (col != Color.Empty) c.Set(x, y, col);
+                if (part != 0)
+                {
+                    sp.Col[x, y] = col;
+                    sp.Part[x, y] = part;
+                    sp.Region[x, y] = part >= P_SPINE ? 4 : part;
+                }
             }
         }
-
-        // Тёмный контур по силуэту, как у ванильных предметов.
-        var copy = (Color[,])c.Px.Clone();
+        // Тёмный контур по общему силуэту.
+        var copy = (Color[,])sp.Col.Clone();
         for (int y = 0; y < N; y++)
-        {
             for (int x = 0; x < N; x++)
             {
-                if (copy[x, y].A == 0) continue;
-                bool border = !Filled(copy, x - 1, y) || !Filled(copy, x + 1, y) || !Filled(copy, x, y - 1) || !Filled(copy, x, y + 1);
-                if (border) c.Set(x, y, Mix(copy[x, y], C(8, 8, 12), region[x, y] == 4 ? 0.55 : 0.7));
+                if (sp.Part[x, y] == 0) continue;
+                bool border = Empty(sp, x - 1, y) || Empty(sp, x + 1, y) || Empty(sp, x, y - 1) || Empty(sp, x, y + 1);
+                if (border) sp.Col[x, y] = Mix(copy[x, y], C(8, 8, 12), sp.Region[x, y] == 4 ? 0.55 : 0.7);
             }
-        }
+        return sp;
+    }
 
-        // Глаз — в тёмной сердцевине у основания клинка, ровно по осям картинки.
-        DrawEye(c, 32.5, 33.5, 1.0, state, region);
-        if (state == EYE_BURNING) Cracks(c, region);
+    static bool Empty(SwordPaint sp, int x, int y)
+    {
+        return x < 0 || y < 0 || x >= 64 || y >= 64 || sp.Part[x, y] == 0;
+    }
+
+    /** Один слой меча: только пиксели нужных частей (гнездо глаза — тёмное, горящий клинок — с трещинами). */
+    static Canvas SwordLayer(SwordPaint sp, int[] parts, bool socket, bool cracks)
+    {
+        var c = new Canvas(64, 64);
+        double ex = EyeX(), ey = EyeY();
+        for (int y = 0; y < 64; y++)
+            for (int x = 0; x < 64; x++)
+            {
+                if (Array.IndexOf(parts, sp.Part[x, y]) < 0) continue;
+                Color col = sp.Col[x, y];
+                if (socket && sp.Region[x, y] == 4)
+                {
+                    double dx = (x + 0.5 - ex) / 8.4, dy = (y + 0.5 - ey) / 5.4;
+                    double d = dx * dx + dy * dy;
+                    if (d < 1.0) col = Mix(C(30, 8, 10), C(14, 4, 6), 1.0 - d);
+                }
+                if (cracks && sp.Part[x, y] == P_CORE && CrackAt(x, y)) col = C(255, 110, 30);
+                c.Set(x, y, col);
+            }
         return c;
+    }
+
+    /** Раскалённые трещины горящего клинка — от глаза к острию и к рукояти. */
+    static bool CrackAt(int x, int y)
+    {
+        double X = x + 0.5 - SW_X0, Y = y + 0.5 - SW_Y0;
+        double u = (X - Y) * SW_S, v = -(X + Y) * SW_S;
+        double[][] paths = {
+            new[] { 43.0, -1.0, 47.0, -2.4, 52.0, -1.8, 57.0, -3.0, 63.0, -2.2, 68.0, -3.4 },
+            new[] { 44.0, 0.6, 49.0, 1.6, 53.0, 0.8, 58.0, 2.0 },
+            new[] { 31.0, -1.2, 28.0, -2.6, 25.0, -1.8 },
+            new[] { 31.0, 0.8, 27.5, 2.0, 24.5, 1.2 },
+        };
+        foreach (var p in paths)
+            for (int i = 0; i + 3 < p.Length; i += 2)
+            {
+                double ax = p[i], ay = p[i + 1], bx = p[i + 2], by = p[i + 3];
+                double vx = bx - ax, vy = by - ay;
+                double t = Sat(((u - ax) * vx + (v - ay) * vy) / (vx * vx + vy * vy));
+                double qx = ax + vx * t - u, qy = ay + vy * t - v;
+                if (qx * qx + qy * qy < 0.42) return true;
+            }
+        return false;
+    }
+
+    /** Плоская картинка меча целиком (с нарисованным глазом) — для частиц и значка. */
+    static Canvas SwordIcon(SwordPaint sp)
+    {
+        var c = SwordLayer(sp, new[] { P_POMMEL, P_WRAP, P_COLLAR, P_SPINE, P_CORE, P_EDGE }, false, false);
+        DrawEye(c, Math.Round(EyeX() * 2) / 2, Math.Round(EyeY() * 2) / 2, 1.0, EYE_OPEN, sp.Region);
+        return c;
+    }
+
+    /**
+     * Детали 3D-глаза (32×32): белок с прожилками (0,0)-(16,8), радужки — обычная (0,8), горящая (8,8),
+     * сердитая (16,8) по 8×8 (круг, вне круга прозрачно), веки (0,16)-(16,20), обод (16,16)-(24,20),
+     * чёрный (24,16)-(28,20), блик (28,16)-(32,20).
+     */
+    static Canvas EyeParts()
+    {
+        var c = new Canvas(32, 32);
+        for (int y = 0; y < 8; y++)
+            for (int x = 0; x < 16; x++)
+            {
+                double vein = Hash(x / 2, y, 31);
+                Color col = vein > 0.8 ? C(110, 12, 16) : Mix(C(28, 8, 10), C(12, 4, 6), Math.Abs(y - 3.5) / 4.0);
+                c.Set(x, y, col);
+            }
+        Iris(c, 0, 8, C(255, 244, 140), C(255, 200, 36), C(230, 132, 0), C(84, 40, 0));
+        Iris(c, 8, 8, C(255, 255, 236), C(255, 228, 90), C(255, 120, 20), C(190, 30, 6));
+        Iris(c, 16, 8, C(255, 200, 60), C(240, 110, 16), C(190, 50, 8), C(70, 12, 6));
+        for (int y = 16; y < 20; y++)
+            for (int x = 0; x < 16; x++)
+                c.Set(x, y, Mul(Mix(C(96, 70, 74), C(50, 34, 38), (y - 16) / 3.0), 1.0 + (Hash(x, y, 33) - 0.5) * 0.15));
+        Paint(c, 16, 16, 24, 20, C(128, 18, 22), 0.2, 34);
+        Paint(c, 24, 16, 28, 20, C(6, 3, 3), 0, 0);
+        Paint(c, 28, 16, 32, 20, C(255, 255, 255), 0, 0);
+        return c;
+    }
+
+    static void Iris(Canvas c, int x0, int y0, Color center, Color mid, Color outer, Color limbal)
+    {
+        for (int y = 0; y < 8; y++)
+            for (int x = 0; x < 8; x++)
+            {
+                double dx = x + 0.5 - 4, dy = y + 0.5 - 4;
+                double r = Math.Sqrt(dx * dx + dy * dy) / 4.0;
+                if (r > 1.0) continue;
+                double ang = Math.Atan2(dy, dx);
+                double streak = 0.9 + 0.1 * Math.Cos(ang * 7 + 0.5);
+                Color col = r < 0.35 ? center : (r < 0.68 ? mid : (r < 0.88 ? outer : limbal));
+                c.Set(x0 + x, y0 + y, Mul(col, streak));
+            }
     }
 
     static bool Filled(Color[,] px, int x, int y)
@@ -578,37 +692,6 @@ public static class ZangetsuTextures
         }
     }
 
-    /** Раскалённые трещины от горящего глаза вдоль тёмной сердцевины клинка. */
-    static void Cracks(Canvas c, int[,] region)
-    {
-        int[][] paths = {
-            new[] { 39, 27, 41, 25, 42, 23, 44, 22, 45, 20, 47, 18, 48, 16 },
-            new[] { 25, 39, 23, 41, 22, 42, 21, 44 },
-            new[] { 40, 31, 42, 30, 44, 28, 46, 27, 48, 25 },
-            new[] { 29, 27, 31, 25, 31, 23, 33, 21 },
-        };
-        foreach (var p in paths)
-        {
-            for (int i = 0; i + 3 < p.Length; i += 2)
-            {
-                Line(c, region, p[i], p[i + 1], p[i + 2], p[i + 3]);
-            }
-        }
-    }
-
-    static void Line(Canvas c, int[,] region, int xa, int ya, int xb, int yb)
-    {
-        int steps = Math.Max(Math.Abs(xb - xa), Math.Abs(yb - ya));
-        for (int i = 0; i <= steps; i++)
-        {
-            int x = (int)Math.Round(xa + (xb - xa) * (double)i / Math.Max(1, steps));
-            int y = (int)Math.Round(ya + (yb - ya) * (double)i / Math.Max(1, steps));
-            if (x < 0 || y < 0 || x >= c.W || y >= c.H || region[x, y] != 4) continue;
-            Color old = c.Px[x, y];
-            if (old.R > 120 && old.G > 120) continue;  // серебряную кромку не трогаем
-            c.Set(x, y, C(255, 120, 30));
-        }
-    }
 
     // ------------------------------------------------------------------ иконка
 

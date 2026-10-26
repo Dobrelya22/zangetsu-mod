@@ -75,8 +75,10 @@ public class ThrownZangetsuRenderer extends EntityRenderer<ThrownZangetsuEntity>
         // Картинка меча лежит по диагонали (остриё вверху справа) — поворот на −135° ставит его остриём вниз.
         matrices.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(-135.0F));
         matrices.scale(SCALE, SCALE, SCALE);
+        net.minecraft.entity.Entity previous = EyeTracker.push(entity);
         this.itemRenderer.renderItem(stack, ModelTransformationMode.NONE, light, OverlayTexture.DEFAULT_UV, matrices, consumers,
                 entity.getWorld(), entity.getId());
+        EyeTracker.pop(previous);
         matrices.pop();
         super.render(entity, yaw, tickDelta, matrices, consumers, light);
     }

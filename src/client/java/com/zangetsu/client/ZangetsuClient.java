@@ -28,7 +28,9 @@ import net.fabricmc.fabric.api.client.rendering.v1.EntityRendererRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 import net.fabricmc.fabric.api.client.rendering.v1.LivingEntityFeatureRendererRegistrationCallback;
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.item.ModelPredicateProviderRegistry;
+import com.zangetsu.client.render.ZangetsuItemRenderer;
+import net.fabricmc.fabric.api.client.model.loading.v1.ModelLoadingPlugin;
+import net.fabricmc.fabric.api.client.rendering.v1.BuiltinItemRendererRegistry;
 import net.minecraft.client.render.entity.PlayerEntityRenderer;
 import net.minecraft.entity.Entity;
 import net.minecraft.item.ItemStack;
@@ -44,11 +46,9 @@ public class ZangetsuClient implements ClientModInitializer {
         EntityRendererRegistry.register(ModEntities.ARROW_HALF, ArrowHalfRenderer::new);
         EntityRendererRegistry.register(ModEntities.GETSUGA, GetsugaRenderer::new);
 
-        // Текстура меча зависит от глаза: закрыт / открыт / горит / сердится.
-        ModelPredicateProviderRegistry.register(ModItems.ZANGETSU, ZangetsuMod.id("eye"), (stack, world, entity, seed) -> {
-            Integer eye = stack.get(ModComponents.EYE);
-            return eye == null ? 0.0F : eye / 3.0F;
-        });
+        // Меч — объёмная модель со своим отрисовщиком (слои клинка и живой 3D-глаз).
+        ModelLoadingPlugin.register(context -> context.addModels(ZangetsuItemRenderer.MODELS));
+        BuiltinItemRendererRegistry.INSTANCE.register(ModItems.ZANGETSU, new ZangetsuItemRenderer());
 
         LivingEntityFeatureRendererRegistrationCallback.EVENT.register((type, renderer, helper, context) -> {
             if (renderer instanceof PlayerEntityRenderer playerRenderer) {

@@ -72,8 +72,10 @@ public class SpiritRenderer extends EntityRenderer<ZangetsuSpiritEntity> {
             matrices.scale(HELD_SWORD_SCALE, HELD_SWORD_SCALE, HELD_SWORD_SCALE);
             // Рукоять (примерно 0,42 от центра картинки по диагонали) — в кулак.
             matrices.translate(0.42F * 0.7071F, 0.42F * 0.7071F, 0.0F);
+            net.minecraft.entity.Entity previous = EyeTracker.push(entity);
             this.itemRenderer.renderItem(this.sword, ModelTransformationMode.NONE, fullBright, OverlayTexture.DEFAULT_UV,
                     matrices, consumers, entity.getWorld(), entity.getId());
+            EyeTracker.pop(previous);
             matrices.pop();
         }
         matrices.pop();

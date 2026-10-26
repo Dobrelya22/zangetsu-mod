@@ -7,7 +7,10 @@ import com.zangetsu.registry.ModAttachments;
 import com.zangetsu.registry.ModComponents;
 import com.zangetsu.registry.ModEntities;
 import com.zangetsu.registry.ModItems;
+import com.zangetsu.world.DreamChunkGenerator;
 import net.fabricmc.api.ModInitializer;
+import net.minecraft.registry.Registries;
+import net.minecraft.registry.Registry;
 import net.minecraft.util.Identifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,6 +34,8 @@ public class ZangetsuMod implements ModInitializer {
         ModItems.init();
         ModEntities.init();
         ModAttachments.init();
+        // Генератор земли сна (холмы, валуны, трава) — до загрузки датапаков.
+        Registry.register(Registries.CHUNK_GENERATOR, id("dream"), DreamChunkGenerator.CODEC);
         ZangetsuNetworking.init();
         ServerEvents.init();
         ZangetsuCommand.init();

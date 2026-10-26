@@ -25,8 +25,20 @@ import org.joml.Matrix4f;
 public final class CrescentMoon {
     private static final Identifier TEXTURE = ZangetsuMod.id("textures/environment/crescent_moon.png");
     private static float shown;
+    /** Краснота неба — только в форме Пустого (во сне луна есть, а небо обычное). */
+    private static float blood;
 
     private CrescentMoon() {
+    }
+
+    /** Насколько проступила кровавая луна (0..1): небо и туман краснеют вместе с ней. */
+    public static float intensity() {
+        return blood;
+    }
+
+    /** Обычную луну прячем, пока видна кровавая. */
+    public static boolean hidesVanillaMoon() {
+        return shown > 0.05F;
     }
 
     private static boolean wanted() {
@@ -39,6 +51,7 @@ public final class CrescentMoon {
         // Плавно проступает и гаснет (≈ за секунду).
         float target = wanted() ? 1.0F : 0.0F;
         shown = MathHelper.clamp(shown + (target - shown) * 0.04F, 0.0F, 1.0F);
+        blood = MathHelper.clamp(blood + ((ClientState.HOLLOW.isEmpty() ? 0.0F : 1.0F) - blood) * 0.04F, 0.0F, 1.0F);
         if (shown < 0.01F) {
             return;
         }

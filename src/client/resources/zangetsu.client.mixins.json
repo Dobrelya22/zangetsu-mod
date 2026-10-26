@@ -4,10 +4,13 @@
   "package": "com.zangetsu.client.mixin",
   "compatibilityLevel": "JAVA_21",
   "client": [
+    "BackgroundRendererMixin",
     "BipedEntityModelMixin",
     "CameraMixin",
     "ClientPlayerEntityMixin",
+    "ClientWorldMixin",
     "EndermanEntityModelMixin",
+    "HeldItemRendererMixin",
     "LivingEntityRendererMixin",
     "WorldRendererMixin"
   ],

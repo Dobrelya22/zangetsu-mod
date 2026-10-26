@@ -23,7 +23,9 @@ import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.minecraft.client.MinecraftClient;
+import com.zangetsu.client.CameraDirector;
 import net.minecraft.client.gui.screen.TitleScreen;
+import net.minecraft.client.gui.screen.ingame.InventoryScreen;
 import net.minecraft.client.option.Perspective;
 import net.minecraft.client.util.ScreenshotRecorder;
 import net.minecraft.entity.Entity;
@@ -220,6 +222,19 @@ public class ZangetsuShots implements ClientModInitializer {
         pause(6);
         shot("third_person_day");
         view(Perspective.FIRST_PERSON);
+        // Сбоку от третьего лица — лезвие должно смотреть вниз.
+        act(c -> CameraDirector.begin(40, new CameraDirector.Shot(90.0F, 90.0F, 6.0F, 2.6F, 0.0F)));
+        pause(6);
+        shot("sword_side_3p");
+        act(c -> CameraDirector.begin(40, new CameraDirector.Shot(-90.0F, -90.0F, 6.0F, 2.6F, 0.0F)));
+        pause(6);
+        shot("sword_side_3p_other");
+        pause(40);
+        act(c -> c.setScreen(new InventoryScreen(c.player)));
+        pause(10);
+        shot("inventory");
+        act(c -> c.setScreen(null));
+        pause(4);
 
         // ---- Ночь: глаз открывается, стрелы рассекаются.
         command("time set 18000");
@@ -247,6 +262,11 @@ public class ZangetsuShots implements ClientModInitializer {
         look(180.0F, 12.0F);
         pause(12);
         shot("zombie");
+        look(160.0F, 20.0F);
+        pause(8);
+        shot("eye_looks_at_zombie");
+        look(180.0F, 12.0F);
+        pause(4);
         onServer(s -> Limbs.cut(this.zombie, player(s), Limbs.LEFT_ARM));
         pause(8);
         shot("zombie_left_arm");
@@ -367,6 +387,12 @@ public class ZangetsuShots implements ClientModInitializer {
         look(-150.0F, -48.0F);
         pause(10);
         shot("crescent_moon");
+        look(0.0F, -88.0F);
+        pause(4);
+        shot("sky_overhead_no_vanilla_moon");
+        look(180.0F, -12.0F);
+        pause(4);
+        shot("blood_sky");
         look(180.0F, 5.0F);
         pause(4);
         onServer(s -> HollowForm.tryGetsuga(player(s)));
@@ -389,6 +415,20 @@ public class ZangetsuShots implements ClientModInitializer {
         look(0.0F, 22.0F);
         pause(3);
         shot("dream_field_2");
+        onServer(s -> {
+            ServerPlayerEntity player = player(s);
+            double x = player.getX() + 70.0, z = player.getZ() + 10.0;
+            double y = player.getServerWorld().getTopPosition(net.minecraft.world.Heightmap.Type.MOTION_BLOCKING_NO_LEAVES,
+                    BlockPos.ofFloored(x, 0, z)).getY();
+            player.networkHandler.requestTeleport(x, y, z, 90.0F, 10.0F);
+        });
+        pause(60);
+        look(-90.0F, 8.0F);
+        pause(3);
+        shot("dream_far");
+        look(90.0F, 8.0F);
+        pause(3);
+        shot("dream_far_back");
         act(c -> {
             ThrownZangetsuEntity sword = nearestClient(c);
             if (sword != null) {
