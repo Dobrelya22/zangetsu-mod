@@ -17,10 +17,10 @@ ffprobe -v error -count_frames -select_streams v:0 -show_entries stream=nb_read_
 
 # Холодные тени, тёплые света, приглушённый цвет, контраст, виньетка и лёгкое неподвижное зерно (зерно,
 # меняющееся каждый кадр, раздувает файл в разы); полосы кашетирования после зерна снова чисто чёрные.
-grade="eq=contrast=1.12:saturation=0.84:gamma=0.96"
+grade="eq=contrast=1.08:saturation=0.88:gamma=1.06"
 grade="$grade,colorbalance=rs=-0.03:gs=-0.005:bs=0.04:rh=0.035:gh=0.01:bh=-0.025"
-grade="$grade,curves=all='0/0 0.12/0.08 0.5/0.5 0.88/0.92 1/1'"
-grade="$grade,vignette=angle=PI/4.6"
+grade="$grade,curves=all='0/0.015 0.25/0.24 0.5/0.52 0.85/0.88 1/1'"
+grade="$grade,vignette=angle=PI/6"
 grade="$grade,noise=alls=3:allf=u"
 grade="$grade,drawbox=x=0:y=0:w=iw:h=138:color=black:t=fill,drawbox=x=0:y=ih-138:w=iw:h=138:color=black:t=fill"
 grade="$grade,format=yuv420p"
