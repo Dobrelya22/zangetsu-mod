@@ -1,0 +1,36 @@
+name: trailer-preview
+
+# Кадры готового трейлера (каждые 3 секунды, без звука) — проверить цвет и монтаж, не скачивая ролик.
+# Запуск вручную: Actions → trailer-preview → Run workflow. Кадры — в артефакте «preview».
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: ffmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Кадры
+        run: |
+          bash tools/trailer/release.sh download zangetsu-trailer.mp4 trailer.mp4
+          mkdir -p preview
+          ffmpeg -hide_banner -loglevel warning -i trailer.mp4 -vf "fps=1/3,scale=960:-2" -q:v 3 preview/%03d.jpg
+          ls preview | wc -l
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: preview
+          retention-days: 3
+          path: preview/
