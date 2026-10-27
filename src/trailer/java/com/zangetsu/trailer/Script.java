@@ -258,7 +258,7 @@ final class Script {
         shake(47.09, 0.8F);
         cut(47.09, "battle_wide", shot(arc(16, 215, 10, 14, 195, 7), p(0, 0.8, 0), 55, 50, 0, 0, true));
         boltAround(48.0, 28, 60);
-        cut(48.87, "low_orbit", shot(arc(3.2, 250, 0.35, 3.2, 205, 0.4), p(0, 1.35, 0), 48));
+        cut(48.87, "low_orbit", shot(arc(3.4, 320, 0.35, 3.4, 270, 0.4), p(0, 1.35, 0), 48));
         speed(50.46, 0.35F);
         cut(50.46, "v1_arm", shot(p(2.83, 1.35, 0.61), p(0.9, 1.35, -1.2), 40));
         limb(50.6, "V1", Limbs.LEFT_ARM);
@@ -332,10 +332,13 @@ final class Script {
         s.settle = 70;
         s.setup = srv -> {
             ServerPlayerEntity p = base(srv, 4, true);
-            ModAttachments.data(p).hollowUsed = HollowForm.BUDGET - 1100;
             Stage.ring(p, "G", 8, 8.0, 14.0, 20.0, 340.0, WALKERS, false, 2.0F);
         };
-        server(82.08, srv -> Stage.wake(srv, "G"));
+        // Время формы — с начала съёмки (подготовка сцены бывает долгой, пока строится мир).
+        server(82.08, srv -> {
+            Stage.wake(srv, "G");
+            ModAttachments.data(Stage.player(srv)).hollowUsed = HollowForm.BUDGET - 1100;
+        });
         waves(83.0, 116.0, 2.8, "WG");
         flash(82.08, 0.3, WHITE, 0.8F);
         shake(82.08, 1.0F);
@@ -589,6 +592,8 @@ final class Script {
             ZangetsuData data = ModAttachments.data(p);
             if (!data.hollowActive) {
                 base(srv, 4, true);
+            } else {
+                data.hollowUsed = 0;
             }
         };
         s.sweepCenter = () -> Stage.at(0, 52, 0);
@@ -748,13 +753,13 @@ final class Script {
         }
     }
 
-    /** Камера не ниже земли (во сне — холмы и валуны). */
+    /** Камера не ниже земли и травы (во сне — холмы, валуны, высокая трава). */
     private static Vec3d lift(Vec3d pos, double clearance) {
         MinecraftClient c = MinecraftClient.getInstance();
         if (c.world == null) {
             return pos;
         }
-        double ground = c.world.getTopY(Heightmap.Type.MOTION_BLOCKING, MathHelper.floor(pos.x), MathHelper.floor(pos.z));
+        double ground = c.world.getTopY(Heightmap.Type.WORLD_SURFACE, MathHelper.floor(pos.x), MathHelper.floor(pos.z));
         return pos.y < ground + clearance ? new Vec3d(pos.x, ground + clearance, pos.z) : pos;
     }
 
