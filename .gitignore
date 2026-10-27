@@ -18,6 +18,7 @@ bin/
 # Запуски Minecraft
 run/
 run-shots/
+run-trailer/
 remappedSrc/
 
 # Исходники Minecraft для справки (не в репозиторий)

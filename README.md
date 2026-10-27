@@ -112,3 +112,4 @@
 - Сборка: `./gradlew build` → `build/libs/zangetsu-*.jar`.
 - Текстуры нарисованы кодом: `tools/textures.cs` (запуск — `tools/textures.ps1` в Windows PowerShell).
 - `./gradlew runShots` — игра сама проходит все сцены мода и делает скриншоты в `run-shots/screenshots` (то же в GitHub Actions: workflow **shots**).
+- `./gradlew runTrailer -PtrailerStills=stills` — игра сама разыгрывает и снимает трейлер кино-камерой, кадр за кадром (60 в секунду), и сохраняет стоп-кадры; с `-PtrailerVideo=trailer.mkv` пишет видео через ffmpeg. Весь ролик с цветом и музыкой собирает workflow **trailer**.

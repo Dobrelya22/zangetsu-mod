@@ -3,6 +3,7 @@ package com.zangetsu.client.render;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.LongSupplier;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.Camera;
 import net.minecraft.client.render.model.json.ModelTransformationMode;
@@ -25,7 +26,13 @@ public final class EyeTracker {
     /** Кто сейчас держит отрисовываемый меч (ставят миксин рук и наши отрисовщики). */
     private static Entity holder;
     private static final Map<Integer, float[]> GAZE = new HashMap<>();
-    private static long lastNanos;
+    private static final Map<Integer, Long> LAST_NANOS = new HashMap<>();
+    /** Насколько открыт глаз — задано снаружи (крупные планы в трейлере); меньше нуля — как обычно. */
+    public static float forcedOpenness = -1.0F;
+    /** Не поглядывать по сторонам, когда рядом никого нет (крупные планы в трейлере). */
+    public static boolean steady;
+    /** Часы для плавного взгляда (в трейлере — время ролика, а не настоящее). */
+    public static LongSupplier nanos = System::nanoTime;
 
     private EyeTracker() {
     }
@@ -90,7 +97,7 @@ public final class EyeTracker {
         float y = MathHelper.clamp(direction.dot(axisB) * maxB * 1.7F, -maxB, maxB);
         int key = key(mode);
         long ticks = client.world != null ? client.world.getTime() : 0L;
-        if (idle) {
+        if (idle && !steady) {
             // Никого рядом — иногда коротко глядит в сторону.
             long phase = Math.floorMod(ticks + key * 37L, 70L);
             if (phase < 16) {
@@ -99,16 +106,17 @@ public final class EyeTracker {
                 y = ((glance * 104729L) % 3 - 1) * maxB * 0.7F;
             }
         }
-        // Плавно, независимо от частоты кадров.
-        long now = System.nanoTime();
-        float dt = lastNanos == 0 ? 0.016F : Math.min(0.1F, (now - lastNanos) / 1.0E9F);
-        lastNanos = now;
+        // Плавно, независимо от частоты кадров; у каждого держателя свои часы.
+        long now = nanos.getAsLong();
+        Long last = LAST_NANOS.put(key, now);
+        float dt = last == null ? 0.016F : MathHelper.clamp((now - last) / 1.0E9F, 0.0F, 0.1F);
         float[] current = GAZE.computeIfAbsent(key, k -> new float[]{0.0F, 0.0F});
         float k = 1.0F - (float) Math.exp(-dt * 14.0F);
         current[0] += (x - current[0]) * k;
         current[1] += (y - current[1]) * k;
         if (GAZE.size() > 256) {
             GAZE.clear();
+            LAST_NANOS.clear();
         }
         return new float[]{current[0], current[1]};
     }
@@ -142,6 +150,9 @@ public final class EyeTracker {
 
     /** Насколько открыт глаз с учётом моргания (0 — закрыт). */
     public static float blink(ModelTransformationMode mode, float openness) {
+        if (forcedOpenness >= 0.0F) {
+            return forcedOpenness;
+        }
         MinecraftClient client = MinecraftClient.getInstance();
         if (client.world == null || openness <= 0.0F) {
             return openness;

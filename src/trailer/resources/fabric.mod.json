@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "zangetsu_trailer",
+  "version": "1.0.0",
+  "name": "Zangetsu — trailer",
+  "environment": "client",
+  "entrypoints": {
+    "client": ["com.zangetsu.trailer.ZangetsuTrailer"]
+  },
+  "mixins": ["zangetsu_trailer.mixins.json"],
+  "depends": {
+    "zangetsu": "*"
+  }
+}

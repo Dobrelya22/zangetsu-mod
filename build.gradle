@@ -13,15 +13,20 @@ loom {
     splitEnvironmentSourceSets()
 }
 
-// Проверочная съёмка живёт отдельно и в jar мода не попадает.
+// Проверочная съёмка и трейлер живут отдельно и в jar мода не попадают.
 sourceSets {
     shots {
         compileClasspath += sourceSets.client.compileClasspath + sourceSets.main.output + sourceSets.client.output
         runtimeClasspath += sourceSets.client.runtimeClasspath + sourceSets.main.output + sourceSets.client.output
     }
+    trailer {
+        compileClasspath += sourceSets.client.compileClasspath + sourceSets.main.output + sourceSets.client.output
+        runtimeClasspath += sourceSets.client.runtimeClasspath + sourceSets.main.output + sourceSets.client.output
+    }
 }
-// Классы и fabric.mod.json съёмки в одной папке: так Fabric видит её отдельным модом.
+// Классы и fabric.mod.json в одной папке: так Fabric видит каждый из них отдельным модом.
 sourceSets.shots.output.resourcesDir = sourceSets.shots.java.destinationDirectory.get().asFile
+sourceSets.trailer.output.resourcesDir = sourceSets.trailer.java.destinationDirectory.get().asFile
 
 loom {
     mods {
@@ -40,6 +45,20 @@ loom {
             vmArg '-Dzangetsu.shots=true'
             programArgs '--width', '1280', '--height', '720'
             runDir 'run-shots'
+        }
+        // Трейлер: ./gradlew runTrailer -PtrailerVideo=trailer.mkv (кадр за кадром, 60 в секунду; нужен ffmpeg)
+        // или -PtrailerStills=stills — только стоп-кадры. -PtrailerScenes=awaken,eye — снять не всё.
+        trailer {
+            client()
+            name 'Trailer'
+            source sourceSets.trailer
+            vmArg '-Dzangetsu.trailer=true'
+            vmArg "-Dzangetsu.trailer.scenes=${findProperty('trailerScenes') ?: 'all'}"
+            vmArg "-Dzangetsu.trailer.video=${findProperty('trailerVideo') ?: ''}"
+            vmArg "-Dzangetsu.trailer.stills=${findProperty('trailerStills') ?: ''}"
+            vmArg "-Dzangetsu.trailer.stillStep=${findProperty('trailerStillStep') ?: '30'}"
+            programArgs '--width', '1920', '--height', '1080', '--username', 'Ichigo'
+            runDir 'run-trailer'
         }
     }
 }

@@ -1,0 +1,123 @@
+name: trailer
+
+# Трейлер мода: настоящий клиент Minecraft на виртуальном экране сам разыгрывает сцены и снимает их
+# кино-камерой кадр за кадром (60 кадров в секунду). Четыре части снимаются параллельно, потом
+# склеиваются, получают цвет, кашетирование и музыку. Музыка лежит в черновике релиза «trailer-assets»
+# (черновики видны только владельцам репозитория), готовый ролик кладётся туда же.
+# Запуск вручную: Actions → trailer → Run workflow.
+on:
+  workflow_dispatch:
+    inputs:
+      parts:
+        description: "Какие части снять (1,2,3,4)"
+        default: "1,2,3,4"
+
+permissions:
+  contents: write
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - part: 1
+            scenes: awaken,eye,ender,eye2
+          - part: 2
+            scenes: battle,hollow
+          - part: 3
+            scenes: rampage
+          - part: 4
+            scenes: dream,finale,outro
+    steps:
+      - uses: actions/checkout@v4
+        if: contains(github.event.inputs.parts, matrix.part)
+
+      - uses: actions/setup-java@v4
+        if: contains(github.event.inputs.parts, matrix.part)
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v4
+        if: contains(github.event.inputs.parts, matrix.part)
+
+      - name: Пакеты для экрана и видео
+        if: contains(github.event.inputs.parts, matrix.part)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb libgl1-mesa-dri mesa-utils ffmpeg
+
+      - name: Съёмка части ${{ matrix.part }}
+        if: contains(github.event.inputs.parts, matrix.part)
+        run: |
+          mkdir -p run-trailer out
+          cp tools/trailer/options.txt run-trailer/options.txt
+          ./gradlew --no-daemon downloadAssets trailerClasses
+          export DISPLAY=:99
+          export LIBGL_ALWAYS_SOFTWARE=1
+          export GALLIUM_DRIVER=llvmpipe
+          export LP_NUM_THREADS=$(nproc)
+          Xvfb :99 -screen 0 1920x1080x24 -nolisten tcp &
+          sleep 2
+          timeout 19000 ./gradlew --no-daemon runTrailer \
+            -PtrailerScenes=${{ matrix.scenes }} \
+            -PtrailerVideo=$PWD/out/part${{ matrix.part }}.mkv \
+            -PtrailerStills=$PWD/out/stills \
+            -PtrailerStillStep=60 || echo "runTrailer завершился с ошибкой"
+          cp run-trailer/trailer-log.txt out/log${{ matrix.part }}.txt || true
+          ls -la out
+
+      - uses: actions/upload-artifact@v4
+        if: always() && contains(github.event.inputs.parts, matrix.part)
+        with:
+          name: part${{ matrix.part }}
+          retention-days: 3
+          path: |
+            out/part${{ matrix.part }}.mkv
+            out/log${{ matrix.part }}.txt
+
+      - uses: actions/upload-artifact@v4
+        if: always() && contains(github.event.inputs.parts, matrix.part)
+        with:
+          name: stills${{ matrix.part }}
+          retention-days: 3
+          path: |
+            out/stills/
+            out/*.log
+            run-trailer/logs/latest.log
+
+      - name: Журнал игры
+        if: always() && contains(github.event.inputs.parts, matrix.part)
+        run: grep -E "ERROR|Exception|Caused by|Трейлер|Mixin" run-trailer/logs/latest.log | head -300 || true
+
+  edit:
+    needs: render
+    if: github.event.inputs.parts == '1,2,3,4'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: ffmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: part*
+          path: parts
+          merge-multiple: true
+
+      - name: Монтаж, цвет, музыка
+        run: |
+          ls -la parts
+          bash tools/trailer/release.sh download music.wav music.wav
+          bash tools/trailer/edit.sh parts music.wav zangetsu-trailer.mp4
+          ls -la zangetsu-trailer.mp4
+          bash tools/trailer/release.sh upload zangetsu-trailer.mp4 zangetsu-trailer.mp4
