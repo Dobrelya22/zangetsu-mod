@@ -19,8 +19,9 @@ case "$1" in
     if [ -n "$old" ]; then
       gh api -X DELETE "repos/$repo/releases/assets/$old"
     fi
+    # -T шлёт файл потоком (--data-binary читал бы весь ролик в память).
     curl -sSf -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Content-Type: application/octet-stream" \
-      --data-binary @"$2" "https://uploads.github.com/repos/$repo/releases/$id/assets?name=$3" > /dev/null
+      -T "$2" "https://uploads.github.com/repos/$repo/releases/$id/assets?name=$3" > /dev/null
     echo "Загружено: $3"
     ;;
 esac

@@ -11,9 +11,13 @@ on:
       parts:
         description: "Какие части снять (1,2,3,4)"
         default: "1,2,3,4"
+      reuse_run:
+        description: "Только смонтировать заново части из этого запуска (номер run); части тогда пусто"
+        default: ""
 
 permissions:
   contents: write
+  actions: read
 
 jobs:
   render:
@@ -95,7 +99,7 @@ jobs:
 
   edit:
     needs: render
-    if: github.event.inputs.parts == '1,2,3,4'
+    if: github.event.inputs.parts == '1,2,3,4' || github.event.inputs.reuse_run != ''
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
@@ -113,6 +117,8 @@ jobs:
           pattern: part*
           path: parts
           merge-multiple: true
+          run-id: ${{ github.event.inputs.reuse_run || github.run_id }}
+          github-token: ${{ github.token }}
 
       - name: Монтаж, цвет, музыка
         run: |
