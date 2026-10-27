@@ -5,8 +5,9 @@ name: trailer-preview
 on:
   workflow_dispatch:
 
+# Черновики релизов видны только с правом записи.
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   preview:
