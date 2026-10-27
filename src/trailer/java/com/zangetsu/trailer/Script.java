@@ -252,7 +252,7 @@ final class Script {
             Stage.wake(srv, "B");
             Stage.wake(srv, "S");
         });
-        waves(47.6, 65.0, 1.8, "WB");
+        waves(47.6, 65.0, 2.4, "WB");
         flash(47.09, 0.25, WHITE, 0.7F);
         boltAround(47.09, 10, 160);
         shake(47.09, 0.8F);
@@ -333,10 +333,10 @@ final class Script {
         s.setup = srv -> {
             ServerPlayerEntity p = base(srv, 4, true);
             ModAttachments.data(p).hollowUsed = HollowForm.BUDGET - 1100;
-            Stage.ring(p, "G", 10, 8.0, 14.0, 20.0, 340.0, WALKERS, false, 2.0F);
+            Stage.ring(p, "G", 8, 8.0, 14.0, 20.0, 340.0, WALKERS, false, 2.0F);
         };
         server(82.08, srv -> Stage.wake(srv, "G"));
-        waves(83.0, 116.0, 2.0, "WG");
+        waves(83.0, 116.0, 2.8, "WG");
         flash(82.08, 0.3, WHITE, 0.8F);
         shake(82.08, 1.0F);
 
@@ -533,14 +533,14 @@ final class Script {
         s.settle = 150;
         s.setup = srv -> {
             ServerPlayerEntity p = base(srv, 4, true);
-            Stage.ring(p, "F", 12, 7.0, 13.0, 0.0, 345.0, WALKERS, false, 2.0F);
+            Stage.ring(p, "F", 8, 7.0, 13.0, 0.0, 345.0, WALKERS, false, 2.0F);
             Stage.ring(p, "S", 2, 14.0, 14.0, 120.0, 240.0, List.of(EntityType.SKELETON, EntityType.STRAY), false, 0.0F);
         };
         server(132.93, srv -> {
             Stage.wake(srv, "F");
             Stage.wake(srv, "S");
         });
-        waves(133.5, 146.5, 1.6, "WF");
+        waves(133.5, 146.5, 2.6, "WF");
         fade(132.93, 0.6, WHITE, Overlay.FADE_IN);
         cut(132.93, "fin_reveal", shot(arc(8, 200, 0.4, 7, 192, 0.5), p(0, 1.6, 0), 42));
         getsuga(134.7, 180.0F, "M1", 1.0F);
