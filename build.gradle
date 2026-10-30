@@ -57,6 +57,7 @@ loom {
             vmArg "-Dzangetsu.trailer.video=${findProperty('trailerVideo') ?: ''}"
             vmArg "-Dzangetsu.trailer.stills=${findProperty('trailerStills') ?: ''}"
             vmArg "-Dzangetsu.trailer.stillStep=${findProperty('trailerStillStep') ?: '30'}"
+            vmArg "-Dzangetsu.trailer.script=${findProperty('trailerScript') ?: 'trailer'}"
             programArgs '--width', '1920', '--height', '1080', '--username', 'Ichigo'
             runDir 'run-trailer'
         }

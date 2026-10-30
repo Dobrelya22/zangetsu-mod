@@ -14,6 +14,8 @@ public final class ClientState {
     public static final Int2ObjectOpenHashMap<Animation> ANIMATIONS = new Int2ObjectOpenHashMap<>();
     /** id игроков в форме Пустого → насколько треснула их маска (0–3). */
     public static final Int2IntOpenHashMap HOLLOW = new Int2IntOpenHashMap();
+    /** id игрока → какой из трёх ударов мечом он сейчас наносит (идут по кругу). */
+    public static final Int2IntOpenHashMap SWING_VARIANT = new Int2IntOpenHashMap();
 
     /** Счётчик клиентских тиков — по нему идут вспышки на экране. */
     public static int ticks;
@@ -21,8 +23,8 @@ public final class ClientState {
     public static int flashStart = -1;
     public static int flashDuration;
 
-    /** Анимация: какая, с какого «возраста» сущности началась и сколько длится. */
-    public record Animation(int type, int startAge, int duration) {
+    /** Анимация: какая, с какого «возраста» сущности началась, сколько длится и её параметр (куда бить). */
+    public record Animation(int type, int startAge, int duration, int param) {
         public float progress(Entity entity, float tickDelta) {
             return (entity.age + tickDelta - this.startAge) / Math.max(1, this.duration);
         }
@@ -45,6 +47,17 @@ public final class ClientState {
         return animation;
     }
 
+    public static int swingVariant(Entity entity) {
+        return SWING_VARIANT.getOrDefault(entity.getId(), 0);
+    }
+
+    /** Начался новый удар — следующий вариант по кругу (диагональ, снизу вверх, горизонталь). */
+    public static int nextSwing(Entity entity) {
+        int variant = (swingVariant(entity) + 1) % 3;
+        SWING_VARIANT.put(entity.getId(), variant);
+        return variant;
+    }
+
     public static boolean isHollow(Entity entity) {
         return HOLLOW.containsKey(entity.getId());
     }
@@ -63,6 +76,7 @@ public final class ClientState {
         LIMBS.remove(entityId);
         ANIMATIONS.remove(entityId);
         HOLLOW.remove(entityId);
+        SWING_VARIANT.remove(entityId);
     }
 
     public static void reset() {
@@ -70,6 +84,7 @@ public final class ClientState {
         LIMBS.clear();
         ANIMATIONS.clear();
         HOLLOW.clear();
+        SWING_VARIANT.clear();
         flashStart = -1;
     }
 }

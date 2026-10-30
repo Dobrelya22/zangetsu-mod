@@ -36,6 +36,8 @@ public final class Scene {
     /** Вокруг чего облететь камерой перед съёмкой, чтобы прогрузились все куски мира (null — площадка). */
     Supplier<Vec3d> sweepCenter;
     Insert.Spec insert;
+    /** Снимать глазами игрока (витрина анимаций от первого лица), без кино-камеры. */
+    boolean firstPerson;
     final List<Cut> cuts = new ArrayList<>();
     final List<Event> events = new ArrayList<>();
     final TreeMap<Double, Float> speeds = new TreeMap<>();

@@ -3,6 +3,7 @@ package com.zangetsu.client.mixin;
 import com.zangetsu.client.ClientState;
 import com.zangetsu.client.render.PlayerPoses;
 import com.zangetsu.logic.Limbs;
+import com.zangetsu.registry.ModItems;
 import net.minecraft.client.model.ModelPart;
 import net.minecraft.client.render.entity.model.BipedEntityModel;
 import net.minecraft.client.render.entity.model.PlayerEntityModel;
@@ -30,6 +31,15 @@ public abstract class BipedEntityModelMixin {
         BipedEntityModel<?> model = (BipedEntityModel<?>) (Object) this;
         if (entity instanceof PlayerEntity) {
             PlayerPoses.apply(model, entity, animationProgress);
+            // Обычный удар Зангецу — тяжёлый взмах всем корпусом вместо ванильного тычка.
+            if (ClientState.animation(entity) == null && model.handSwingProgress > 0.0F && entity.getMainHandStack().isOf(ModItems.ZANGETSU)) {
+                PlayerPoses.cleave(model, model.handSwingProgress, ClientState.swingVariant(entity));
+                model.hat.copyTransform(model.head);
+            }
+            // Под маской Пустого слой волос скина торчал бы сквозь кость.
+            if (ClientState.isHollow(entity)) {
+                model.hat.visible = false;
+            }
             return;
         }
         int limbs = ClientState.limbs(entity);

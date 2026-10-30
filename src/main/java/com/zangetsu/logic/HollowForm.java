@@ -4,6 +4,9 @@ import com.zangetsu.entity.GetsugaEntity;
 import com.zangetsu.network.AnimationPayload;
 import com.zangetsu.network.ClientFxPayload;
 import com.zangetsu.registry.ModAttachments;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.UUID;
 import net.minecraft.block.Blocks;
 import net.minecraft.entity.effect.StatusEffect;
 import net.minecraft.entity.effect.StatusEffectInstance;
@@ -26,6 +29,10 @@ public final class HollowForm {
     public static final int BUDGET = 2 * 60 * 20;
     public static final int TRANSFORM_TICKS = 30;
     public static final int GETSUGA_COOLDOWN = 24;
+    /** Замах Гецуги: через столько тиков волна срывается с клинка; вся анимация — дольше. */
+    public static final int GETSUGA_WINDUP = 7;
+    public static final int GETSUGA_ANIMATION = 18;
+    private static final Set<UUID> CHARGING = new HashSet<>();
 
     @SuppressWarnings("unchecked")
     private static final RegistryEntry<StatusEffect>[] BUFFS = new RegistryEntry[]{
@@ -187,13 +194,28 @@ public final class HollowForm {
         Sync.player(player);
     }
 
-    /** Правая кнопка с мечом в форме Пустого — Гецуга Теншо. */
+    /**
+     * Правая кнопка с мечом в форме Пустого — Гецуга Теншо: замах за плечо, на клинке собирается чёрно-алая
+     * реяцу — и на взмахе волна срывается с меча.
+     */
     public static boolean tryGetsuga(ServerPlayerEntity player) {
         ZangetsuData data = ModAttachments.data(player);
-        if (!data.hollowActive || Cinematic.isLocked(player)) {
+        if (!data.hollowActive || Cinematic.isLocked(player) || CHARGING.contains(player.getUuid())) {
             return false;
         }
-        GetsugaEntity.fire(player);
+        CHARGING.add(player.getUuid());
+        Sync.animation(player, AnimationPayload.GETSUGA, GETSUGA_ANIMATION);
+        ServerWorld world = player.getServerWorld();
+        Vec3d blade = player.getPos().add(0.0, 2.3, 0.0);
+        Fx.particles(world, Fx.REIATSU_BLACK, blade, 14, 0.35, 0.02);
+        Fx.particles(world, Fx.REIATSU_RED, blade, 14, 0.4, 0.02);
+        Fx.sound(player, SoundEvents.ENTITY_WARDEN_SONIC_CHARGE, 0.7F, 1.5F);
+        Scheduler.later(GETSUGA_WINDUP, () -> {
+            CHARGING.remove(player.getUuid());
+            if (player.isAlive() && !player.isRemoved() && ModAttachments.data(player).hollowActive) {
+                GetsugaEntity.fire(player);
+            }
+        });
         return true;
     }
 }

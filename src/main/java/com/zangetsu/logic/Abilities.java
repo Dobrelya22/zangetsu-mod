@@ -1,6 +1,7 @@
 package com.zangetsu.logic;
 
 import com.zangetsu.entity.ArrowHalfEntity;
+import com.zangetsu.network.AnimationPayload;
 import com.zangetsu.registry.ModAttachments;
 import java.util.HashMap;
 import java.util.List;
@@ -28,6 +29,7 @@ import net.minecraft.server.world.ServerWorld;
 import net.minecraft.sound.SoundEvents;
 import net.minecraft.util.Hand;
 import net.minecraft.util.math.Box;
+import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
 
 /** Что меч делает сам, когда глаз открыт. */
@@ -35,6 +37,7 @@ public final class Abilities {
     private static final double PARRY_RANGE = 4.5;
     private static final double AUTO_ATTACK_RANGE = 4.0;
     private static final int AUTO_ATTACK_COOLDOWN = 16;
+    private static final int AUTO_SLASH_TICKS = 8;
 
     private static final Map<UUID, Long> NEXT_AUTO_ATTACK = new HashMap<>();
 
@@ -111,7 +114,10 @@ public final class Abilities {
         }
         NEXT_AUTO_ATTACK.put(player.getUuid(), now + AUTO_ATTACK_COOLDOWN);
         float damage = (float) player.getAttributeValue(EntityAttributes.GENERIC_ATTACK_DAMAGE) * 0.75F;
-        player.swingHand(Hand.MAIN_HAND, true);
+        // Меч рвётся к цели сам: своя анимация с углом к мобу (рука — следом) и золотой шлейф у всех, кто видит.
+        Vec3d to = target.getPos().subtract(player.getPos());
+        int toward = Math.round(MathHelper.wrapDegrees((float) Math.toDegrees(Math.atan2(to.z, to.x)) - 90.0F - player.getHeadYaw()));
+        Sync.animation(player, AnimationPayload.AUTO_SLASH, AUTO_SLASH_TICKS, toward);
         Vec3d at = target.getBoundingBox().getCenter();
         Fx.particles(world, ParticleTypes.SWEEP_ATTACK, at, 1, 0.0, 0.0);
         Fx.particles(world, Fx.EYE_GOLD, at, 6, 0.3, 0.0);

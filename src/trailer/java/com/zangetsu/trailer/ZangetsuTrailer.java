@@ -16,7 +16,7 @@ public class ZangetsuTrailer implements ClientModInitializer {
         if (!Boolean.getBoolean("zangetsu.trailer")) {
             return;
         }
-        Director.init(Script.build());
+        Director.init("showcase".equals(System.getProperty("zangetsu.trailer.script")) ? Showcase.build() : Script.build());
         ClientTickEvents.END_CLIENT_TICK.register(Director::onClientTick);
         WorldRenderEvents.AFTER_ENTITIES.register(Insert::render);
         EyeTracker.nanos = Director::eyeNanos;

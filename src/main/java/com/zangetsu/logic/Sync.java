@@ -60,7 +60,11 @@ public final class Sync {
     }
 
     public static void animation(ServerPlayerEntity player, int animation, int duration) {
-        toSelfAndTrackers(player, new AnimationPayload(player.getId(), animation, duration));
+        animation(player, animation, duration, 0);
+    }
+
+    public static void animation(ServerPlayerEntity player, int animation, int duration, int param) {
+        toSelfAndTrackers(player, new AnimationPayload(player.getId(), animation, duration, param));
     }
 
     public static void hollow(ServerPlayerEntity player, boolean active) {

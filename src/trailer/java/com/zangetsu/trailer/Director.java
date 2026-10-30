@@ -162,6 +162,7 @@ public final class Director {
                     video = scene.start;
                     Insert.show(scene.insert);
                     activeCut = scene.cutAt(scene.start);
+                    TrailerCamera.setActive(!scene.firstPerson);
                     TrailerCamera.setShot(activeCut.shot(), activeCut.start(), scene.cutEnd(activeCut));
                 }
             }
@@ -282,9 +283,13 @@ public final class Director {
             }
             client.setScreen(null);
         }
-        client.options.hudHidden = true;
-        if (client.options.getPerspective() != Perspective.THIRD_PERSON_BACK) {
-            client.options.setPerspective(Perspective.THIRD_PERSON_BACK);
+        // Вид от первого лица — только в витрине (руки и меч, как их видит игрок); тогда и интерфейс не прячем,
+        // иначе игра не рисует руки.
+        boolean firstPerson = scene != null && scene.firstPerson;
+        client.options.hudHidden = !firstPerson;
+        Perspective perspective = firstPerson ? Perspective.FIRST_PERSON : Perspective.THIRD_PERSON_BACK;
+        if (client.options.getPerspective() != perspective) {
+            client.options.setPerspective(perspective);
         }
         client.options.sneakKey.setPressed(sneaking);
         if (client.player != null && walkTo != null) {

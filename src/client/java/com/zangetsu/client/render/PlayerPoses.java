@@ -3,13 +3,16 @@ package com.zangetsu.client.render;
 import com.zangetsu.client.ClientState;
 import com.zangetsu.network.AnimationPayload;
 import net.minecraft.client.render.entity.model.BipedEntityModel;
+import net.minecraft.client.MinecraftClient;
 import net.minecraft.entity.LivingEntity;
+import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.util.math.MathHelper;
 
 /**
  * Позы игрока в сценах: тянется к рукояти и поднимает меч; замах двумя руками и удар сверху (казнь);
  * горизонтальный взмах (эндермен пополам); вытаскивает меч из земли во сне; раскидывает руки и
- * запрокидывает голову, превращаясь в Пустого.
+ * запрокидывает голову, превращаясь в Пустого. В бою с Зангецу — тяжёлые взмахи всем корпусом (три удара по очереди),
+ * рывок, когда меч рубит сам, и Гецуга: замах высоко за правое плечо, левая рука указывает цель — и взмах по горизонтали.
  */
 public final class PlayerPoses {
     private PlayerPoses() {
@@ -27,6 +30,8 @@ public final class PlayerPoses {
             case AnimationPayload.EXECUTE -> execute(model, t);
             case AnimationPayload.SLASH -> slash(model, t);
             case AnimationPayload.HOLLOW -> hollow(model, t, animationProgress);
+            case AnimationPayload.AUTO_SLASH -> auto(model, t, animation.param());
+            case AnimationPayload.GETSUGA -> getsuga(model, t, animationProgress);
             default -> {
             }
         }
@@ -88,6 +93,102 @@ public final class PlayerPoses {
         model.leftArm.pitch = -0.3F * (1.0F - recover);
         model.leftArm.roll = -0.3F * (1.0F - recover);
         model.body.yaw = MathHelper.lerp(recover, MathHelper.lerp(strike, -0.35F * wind, 0.3F), 0.0F);
+    }
+
+    /**
+     * Насколько клинок развёрнут вперёд в кулаке (0 — висит лезвием вниз, 1 — по ходу удара): во время удара мечом,
+     * рывка и Гецуги.
+     */
+    public static float bladeForward(PlayerEntity player) {
+        float tickDelta = MinecraftClient.getInstance().getRenderTickCounter().getTickDelta(false);
+        ClientState.Animation animation = ClientState.animation(player);
+        float t;
+        if (animation == null) {
+            t = player.getHandSwingProgress(tickDelta);
+        } else if (animation.type() == AnimationPayload.AUTO_SLASH || animation.type() == AnimationPayload.GETSUGA) {
+            t = animation.progress(player, tickDelta);
+        } else {
+            return 0.0F;
+        }
+        if (t <= 0.0F || t >= 1.0F) {
+            return 0.0F;
+        }
+        return phase(t, 0.0F, 0.18F) * (1.0F - phase(t, 0.62F, 1.0F));
+    }
+
+    // ---------------------------------------------------------------- бой
+
+    /**
+     * Поза бойца: правая рука (питч, рыск, крен), левая рука (то же), поворот и наклон корпуса. Тяжёлый меч
+     * ведёт весь корпус — плечи поворачиваются вместе с ним. Рыск и поворот плюс — вправо (к руке с мечом),
+     * минус — влево, поперёк корпуса.
+     */
+    private static final float[][][] CLEAVES = {
+            // Диагональ: замах над правым плечом — удар вниз влево.
+            {{-2.8F, 0.45F, 0.2F, -0.2F, -0.2F, -0.25F, 0.4F, -0.05F}, {-0.55F, -0.85F, -0.15F, -0.6F, -0.4F, -0.35F, -0.45F, 0.22F}},
+            // Восходящий: снизу слева — вверх вправо.
+            {{-0.35F, -0.95F, -0.3F, -0.5F, -0.3F, -0.2F, -0.45F, 0.15F}, {-2.6F, 0.55F, 0.3F, -0.15F, -0.1F, -0.4F, 0.4F, -0.1F}},
+            // Горизонтальный: справа налево на уровне плеч.
+            {{-1.55F, 1.15F, 0.0F, -0.4F, -0.4F, -0.2F, 0.5F, 0.0F}, {-1.55F, -1.15F, 0.0F, -0.8F, -0.6F, -0.3F, -0.55F, 0.05F}},
+    };
+
+    /** Обычный удар мечом ({ p} — ход ванильного взмаха 0..1, { variant} — какой из трёх). */
+    public static void cleave(BipedEntityModel<?> model, float p, int variant) {
+        float[][] pose = CLEAVES[MathHelper.clamp(variant, 0, 2)];
+        strike(model, p, pose[0], pose[1], 0.2F, 0.45F, 0.6F);
+    }
+
+    /** Меч рубит сам: рывок к цели ({ toward} — угол к ней в градусах), корпус подаётся вперёд. */
+    private static void auto(BipedEntityModel<?> model, float t, int toward) {
+        float aim = MathHelper.clamp(toward * MathHelper.RADIANS_PER_DEGREE, -1.2F, 1.2F);
+        float[] wind = {-2.2F, 0.7F, 0.3F, -0.3F, -0.2F, -0.3F, 0.35F, 0.0F};
+        float[] hit = {-1.25F, -0.6F + aim * 0.8F, -0.2F, -0.9F, -0.5F, -0.5F, -0.3F + aim * 0.4F, 0.3F};
+        strike(model, t, wind, hit, 0.25F, 0.42F, 0.65F);
+    }
+
+    /** Гецуга: замах за правое плечо, левая рука указывает цель; дрожь перед ударом; взмах по горизонтали. */
+    private static void getsuga(BipedEntityModel<?> model, float t, float time) {
+        float[] wind = {-3.0F, 0.75F, 0.35F, -1.45F, -0.35F, 0.0F, 0.55F, -0.12F};
+        float[] hit = {-1.5F, -1.2F, 0.0F, -0.6F, -0.8F, -0.4F, -0.6F, 0.18F};
+        strike(model, t, wind, hit, 0.33F, 0.48F, 0.62F);
+        if (t > 0.2F && t < 0.38F) {
+            float tremble = MathHelper.sin(time * 3.3F) * 0.03F;
+            model.rightArm.roll += tremble;
+            model.body.pitch += tremble * 0.5F;
+        }
+    }
+
+    /** Покой → замах (до { tWind}) → удар (до { tHit}) → держит → возврат (с { tBack}). */
+    private static void strike(BipedEntityModel<?> model, float t, float[] wind, float[] hit, float tWind, float tHit, float tBack) {
+        if (t < tWind) {
+            blend(model, wind, phase(t, 0.0F, tWind));
+        } else if (t < tBack) {
+            float k = phase(t, tWind, tHit);
+            float[] pose = new float[wind.length];
+            for (int i = 0; i < pose.length; i++) {
+                pose[i] = MathHelper.lerp(k, wind[i], hit[i]);
+            }
+            blend(model, pose, 1.0F);
+        } else {
+            blend(model, hit, 1.0F - phase(t, tBack, 1.0F));
+        }
+    }
+
+    private static void blend(BipedEntityModel<?> m, float[] pose, float k) {
+        float bodyYaw = MathHelper.lerp(k, m.body.yaw, pose[6]);
+        m.rightArm.pitch = MathHelper.lerp(k, m.rightArm.pitch, pose[0]);
+        m.rightArm.yaw = MathHelper.lerp(k, m.rightArm.yaw, pose[1]) + bodyYaw * k;
+        m.rightArm.roll = MathHelper.lerp(k, m.rightArm.roll, pose[2]);
+        m.leftArm.pitch = MathHelper.lerp(k, m.leftArm.pitch, pose[3]);
+        m.leftArm.yaw = MathHelper.lerp(k, m.leftArm.yaw, pose[4]) + bodyYaw * k;
+        m.leftArm.roll = MathHelper.lerp(k, m.leftArm.roll, pose[5]);
+        m.body.yaw = bodyYaw;
+        m.body.pitch = MathHelper.lerp(k, m.body.pitch, pose[7]);
+        // Плечи идут за корпусом.
+        m.rightArm.pivotZ = MathHelper.sin(bodyYaw) * 5.0F;
+        m.rightArm.pivotX = -MathHelper.cos(bodyYaw) * 5.0F;
+        m.leftArm.pivotZ = -MathHelper.sin(bodyYaw) * 5.0F;
+        m.leftArm.pivotX = MathHelper.cos(bodyYaw) * 5.0F;
     }
 
     /** Превращение: руки в стороны, голова запрокинута — рёв. */

@@ -4,8 +4,8 @@ import com.zangetsu.ZangetsuMod;
 import com.zangetsu.client.render.ArrowHalfRenderer;
 import com.zangetsu.client.render.GetsugaRenderer;
 import com.zangetsu.client.render.HollowFeatureRenderer;
-import com.zangetsu.client.render.HollowMaskModel;
 import com.zangetsu.client.render.SeveredPartRenderer;
+import com.zangetsu.client.render.SlashTrails;
 import com.zangetsu.client.render.SpiritModel;
 import com.zangetsu.client.render.SpiritRenderer;
 import com.zangetsu.client.render.ThrownZangetsuRenderer;
@@ -30,15 +30,16 @@ import net.fabricmc.fabric.api.client.rendering.v1.LivingEntityFeatureRendererRe
 import net.minecraft.client.MinecraftClient;
 import com.zangetsu.client.render.ZangetsuItemRenderer;
 import net.fabricmc.fabric.api.client.rendering.v1.BuiltinItemRendererRegistry;
+import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
 import net.minecraft.client.render.entity.PlayerEntityRenderer;
 import net.minecraft.entity.Entity;
+import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
 
 public class ZangetsuClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         EntityModelLayerRegistry.registerModelLayer(SpiritModel.LAYER, SpiritModel::getTexturedModelData);
-        EntityModelLayerRegistry.registerModelLayer(HollowMaskModel.LAYER, HollowMaskModel::getTexturedModelData);
         EntityRendererRegistry.register(ModEntities.SPIRIT, SpiritRenderer::new);
         EntityRendererRegistry.register(ModEntities.THROWN_ZANGETSU, ThrownZangetsuRenderer::new);
         EntityRendererRegistry.register(ModEntities.SEVERED_PART, SeveredPartRenderer::new);
@@ -50,7 +51,7 @@ public class ZangetsuClient implements ClientModInitializer {
 
         LivingEntityFeatureRendererRegistrationCallback.EVENT.register((type, renderer, helper, context) -> {
             if (renderer instanceof PlayerEntityRenderer playerRenderer) {
-                helper.register(new HollowFeatureRenderer(playerRenderer, context.getModelLoader()));
+                helper.register(new HollowFeatureRenderer(playerRenderer));
             }
         });
 
@@ -60,14 +61,31 @@ public class ZangetsuClient implements ClientModInitializer {
             ClientState.ticks++;
             KeyBindings.tick(client);
             CameraDirector.tick(client);
+            swings(client);
         });
+        // Шлейфы ударов — светящиеся дуги в воздухе.
+        WorldRenderEvents.AFTER_ENTITIES.register(SlashTrails::render);
         ClientEntityEvents.ENTITY_UNLOAD.register((entity, world) -> ClientState.forget(entity.getId()));
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
             ClientState.reset();
             CameraDirector.reset();
+            SlashTrails.clear();
         });
 
         registerReceivers();
+    }
+
+    /** Новый удар Зангецу у кого-то из игроков — следующий вариант взмаха и стальной шлейф. */
+    private static void swings(MinecraftClient client) {
+        if (client.world == null) {
+            return;
+        }
+        for (PlayerEntity player : client.world.getPlayers()) {
+            if (player.handSwinging && player.handSwingTicks == 0 && player.getMainHandStack().isOf(ModItems.ZANGETSU)
+                    && ClientState.animation(player) == null) {
+                SlashTrails.swing(player, ClientState.nextSwing(player));
+            }
+        }
     }
 
     private static void registerReceivers() {
@@ -92,7 +110,15 @@ public class ZangetsuClient implements ClientModInitializer {
             if (entity == null) {
                 return;
             }
-            ClientState.ANIMATIONS.put(payload.entityId(), new ClientState.Animation(payload.animation(), entity.age, payload.duration()));
+            ClientState.ANIMATIONS.put(payload.entityId(), new ClientState.Animation(payload.animation(), entity.age, payload.duration(), payload.param()));
+            if (entity instanceof PlayerEntity player && payload.animation() == AnimationPayload.AUTO_SLASH) {
+                SlashTrails.auto(player, payload.param(), ClientState.nextSwing(player));
+                return;
+            }
+            if (entity instanceof PlayerEntity player && payload.animation() == AnimationPayload.GETSUGA) {
+                SlashTrails.getsuga(player, payload.duration() * 0.4F);
+                return;
+            }
             if (entity == client.player) {
                 // У себя — камера облетает сбоку; превращение — спереди, чтобы видеть маску.
                 CameraDirector.begin(payload.duration() + 8, switch (payload.animation()) {

@@ -401,7 +401,8 @@ public class ZangetsuShots implements ClientModInitializer {
         look(180.0F, 5.0F);
         pause(4);
         onServer(s -> HollowForm.tryGetsuga(player(s)));
-        pause(3);
+        // Замах: волна срывается с клинка через GETSUGA_WINDUP тиков.
+        pause(HollowForm.GETSUGA_WINDUP + 3);
         shot("getsuga_1");
         pause(4);
         shot("getsuga_2");
@@ -410,7 +411,7 @@ public class ZangetsuShots implements ClientModInitializer {
         act(c -> CameraDirector.begin(60, new CameraDirector.Shot(95.0F, 95.0F, 32.0F, 7.0F, 3.0F)));
         pause(2);
         onServer(s -> HollowForm.tryGetsuga(player(s)));
-        pause(5);
+        pause(HollowForm.GETSUGA_WINDUP + 5);
         shot("getsuga_side");
         pause(60);
 
