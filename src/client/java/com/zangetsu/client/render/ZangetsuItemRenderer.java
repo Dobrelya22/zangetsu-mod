@@ -3,6 +3,8 @@ package com.zangetsu.client.render;
 import com.zangetsu.ZangetsuMod;
 import com.zangetsu.logic.Eye;
 import com.zangetsu.registry.ModComponents;
+import java.util.ArrayList;
+import java.util.List;
 import net.fabricmc.fabric.api.client.rendering.v1.BuiltinItemRendererRegistry;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.LightmapTextureManager;
@@ -25,7 +27,7 @@ import org.joml.Vector3f;
  * толстый обух, плоская тёмная сердцевина со шлифовкой, долом и гравировкой «斬月», туманный хамон и
  * серебряная фаска к острой кромке. Рукоять — кожа ската, поверх неё крест-накрест выпуклые ленты
  * шёлкового шнура; латунная муфта с фланцем, воронёное навершие с кольцом и обломком цепи, которая
- * висит по силе тяжести. У горящего клинка трещины светятся в темноте. На одной стороне клинка — живой
+ * висит по силе тяжести. У горящего клинка — объёмные раскалённые разломы. На внутренней стороне клинка — живой
  * 3D-глаз: выпуклый обод, тёмный белок, жёлтая радужка с вертикальным зрачком, веки и влажная роговица.
  * Глаз смотрит на ближайшего злого моба или на тебя, моргает, сердито щурится и горит в форме Пустого.
  * Всё, что на глазу, строится сеткой по его миндалине, поэтому зрачок и радужка не выходят за обод.
@@ -37,8 +39,8 @@ import org.joml.Vector3f;
 public class ZangetsuItemRenderer implements BuiltinItemRendererRegistry.DynamicItemRenderer {
     private static final Identifier TEXTURE = ZangetsuMod.id("textures/entity/zangetsu_model.png");
     private static final Identifier EYE_TEXTURE = ZangetsuMod.id("textures/entity/zangetsu_eye.png");
-    /** Раскалённые трещины горящего клинка — тот же атлас, рисуется светом поверх. */
-    private static final Identifier GLOW_TEXTURE = ZangetsuMod.id("textures/entity/zangetsu_glow.png");
+    /** Жар в трещинах горящего клинка: цвет даёт вершина, рисуется светом. */
+    private static final Identifier GLOW_TEXTURE = ZangetsuMod.id("textures/misc/white.png");
     /** Атлас 512×512 (раскладка — в tools/textures.cs): клинок 448×160, горящий клинок под ним, справа рукоять и металл. */
     private static final float ATLAS = 512.0F;
     private static final float BLADE_TW = 448.0F;
@@ -57,6 +59,9 @@ public class ZangetsuItemRenderer implements BuiltinItemRendererRegistry.Dynamic
     private static final float EDGE = 2.8F;
     private static final float BEVEL = 1.7F;
     private static final float SPINE_T = 0.62F;
+    /** Скругление обуха: высота фаски и доля толщины, что остаётся на верхней грани. */
+    private static final float SPINE_CHAMFER = 0.16F;
+    private static final float SPINE_TOP = 0.6F;
     private static final float FLAT_T = 0.55F;
     private static final float EDGE_T = 0.05F;
     private static final float HILT_V = -0.5F;
@@ -69,7 +74,13 @@ public class ZangetsuItemRenderer implements BuiltinItemRendererRegistry.Dynamic
     private static final Vector3f FP_BLADE = new Vector3f(-0.5F, 0.75F, -0.45F);
     private static final Vector3f FP_FACE = new Vector3f(0.35F, 0.15F, 0.92F);
     private static final Vector3f FP_GRIP = new Vector3f(0.11F, -0.1F, -0.02F);
-    private static final float FP_SCALE = 0.78F;
+    public static final float FP_SCALE = 0.78F;
+    /** Масштаб меча от третьего лица (как в модели предмета). */
+    public static final float THIRD_PERSON_SCALE = 1.45F;
+    /** След клинка: от середины клинка до острия (пиксели модели от точки хвата). */
+    public static final float TRAIL_NEAR = 10.5F, TRAIL_FAR = 18.3F;
+    /** Поворот меча от первого лица, заданный приёмом на время рисования (null — обычный). */
+    public static Quaternionf firstPersonRotation;
 
     // ---- глаз
     private static final float EYE_U = 10.6F;
@@ -120,9 +131,7 @@ public class ZangetsuItemRenderer implements BuiltinItemRendererRegistry.Dynamic
         collar(mesh);
         blade(mesh, burning);
         if (burning) {
-            // Трещины горят и в темноте.
-            blade(new Mesh(matrices.peek(), consumers.getBuffer(RenderLayer.getEyes(GLOW_TEXTURE)), LightmapTextureManager.MAX_LIGHT_COORDINATE,
-                    overlay), true);
+            burnCracks(mesh, matrices, consumers, overlay);
         }
         renderEye(eye, mode, matrices, consumers, light, overlay);
         matrices.pop();
@@ -136,29 +145,53 @@ public class ZangetsuItemRenderer implements BuiltinItemRendererRegistry.Dynamic
     private static void firstPerson(MatrixStack matrices, boolean right) {
         float side = right ? 1.0F : -1.0F;
         matrices.translate(0.5F, 0.5F, 0.5F);
+        if (firstPersonRotation != null) {
+            // Положение задал приём: точка хвата стоит там, куда сдвинули матрицу, меч повёрнут вокруг неё.
+            Vector3f hold = toModel(HOLD_U, HILT_V, 0.0F);
+            matrices.multiply(firstPersonRotation);
+            matrices.scale(FP_SCALE, FP_SCALE, FP_SCALE);
+            matrices.translate(-hold.x, -hold.y, -hold.z);
+            return;
+        }
         matrices.translate(FP_GRIP.x * side, FP_GRIP.y, FP_GRIP.z);
-        matrices.multiply(firstPersonRotation(right));
+        matrices.multiply(restRotation(right));
         matrices.scale(FP_SCALE, FP_SCALE, FP_SCALE);
         matrices.translate(-0.5F, -0.5F, -0.5F);
     }
 
-    private static Quaternionf firstPersonRotation(boolean right) {
+    /** Поворот, при котором клинок смотрит в {@code blade}, а лезвие — в {@code edge} (оси меча → заданные оси). */
+    public static Quaternionf swordRotation(Vector3f blade, Vector3f edge) {
+        Matrix3f target = new Matrix3f(blade, edge, new Vector3f(blade).cross(edge));
+        Matrix3f item = new Matrix3f(AXIS_U, AXIS_V, new Vector3f(0.0F, 0.0F, 1.0F));
+        return new Quaternionf().setFromNormalized(target.mul(item.transpose()));
+    }
+
+    /** Куда смотрит клинок от первого лица в покое (правая рука). */
+    public static Vector3f restBlade() {
+        return new Vector3f(FP_BLADE).normalize();
+    }
+
+    /** Куда смотрит лезвие от первого лица в покое (правая рука): плоскость с глазом повёрнута к камере. */
+    public static Vector3f restEdge() {
+        Vector3f blade = restBlade();
+        Vector3f face = new Vector3f(FP_FACE);
+        face.sub(new Vector3f(blade).mul(face.dot(blade))).normalize();
+        return face.cross(blade);
+    }
+
+    private static Quaternionf restRotation(boolean right) {
         float side = right ? 1.0F : -1.0F;
         Vector3f blade = new Vector3f(FP_BLADE.x * side, FP_BLADE.y, FP_BLADE.z).normalize();
         Vector3f face = new Vector3f(FP_FACE.x * side, FP_FACE.y, FP_FACE.z);
         face.sub(new Vector3f(blade).mul(face.dot(blade))).normalize();
-        Vector3f edge = new Vector3f(face).cross(blade);
-        // Оси меча (вдоль, к лезвию, толщина) → оси руки.
-        Matrix3f hand = new Matrix3f(blade, edge, face);
-        Matrix3f item = new Matrix3f(AXIS_U, AXIS_V, new Vector3f(0.0F, 0.0F, 1.0F));
-        return new Quaternionf().setFromNormalized(hand.mul(item.transpose()));
+        return swordRotation(blade, new Vector3f(face).cross(blade));
     }
 
-    /** Точка хвата от первого лица (в пространстве руки): сюда ставится кулак. */
+    /** Точка хвата от первого лица в покое (в пространстве руки): сюда ставится кулак. */
     public static Vector3f firstPersonHold(boolean right) {
         float side = right ? 1.0F : -1.0F;
         Vector3f hold = toModel(HOLD_U, HILT_V, 0.0F).sub(0.5F, 0.5F, 0.5F).mul(FP_SCALE);
-        return firstPersonRotation(right).transform(hold).add(FP_GRIP.x * side, FP_GRIP.y, FP_GRIP.z);
+        return restRotation(right).transform(hold).add(FP_GRIP.x * side, FP_GRIP.y, FP_GRIP.z);
     }
 
     /** «Вниз» по силе тяжести в координатах меча (u, v, w) — для цепи на навершии. */
@@ -345,6 +378,145 @@ public class ZangetsuItemRenderer implements BuiltinItemRendererRegistry.Dynamic
         return row0 + MathHelper.clamp((v - SPINE) / (EDGE - SPINE), 0.0F, 1.0F) * BLADE_TH;
     }
 
+    /** Сталь обуха (448,192)-(512,256): вдоль клинка — по всей высоте куска. */
+    private static float spineTv(float u) {
+        return 192.0F + (u - BLADE_START) / (BLADE_END - BLADE_START) * 64.0F;
+    }
+
+    // ---------------------------------------------------------------- трещины горящего клинка
+
+    /** Пути трещин по клинку (u, v): от гнезда глаза к острию и к рукояти. */
+    private static final float[][] BURN_PATHS = {
+            {13.0F, -0.7F, 14.6F, -1.2F, 16.2F, -0.6F, 17.8F, -1.4F, 19.6F, -0.9F, 21.0F, -1.6F},
+            {12.9F, 0.1F, 14.4F, 0.7F, 15.8F, 0.3F, 17.2F, 0.9F},
+            {8.2F, -0.9F, 7.4F, -1.5F, 6.6F, -1.1F},
+            {8.3F, 0.0F, 7.5F, 0.6F, 6.7F, 0.3F},
+            {10.6F, -1.9F, 11.4F, -2.15F},
+    };
+    /** Свет по сечению разлома: от края багровый, к стенкам оранжевый, по самой середине дна почти белый. */
+    private static final int[] BURN_LIGHT = {0x000000, 0x9A1208, 0xFF6A12, 0xFFE9A8, 0xFF6A12, 0x9A1208, 0x000000};
+    /** Сталь по тому же сечению: обугленные края, тёмное дно (свет ложится поверх). */
+    private static final int[] BURN_STEEL = {0x6A3A34, 0x6A3A34, 0x301008, 0x301008, 0x301008, 0x6A3A34, 0x6A3A34};
+
+    /** Вершина разлома: положение, координаты в атласе (для обугленных краёв), нормаль и цвет. */
+    private record BurnVertex(Vector3f p, float tu, float tv, Vector3f n, int rgb) {
+    }
+
+    /** Обугленные края разломов и их светящаяся часть (четвёрками вершин); считается один раз. */
+    private static final List<BurnVertex> BURN_EDGES = new ArrayList<>();
+    private static final List<BurnVertex> BURN_GLOW = new ArrayList<>();
+
+    static {
+        for (int side = -1; side <= 1; side += 2) {
+            for (int k = 0; k < BURN_PATHS.length; k++) {
+                burnPath(BURN_PATHS[k], side, k * 13 + side);
+            }
+        }
+    }
+
+    private static float burnRand(int a, int b) {
+        int h = a * 374761393 + b * 668265263;
+        h = (h ^ (h >>> 13)) * 1274126177;
+        return ((h ^ (h >>> 16)) & 0xFFFF) / 65535.0F;
+    }
+
+    /** Толщина клинка (w) в точке (u, v): от неё растёт рельеф разлома. */
+    private static float bladeSurface(float u, float v) {
+        float[] c = section(u);
+        return v <= c[1] ? MathHelper.lerp(MathHelper.clamp((v - c[0]) / Math.max(1.0E-3F, c[1] - c[0]), 0.0F, 1.0F), c[3], c[4])
+                : MathHelper.lerp(MathHelper.clamp((v - c[1]) / Math.max(1.0E-3F, c[2] - c[1]), 0.0F, 1.0F), c[4], c[5]);
+    }
+
+    /**
+     * Разлом на стали: посередине дно, раскалённое добела, по бокам стенки от жара к багровому и обугленные вздутые края,
+     * с которых свечение ещё немного ложится на клинок. Края неровные, у концов разлом сходит на нет.
+     */
+    private static void burnPath(float[] line, int side, int seed) {
+        List<float[]> path = new ArrayList<>();
+        for (int i = 0; i + 3 < line.length; i += 2) {
+            float du = line[i + 2] - line[i], dv = line[i + 3] - line[i + 1];
+            float length = MathHelper.sqrt(du * du + dv * dv);
+            int steps = Math.max(2, (int) (length / 0.16F));
+            for (int k = 0; k < steps; k++) {
+                float s = (float) k / steps, wander = k == 0 ? 0.0F : (burnRand(seed + i, k) - 0.5F) * 0.16F;
+                path.add(new float[]{line[i] + du * s - dv / length * wander, line[i + 1] + dv * s + du / length * wander});
+            }
+        }
+        path.add(new float[]{line[line.length - 2], line[line.length - 1]});
+        int last = path.size() - 1;
+        float[][] previous = null;
+        for (int k = 0; k <= last; k++) {
+            float[] p = path.get(k), before = path.get(Math.max(0, k - 1)), after = path.get(Math.min(last, k + 1));
+            float tu = after[0] - before[0], tv = after[1] - before[1], length = Math.max(1.0E-4F, MathHelper.sqrt(tu * tu + tv * tv));
+            float nu = -tv / length, nv = tu / length;
+            float taper = MathHelper.clamp(Math.min(k, last - k) / 4.0F, 0.0F, 1.0F);
+            float floor = (0.07F + 0.05F * burnRand(seed, k)) * taper, lip = floor + 0.07F * taper, slope = lip + 0.22F * taper;
+            float liftA = (0.08F + 0.1F * burnRand(seed + 1, k)) * taper, liftB = (0.08F + 0.1F * burnRand(seed + 2, k)) * taper;
+            float[][] profile = {{-slope, 0.012F}, {-lip, liftA}, {-floor, 0.02F}, {0.0F, 0.02F}, {floor, 0.02F}, {lip, liftB}, {slope, 0.012F}};
+            // Каждое сечение — {u, v, w} семи точек.
+            float[][] row = new float[7][];
+            boolean ok = true;
+            for (int c = 0; c < 7; c++) {
+                float u = p[0] + nu * profile[c][0], v = p[1] + nv * profile[c][0];
+                float[] s = section(u);
+                ok &= v > s[0] + 0.04F && v < s[2] - 0.04F;
+                row[c] = new float[]{u, v, side * (bladeSurface(u, v) + profile[c][1])};
+            }
+            if (!ok) {
+                previous = null;
+                continue;
+            }
+            if (previous != null) {
+                for (int c = 0; c < 6; c++) {
+                    burnQuad(previous, row, c, side);
+                }
+            }
+            previous = row;
+        }
+    }
+
+    private static void burnQuad(float[][] a, float[][] b, int c, int side) {
+        Vector3f a0 = toModel(a[c][0], a[c][1], a[c][2]), a1 = toModel(a[c + 1][0], a[c + 1][1], a[c + 1][2]);
+        Vector3f b0 = toModel(b[c][0], b[c][1], b[c][2]), b1 = toModel(b[c + 1][0], b[c + 1][1], b[c + 1][2]);
+        Vector3f n = new Vector3f(b0).sub(a0).cross(new Vector3f(a1).sub(a0));
+        if (n.lengthSquared() < 1.0E-12F) {
+            n.set(0.0F, 0.0F, side);
+        }
+        if (n.z * side < 0.0F) {
+            n.negate();
+        }
+        n.normalize();
+        float tu = 448.0F + (a[c][0] * 7.0F) % 64.0F, tv = 100.0F + c * 3.0F;
+        BURN_EDGES.add(new BurnVertex(a0, tu, tv, n, BURN_STEEL[c]));
+        BURN_EDGES.add(new BurnVertex(b0, tu, tv, n, BURN_STEEL[c]));
+        BURN_EDGES.add(new BurnVertex(b1, tu, tv, n, BURN_STEEL[c + 1]));
+        BURN_EDGES.add(new BurnVertex(a1, tu, tv, n, BURN_STEEL[c + 1]));
+        BURN_GLOW.add(new BurnVertex(a0, 0.0F, 0.0F, n, BURN_LIGHT[c]));
+        BURN_GLOW.add(new BurnVertex(b0, 0.0F, 1.0F, n, BURN_LIGHT[c]));
+        BURN_GLOW.add(new BurnVertex(b1, 1.0F, 1.0F, n, BURN_LIGHT[c + 1]));
+        BURN_GLOW.add(new BurnVertex(a1, 1.0F, 0.0F, n, BURN_LIGHT[c + 1]));
+    }
+
+    /** Разломы горящего клинка: края — сталью, внутренность — светом, который чуть дышит. */
+    private static void burnCracks(Mesh mesh, MatrixStack matrices, VertexConsumerProvider consumers, int overlay) {
+        for (BurnVertex v : BURN_EDGES) {
+            mesh.colored(v.p(), v.tu(), v.tv(), v.n(), v.rgb());
+        }
+        float time = animationTime();
+        float pulse = 0.82F + 0.18F * MathHelper.sin(time * 0.22F);
+        Mesh glow = new Mesh(matrices.peek(), consumers.getBuffer(RenderLayer.getEyes(GLOW_TEXTURE)), LightmapTextureManager.MAX_LIGHT_COORDINATE, overlay);
+        for (int i = 0; i + 3 < BURN_GLOW.size(); i += 4) {
+            float flicker = pulse * (0.9F + 0.1F * MathHelper.sin(time * 0.6F + BURN_GLOW.get(i).p().x * 40.0F));
+            // Светящийся слой отбрасывает обратные грани, а стороны клинка смотрят в разные стороны — рисуем обе.
+            for (int k = 0; k < 4; k++) {
+                glow.lit(BURN_GLOW.get(i + k), flicker);
+            }
+            for (int k = 3; k >= 0; k--) {
+                glow.lit(BURN_GLOW.get(i + k), flicker);
+            }
+        }
+    }
+
     private static void blade(Mesh m, boolean burning) {
         int row0 = burning ? (int) BLADE_TH : 0;
         float[] us = new float[TIP_SEGMENTS + 2];
@@ -356,19 +528,26 @@ public class ZangetsuItemRenderer implements BuiltinItemRendererRegistry.Dynamic
             float ua = us[i], ub = us[i + 1];
             float[] a = section(ua), b = section(ub);
             float tua = bladeTu(ua), tub = bladeTu(ub);
+            // Обух скруглён: от плоскости клинка фаска на узкий верх.
+            float cha = Math.min(SPINE_CHAMFER, (a[1] - a[0]) * 0.5F), chb = Math.min(SPINE_CHAMFER, (b[1] - b[0]) * 0.5F);
+            float sa = spineTv(ua), sb = spineTv(ub);
             for (int side = -1; side <= 1; side += 2) {
-                // Плоская сердцевина: от обуха до начала скоса.
-                m.quad(ua, a[0], side * a[3], tua, bladeTv(a[0], row0), ub, b[0], side * b[3], tub, bladeTv(b[0], row0),
+                // Плоская сердцевина: от фаски обуха до начала скоса.
+                m.quad(ua, a[0] + cha, side * a[3], tua, bladeTv(a[0] + cha, row0), ub, b[0] + chb, side * b[3], tub, bladeTv(b[0] + chb, row0),
                         ub, b[1], side * b[4], tub, bladeTv(b[1], row0), ua, a[1], side * a[4], tua, bladeTv(a[1], row0), 0, 0, side);
                 // Скос к кромке.
                 m.quad(ua, a[1], side * a[4], tua, bladeTv(a[1], row0), ub, b[1], side * b[4], tub, bladeTv(b[1], row0),
                         ub, b[2], side * b[5], tub, bladeTv(b[2], row0), ua, a[2], side * a[5], tua, bladeTv(a[2], row0), 0, 0.35F, side);
+                // Фаска обуха.
+                float edgeU = side > 0 ? 448.0F : 512.0F, topU = side > 0 ? 466.0F : 494.0F;
+                m.quad(ua, a[0] + cha, side * a[3], edgeU, sa, ub, b[0] + chb, side * b[3], edgeU, sb,
+                        ub, b[0], side * b[3] * SPINE_TOP, topU, sb, ua, a[0], side * a[3] * SPINE_TOP, topU, sa, 0, -0.7F, side * 0.7F);
             }
-            // Кромка и обух.
+            // Кромка и верх обуха: своя чистая сталь вместо строк клинка, растянутых в продольные полосы.
             m.quad(ua, a[2], a[5], tua, row0 + 158.0F, ub, b[2], b[5], tub, row0 + 158.0F, ub, b[2], -b[5], tub, row0 + 159.6F,
                     ua, a[2], -a[5], tua, row0 + 159.6F, 0, 1, 0);
-            m.quad(ua, a[0], a[3], tua, row0 + 0.8F, ub, b[0], b[3], tub, row0 + 0.8F, ub, b[0], -b[3], tub, row0 + 5.6F,
-                    ua, a[0], -a[3], tua, row0 + 5.6F, 0, -1, 0);
+            m.quad(ua, a[0], a[3] * SPINE_TOP, 466.0F, sa, ub, b[0], b[3] * SPINE_TOP, 466.0F, sb, ub, b[0], -b[3] * SPINE_TOP, 494.0F, sb,
+                    ua, a[0], -a[3] * SPINE_TOP, 494.0F, sa, 0, -1, 0);
         }
         // Торцы: у основания (под муфтой) и у самого острия.
         for (float u : new float[]{BLADE_START, BLADE_END}) {
@@ -383,11 +562,11 @@ public class ZangetsuItemRenderer implements BuiltinItemRendererRegistry.Dynamic
     // ---------------------------------------------------------------- глаз
 
     /**
-     * Глаз — только на одной стороне клинка: в руке от третьего лица он смотрит наружу, от кулака (у правой руки это
-     * сторона −w, у левой +w), от первого лица и во всех остальных случаях — на зрителя (+w).
+     * Глаз — только на внутренней стороне клинка, обращённой к хозяину: от первого лица он смотрит на тебя, а от третьего
+     * — к телу. Это сторона +w, а у меча в левой руке, который держится так же, но тело с другой стороны, — −w.
      */
     private static int eyeSide(ModelTransformationMode mode) {
-        return mode == ModelTransformationMode.THIRD_PERSON_RIGHT_HAND ? -1 : 1;
+        return mode == ModelTransformationMode.THIRD_PERSON_LEFT_HAND ? -1 : 1;
     }
 
     private void renderEye(int state, ModelTransformationMode mode, MatrixStack matrices, VertexConsumerProvider consumers, int light, int overlay) {
@@ -415,9 +594,9 @@ public class ZangetsuItemRenderer implements BuiltinItemRendererRegistry.Dynamic
             Face glow = new Face(matrices.peek(), consumers.getBuffer(RenderLayer.getEyes(EYE_TEXTURE)), side, LightmapTextureManager.MAX_LIGHT_COORDINATE, overlay);
             iris(glow, gaze, 0.03F, irisU, state == Eye.BURNING ? 0xFFFFFFFF : 0xFF9A7A3A);
         }
-        if (openness > 0.85F) {
+        if (openness > 0.85F && state != Eye.BURNING) {
             // Влажная роговица: прозрачный купол с бликом поверх открытого глаза.
-            cornea(new Face(matrices.peek(), consumers.getBuffer(RenderLayer.getEntityTranslucent(EYE_TEXTURE)), side, light, overlay), openness);
+            cornea(new Face(matrices.peek(), consumers.getBuffer(RenderLayer.getEntityTranslucent(EYE_TEXTURE)), side, light, overlay), openness, gaze);
         }
     }
 
@@ -552,17 +731,17 @@ public class ZangetsuItemRenderer implements BuiltinItemRendererRegistry.Dynamic
         f.lashVertex(a0, to0 + dir0 * Math.min(lash, Math.abs(from0 - to0)));
     }
 
-    /** Купол роговицы над всем глазом — та же сетка по миндалине. */
-    private static void cornea(Face f, float openness) {
+    /** Купол роговицы над всем глазом — та же сетка по миндалине; блик лежит на радужке и ходит вместе с ней. */
+    private static void cornea(Face f, float openness, float[] gaze) {
         int rows = 6;
         for (int i = 0; i < LENS_N; i++) {
             float a0 = LENS_A[i], a1 = LENS_A[i + 1], h0 = lensH(a0) * openness, h1 = lensH(a1) * openness;
             for (int j = 0; j < rows; j++) {
                 float s0 = -1.0F + 2.0F * j / rows, s1 = -1.0F + 2.0F * (j + 1) / rows;
-                f.corneaVertex(a0, s0 * h0);
-                f.corneaVertex(a1, s0 * h1);
-                f.corneaVertex(a1, s1 * h1);
-                f.corneaVertex(a0, s1 * h0);
+                f.corneaVertex(a0, s0 * h0, gaze);
+                f.corneaVertex(a1, s0 * h1, gaze);
+                f.corneaVertex(a1, s1 * h1, gaze);
+                f.corneaVertex(a0, s1 * h0, gaze);
             }
         }
     }
@@ -591,8 +770,19 @@ public class ZangetsuItemRenderer implements BuiltinItemRendererRegistry.Dynamic
         }
 
         private void vertex(Vector3f p, float tu, float tv, Vector3f n) {
-            this.vertices.vertex(this.entry.getPositionMatrix(), p.x, p.y, p.z).color(-1).texture(tu / ATLAS, tv / ATLAS)
+            this.colored(p, tu, tv, n, 0xFFFFFF);
+        }
+
+        void colored(Vector3f p, float tu, float tv, Vector3f n, int rgb) {
+            this.vertices.vertex(this.entry.getPositionMatrix(), p.x, p.y, p.z).color(0xFF000000 | rgb).texture(tu / ATLAS, tv / ATLAS)
                     .overlay(this.overlay).light(this.light).normal(this.entry, n.x, n.y, n.z);
+        }
+
+        /** Вершина светящегося слоя: цвет вершины умножен на яркость (свет складывается, так что тёмное просто не видно). */
+        void lit(BurnVertex v, float brightness) {
+            int r = (int) (((v.rgb() >> 16) & 0xFF) * brightness), g = (int) (((v.rgb() >> 8) & 0xFF) * brightness), b = (int) ((v.rgb() & 0xFF) * brightness);
+            this.vertices.vertex(this.entry.getPositionMatrix(), v.p().x, v.p().y, v.p().z).color(r, g, b, 255).texture(v.tu(), v.tv())
+                    .overlay(this.overlay).light(this.light).normal(this.entry, v.n().x, v.n().y, v.n().z);
         }
     }
 
@@ -637,8 +827,8 @@ public class ZangetsuItemRenderer implements BuiltinItemRendererRegistry.Dynamic
             this.vertex(this.at(a, b, domeLift(a, b) + 0.08F), 26.0F / 32.0F, 18.0F / 32.0F, 0xFFFFFFFF, this.up());
         }
 
-        void corneaVertex(float a, float b) {
-            float x = a / EYE_W, y = b / EYE_H;
+        void corneaVertex(float a, float b, float[] gaze) {
+            float x = MathHelper.clamp((a - gaze[0]) / EYE_W, -0.98F, 0.98F), y = MathHelper.clamp((b - gaze[1]) / EYE_H, -0.98F, 0.98F);
             this.vertex(this.at(a, b, domeLift(a, b) + 0.055F), (28.0F + x * 4.0F) / 32.0F, (12.0F - y * 4.0F) / 32.0F, 0xFFFFFFFF, this.up());
         }
 

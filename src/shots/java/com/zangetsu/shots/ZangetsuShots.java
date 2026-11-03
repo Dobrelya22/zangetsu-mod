@@ -26,6 +26,7 @@ import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.minecraft.client.MinecraftClient;
 import com.zangetsu.client.CameraDirector;
 import com.zangetsu.client.ClientState;
+import com.zangetsu.client.ZangetsuCombat;
 import net.minecraft.client.gui.screen.TitleScreen;
 import net.minecraft.client.gui.screen.ingame.InventoryScreen;
 import net.minecraft.client.option.Perspective;
@@ -89,6 +90,7 @@ public class ZangetsuShots implements ClientModInitializer {
     private LivingEntity zombie;
     private LivingEntity enderman;
     private LivingEntity attacker;
+    private MobEntity golem;
     private float healthBefore;
     private int bondBefore;
     private int checksTotal;
@@ -331,6 +333,27 @@ public class ZangetsuShots implements ClientModInitializer {
             check("на III уровне меч сам бьёт зомби", !this.attacker.isAlive() || this.attacker.getHealth() < this.attacker.getMaxHealth());
             this.attacker.discard();
         });
+        // Удар по нажатию: урон не в миг клика, а когда клинок доходит до цели. Голем — чтобы меч не ударил его сам.
+        onServer(s -> {
+            ServerPlayerEntity player = player(s);
+            this.golem = EntityType.IRON_GOLEM.create(player.getServerWorld());
+            Vec3d at = player.getPos().add(player.getRotationVector().multiply(2.2).multiply(1.0, 0.0, 1.0));
+            this.golem.refreshPositionAndAngles(at.x, at.y, at.z, 0.0F, 0.0F);
+            this.golem.setAiDisabled(true);
+            player.getServerWorld().spawnEntity(this.golem);
+        });
+        pause(6);
+        act(c -> lookAt(c, this.golem.getBoundingBox().getCenter()));
+        pause(4);
+        act(c -> check("нажатие атаки начинает замах Зангецу", ZangetsuCombat.onAttackKey(c)));
+        pause(2);
+        onServer(s -> check("в миг клика урона ещё нет: идёт замах", this.golem.getHealth() >= this.golem.getMaxHealth()));
+        pause(16);
+        onServer(s -> {
+            check("урон приходит, когда клинок дошёл до цели", this.golem.getHealth() < this.golem.getMaxHealth());
+            this.golem.discard();
+        });
+        pause(10);
         onServer(s -> {
             ServerPlayerEntity player = player(s);
             this.healthBefore = player.getHealth();

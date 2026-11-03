@@ -10,9 +10,11 @@
     "ClientPlayerEntityMixin",
     "ClientWorldMixin",
     "EndermanEntityModelMixin",
+    "GameRendererMixin",
     "HeldItemFeatureRendererMixin",
     "HeldItemRendererMixin",
     "LivingEntityRendererMixin",
+    "MinecraftClientMixin",
     "WorldRendererMixin"
   ],
   "injectors": {

@@ -2,11 +2,13 @@ package com.zangetsu.client.render;
 
 import com.zangetsu.client.ClientState;
 import com.zangetsu.network.AnimationPayload;
+import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import net.minecraft.client.model.ModelPart;
 import net.minecraft.client.render.entity.model.BipedEntityModel;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.util.Arm;
 import net.minecraft.util.math.MathHelper;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
@@ -14,8 +16,8 @@ import org.joml.Vector3f;
 /**
  * Позы игрока в сценах: тянется к рукояти и поднимает меч; замах двумя руками и удар сверху (казнь);
  * горизонтальный взмах (эндермен пополам); вытаскивает меч из земли во сне; раскидывает руки и
- * запрокидывает голову, превращаясь в Пустого. В бою с Зангецу — тяжёлые взмахи всем корпусом (три удара по очереди),
- * рывок, когда меч рубит сам, и Гецуга: замах высоко за правое плечо, левая рука указывает цель — и взмах по горизонтали.
+ * запрокидывает голову, превращаясь в Пустого. В бою с Зангецу — приёмы из {@link SwordMoves}
+ * и Гецуга: замах высоко за правое плечо, левая рука указывает цель — и взмах по горизонтали.
  */
 public final class PlayerPoses {
     /** На сколько градусов запястье подаёт клинок вперёд в ударе. */
@@ -25,6 +27,9 @@ public final class PlayerPoses {
     /** Кулак от плеча вдоль руки и расстояние между кулаками на рукояти (пиксели модели). */
     private static final float FIST_Y = 8.6F;
     private static final float SECOND_HAND = 3.6F;
+    /** На сколько рука может «согнуться» и вытянуться (доля длины): рука в модели не гнётся, поэтому укорачивается. */
+    private static final float MIN_REACH = 0.72F, MAX_REACH = 1.12F;
+    private static final float[] ZERO = new float[SwordMoves.SIZE];
 
     private PlayerPoses() {
     }
@@ -41,7 +46,6 @@ public final class PlayerPoses {
             case AnimationPayload.EXECUTE -> execute(model, t);
             case AnimationPayload.SLASH -> slash(model, t);
             case AnimationPayload.HOLLOW -> hollow(model, t, animationProgress);
-            case AnimationPayload.AUTO_SLASH -> auto(model, t, animation.param());
             case AnimationPayload.GETSUGA -> getsuga(model, t, animationProgress);
             default -> {
             }
@@ -135,11 +139,7 @@ public final class PlayerPoses {
     public static float bladeForward(PlayerEntity player) {
         float tickDelta = MinecraftClient.getInstance().getRenderTickCounter().getTickDelta(false);
         ClientState.Animation animation = ClientState.animation(player);
-        if (animation == null) {
-            float swing = player.getHandSwingProgress(tickDelta);
-            return swing <= 0.0F || swing >= 1.0F ? 0.0F : phase(swing, 0.12F, 0.3F) * (1.0F - phase(swing, 0.62F, 1.0F));
-        }
-        return flip(animation.type(), animation.progress(player, tickDelta));
+        return animation == null ? 0.0F : flip(animation.type(), animation.progress(player, tickDelta));
     }
 
     private static float flip(int animation, float t) {
@@ -147,7 +147,7 @@ public final class PlayerPoses {
             return 0.0F;
         }
         return switch (animation) {
-            case AnimationPayload.AUTO_SLASH, AnimationPayload.GETSUGA -> phase(t, 0.2F, 0.38F) * (1.0F - phase(t, 0.62F, 1.0F));
+            case AnimationPayload.GETSUGA -> phase(t, 0.2F, 0.38F) * (1.0F - phase(t, 0.62F, 1.0F));
             case AnimationPayload.EXECUTE, AnimationPayload.SLASH -> phase(t, 0.42F, 0.52F) * (1.0F - phase(t, 0.8F, 1.0F));
             default -> 0.0F;
         };
@@ -155,32 +155,139 @@ public final class PlayerPoses {
 
     // ---------------------------------------------------------------- бой
 
-    /**
-     * Поза бойца: правая рука (питч, рыск, крен), левая рука (то же), поворот и наклон корпуса. Тяжёлый меч
-     * ведёт весь корпус — плечи поворачиваются вместе с ним. Рыск и поворот плюс — вправо (к руке с мечом),
-     * минус — влево, поперёк корпуса.
-     */
-    private static final float[][][] CLEAVES = {
-            // Диагональ: замах над правым плечом — удар вниз влево.
-            {{-2.8F, 0.45F, 0.2F, -0.2F, -0.2F, -0.25F, 0.4F, -0.05F}, {-0.55F, -0.85F, -0.15F, -0.6F, -0.4F, -0.35F, -0.45F, 0.22F}},
-            // Восходящий: снизу слева — вверх вправо.
-            {{-0.35F, -0.95F, -0.3F, -0.5F, -0.3F, -0.2F, -0.45F, 0.15F}, {-2.6F, 0.55F, 0.3F, -0.15F, -0.1F, -0.4F, 0.4F, -0.1F}},
-            // Горизонтальный: справа налево на уровне плеч.
-            {{-1.55F, 1.15F, 0.0F, -0.4F, -0.4F, -0.2F, 0.5F, 0.0F}, {-1.55F, -1.15F, 0.0F, -0.8F, -0.6F, -0.3F, -0.55F, 0.05F}},
-    };
-
-    /** Обычный удар мечом ({ p} — ход ванильного взмаха 0..1, { variant} — какой из трёх). */
-    public static void cleave(BipedEntityModel<?> model, float p, int variant) {
-        float[][] pose = CLEAVES[MathHelper.clamp(variant, 0, 2)];
-        strike(model, p, pose[0], pose[1], 0.2F, 0.45F, 0.6F);
+    /** Где сейчас меч в руке идущего удара: кулак (пиксели модели), куда смотрят клинок и лезвие. */
+    public record SwordPose(Vector3f fist, Vector3f blade, Vector3f edge, int color, float trail) {
     }
 
-    /** Меч рубит сам: рывок к цели ({ toward} — угол к ней в градусах), корпус подаётся вперёд. */
-    private static void auto(BipedEntityModel<?> model, float t, int toward) {
-        float aim = MathHelper.clamp(toward * MathHelper.RADIANS_PER_DEGREE, -1.2F, 1.2F);
-        float[] wind = {-2.2F, 0.7F, 0.3F, -0.3F, -0.2F, -0.3F, 0.35F, 0.0F};
-        float[] hit = {-1.25F, -0.6F + aim * 0.8F, -0.2F, -0.9F, -0.5F, -0.5F, -0.3F + aim * 0.4F, 0.3F};
-        strike(model, t, wind, hit, 0.25F, 0.42F, 0.65F);
+    private static final Int2ObjectOpenHashMap<SwordPose> SWORD_POSES = new Int2ObjectOpenHashMap<>();
+
+    /** Поза меча, которую нужно нарисовать вместо обычной (null — обычная). */
+    public static SwordPose sword(LivingEntity player) {
+        return SWORD_POSES.get(player.getId());
+    }
+
+    /**
+     * Идущий приём ({@link SwordMoves}): сплайн даёт кулак и клинок, руки сами приходят к мечу. Правая рука смотрит на кулак и
+     * чуть укорачивается или вытягивается (так выглядит согнутый локоть у негнущейся руки), левая в двуручных приёмах ложится на
+     * рукоять за правой. Корпус, плечи и ноги идут за ударом. У левши всё зеркально.
+     */
+    public static void swing(BipedEntityModel<?> m, LivingEntity player, float time) {
+        ClientState.Swing swing = ClientState.swing(player, time);
+        if (swing == null) {
+            SWORD_POSES.remove(player.getId());
+            return;
+        }
+        SwordMoves.Move move = SwordMoves.ALL[swing.move];
+        float t = MathHelper.clamp(swing.progress(time), 0.0F, 1.0F);
+        boolean lefty = player.getMainArm() == Arm.LEFT;
+        float mx = lefty ? -1.0F : 1.0F;
+        ModelPart main = lefty ? m.leftArm : m.rightArm, off = lefty ? m.rightArm : m.leftArm;
+        float[] rest = idle(main, mx, m);
+        float[] v = SwordMoves.sample(move.body(), t, rest);
+        float weight = SwordMoves.smooth(0.0F, 0.1F, t) * (1.0F - SwordMoves.smooth(0.86F, 1.0F, t));
+
+        float bodyYaw = v[SwordMoves.YAW] * mx;
+        m.body.yaw = bodyYaw;
+        m.body.pitch = v[SwordMoves.PITCH];
+        // Плечи идут за корпусом, наклон — как у приседа: иначе пояс разъедется с ногами.
+        float lean = MathHelper.clamp(v[SwordMoves.PITCH] / 0.5F, 0.0F, 1.0F);
+        m.rightArm.pivotZ = MathHelper.sin(bodyYaw) * 5.0F;
+        m.rightArm.pivotX = -MathHelper.cos(bodyYaw) * 5.0F;
+        m.leftArm.pivotZ = -MathHelper.sin(bodyYaw) * 5.0F;
+        m.leftArm.pivotX = MathHelper.cos(bodyYaw) * 5.0F;
+        m.rightArm.pivotY = m.leftArm.pivotY = 2.0F + 3.2F * lean;
+        m.body.pivotY = 3.2F * lean;
+        m.head.pivotY = 4.2F * lean;
+        m.head.pitch += v[SwordMoves.PITCH] * 0.3F;
+        m.rightLeg.pivotZ = m.leftLeg.pivotZ = 4.0F * lean;
+        m.rightLeg.pivotY = m.leftLeg.pivotY = 12.0F + 0.2F * lean;
+        (lefty ? m.leftLeg : m.rightLeg).pitch += v[SwordMoves.LEG_R];
+        (lefty ? m.rightLeg : m.leftLeg).pitch += v[SwordMoves.LEG_L];
+        m.hat.copyTransform(m.head);
+
+        // Кулак и меч: у рывка к цели весь приём повёрнут в её сторону.
+        Vector3f target = turned(mx * v[SwordMoves.FX], v[SwordMoves.FX + 1], v[SwordMoves.FX + 2], swing.aim);
+        Vector3f blade = turned(mx * v[SwordMoves.BX], v[SwordMoves.BX + 1], v[SwordMoves.BX + 2], swing.aim).normalize();
+        Vector3f edge = turned(mx * v[SwordMoves.EX], v[SwordMoves.EX + 1], v[SwordMoves.EX + 2], swing.aim);
+        edge.sub(new Vector3f(blade).mul(edge.dot(blade))).normalize();
+
+        // Плечо смотрит на кулак; кисть смещена от оси руки на пиксель.
+        float handX = lefty ? 1.0F : -1.0F;
+        float[] aimed = aim(main, target.x - handX, target.y, target.z);
+        float dx = target.x - handX - main.pivotX, dy = target.y - main.pivotY, dz = target.z - main.pivotZ;
+        float reach = MathHelper.clamp(MathHelper.sqrt(dx * dx + dy * dy + dz * dz) / FIST_Y, MIN_REACH, MAX_REACH);
+        main.pitch = angleLerp(weight, main.pitch, aimed[0]);
+        main.yaw = angleLerp(weight, main.yaw, aimed[1]);
+        main.roll = MathHelper.lerp(weight, main.roll, 0.0F);
+        main.yScale = MathHelper.lerp(weight, 1.0F, reach);
+        Quaternionf arm = new Quaternionf().rotationZYX(main.roll, main.yaw, main.pitch);
+        Vector3f fist = arm.transform(new Vector3f(handX, FIST_Y * main.yScale, 0.0F)).add(main.pivotX, main.pivotY, main.pivotZ);
+        SWORD_POSES.put(player.getId(), new SwordPose(fist, blade, edge, swing.color, SwordMoves.trail(move, t)));
+
+        // Свободная рука уходит в противовес; в двуручных — ложится на рукоять.
+        float two = MathHelper.clamp(v[SwordMoves.TWO], 0.0F, 1.0F);
+        float freePitch = MathHelper.lerp(weight, off.pitch, -0.3F - 0.3F * Math.abs(v[SwordMoves.YAW]));
+        float freeYaw = MathHelper.lerp(weight, off.yaw, bodyYaw * 0.6F);
+        float freeRoll = MathHelper.lerp(weight, off.roll, -0.35F * mx);
+        Vector3f hold = new Vector3f(fist).sub(new Vector3f(blade).mul(SECOND_HAND));
+        float[] onHilt = aim(off, hold.x + handX, hold.y, hold.z);
+        float hx = hold.x + handX - off.pivotX, hy = hold.y - off.pivotY, hz = hold.z - off.pivotZ;
+        off.pitch = angleLerp(two, freePitch, onHilt[0]);
+        off.yaw = angleLerp(two, freeYaw, onHilt[1]);
+        off.roll = MathHelper.lerp(two, freeRoll, 0.0F);
+        off.yScale = MathHelper.lerp(two, 1.0F, MathHelper.clamp(MathHelper.sqrt(hx * hx + hy * hy + hz * hz) / FIST_Y, MIN_REACH, 1.25F));
+    }
+
+    /** Поза покоя в координатах приёма: где сейчас кулак и меч у опущенной руки. */
+    private static float[] idle(ModelPart main, float mx, BipedEntityModel<?> m) {
+        Quaternionf arm = new Quaternionf().rotationZYX(main.roll, main.yaw, main.pitch);
+        Vector3f fist = arm.transform(new Vector3f(-mx, FIST_Y, 0.0F)).add(main.pivotX, main.pivotY, main.pivotZ);
+        float tilt = GRIP_TO_ARM * MathHelper.RADIANS_PER_DEGREE;
+        Vector3f blade = arm.transform(new Vector3f(0.0F, MathHelper.cos(tilt), -MathHelper.sin(tilt)));
+        Vector3f edge = arm.transform(new Vector3f(0.0F, MathHelper.sin(tilt), MathHelper.cos(tilt)));
+        float[] rest = new float[SwordMoves.SIZE];
+        rest[SwordMoves.FX] = mx * fist.x;
+        rest[SwordMoves.FX + 1] = fist.y;
+        rest[SwordMoves.FX + 2] = fist.z;
+        rest[SwordMoves.BX] = mx * blade.x;
+        rest[SwordMoves.BX + 1] = blade.y;
+        rest[SwordMoves.BX + 2] = blade.z;
+        rest[SwordMoves.EX] = mx * edge.x;
+        rest[SwordMoves.EX + 1] = edge.y;
+        rest[SwordMoves.EX + 2] = edge.z;
+        rest[SwordMoves.YAW] = mx * m.body.yaw;
+        rest[SwordMoves.PITCH] = m.body.pitch;
+        return rest;
+    }
+
+    /** Повернуть вокруг вертикали на {@code aim} радиан вправо: рывок к цели. */
+    private static Vector3f turned(float x, float y, float z, float aim) {
+        if (aim == 0.0F) {
+            return new Vector3f(x, y, z);
+        }
+        float c = MathHelper.cos(aim), s = MathHelper.sin(aim);
+        return new Vector3f(x * c + z * s, y, -x * s + z * c);
+    }
+
+    private static float angleLerp(float k, float from, float to) {
+        float d = to - from;
+        while (d > MathHelper.PI) {
+            d -= MathHelper.TAU;
+        }
+        while (d < -MathHelper.PI) {
+            d += MathHelper.TAU;
+        }
+        return from + d * k;
+    }
+
+    /** Поворот всего тела в приёме (градусы) и присед (пиксели): {разворот, присед}. */
+    public static float[] root(LivingEntity player, float time) {
+        ClientState.Swing swing = ClientState.swing(player, time);
+        if (swing == null) {
+            return null;
+        }
+        float[] v = SwordMoves.sample(SwordMoves.ALL[swing.move].body(), MathHelper.clamp(swing.progress(time), 0.0F, 1.0F), ZERO);
+        return new float[]{v[SwordMoves.SPIN], v[SwordMoves.DIP]};
     }
 
     /** Гецуга: замах за правое плечо, левая рука указывает цель; дрожь перед ударом; взмах по горизонтали. */

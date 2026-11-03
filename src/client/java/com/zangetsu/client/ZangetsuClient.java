@@ -6,6 +6,7 @@ import com.zangetsu.client.render.GetsugaRenderer;
 import com.zangetsu.client.render.HollowFeatureRenderer;
 import com.zangetsu.client.render.SeveredPartRenderer;
 import com.zangetsu.client.render.SlashTrails;
+import com.zangetsu.client.render.SwordMoves;
 import com.zangetsu.client.render.SpiritModel;
 import com.zangetsu.client.render.SpiritRenderer;
 import com.zangetsu.client.render.ThrownZangetsuRenderer;
@@ -35,6 +36,7 @@ import net.minecraft.client.render.entity.PlayerEntityRenderer;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
+import net.minecraft.util.math.MathHelper;
 
 public class ZangetsuClient implements ClientModInitializer {
     @Override
@@ -61,7 +63,7 @@ public class ZangetsuClient implements ClientModInitializer {
             ClientState.ticks++;
             KeyBindings.tick(client);
             CameraDirector.tick(client);
-            swings(client);
+            ZangetsuCombat.tick(client);
         });
         // Шлейфы ударов — светящиеся дуги в воздухе.
         WorldRenderEvents.AFTER_ENTITIES.register(SlashTrails::render);
@@ -73,19 +75,6 @@ public class ZangetsuClient implements ClientModInitializer {
         });
 
         registerReceivers();
-    }
-
-    /** Новый удар Зангецу у кого-то из игроков — следующий вариант взмаха и стальной шлейф. */
-    private static void swings(MinecraftClient client) {
-        if (client.world == null) {
-            return;
-        }
-        for (PlayerEntity player : client.world.getPlayers()) {
-            if (player.handSwinging && player.handSwingTicks == 0 && player.getMainHandStack().isOf(ModItems.ZANGETSU)
-                    && ClientState.animation(player) == null) {
-                SlashTrails.swing(player, ClientState.nextSwing(player));
-            }
-        }
     }
 
     private static void registerReceivers() {
@@ -116,11 +105,13 @@ public class ZangetsuClient implements ClientModInitializer {
             if (entity == null) {
                 return;
             }
-            ClientState.ANIMATIONS.put(payload.entityId(), new ClientState.Animation(payload.animation(), entity.age, payload.duration(), payload.param()));
             if (entity instanceof PlayerEntity player && payload.animation() == AnimationPayload.AUTO_SLASH) {
-                SlashTrails.auto(player, payload.param(), ClientState.nextSwing(player));
+                // Меч рубит сам: быстрый приём, повёрнутый к цели, с золотым следом.
+                ZangetsuCombat.start(player, MathHelper.clamp(payload.param() * MathHelper.RADIANS_PER_DEGREE, -1.2F, 1.2F),
+                        SwordMoves.auto(ClientState.nextSwing(player)), SwordMoves.AUTO_SPEED, SlashTrails.GOLD);
                 return;
             }
+            ClientState.ANIMATIONS.put(payload.entityId(), new ClientState.Animation(payload.animation(), entity.age, payload.duration(), payload.param()));
             if (entity instanceof PlayerEntity player && payload.animation() == AnimationPayload.GETSUGA) {
                 SlashTrails.getsuga(player, payload.duration() * 0.4F);
                 return;

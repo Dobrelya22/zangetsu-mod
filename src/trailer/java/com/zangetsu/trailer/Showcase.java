@@ -51,6 +51,11 @@ final class Showcase {
         mask("final", 36.0, 5);
         finalGetsuga();
         execute();
+        moves("moves_side", 50.0, 270.0F, false);
+        moves("moves_front", 75.0, 205.0F, false);
+        moves("moves_fp", 100.0, 0.0F, true);
+        moves("moves_back", 125.0, 25.0F, false);
+        damage();
     }
 
     // ---------------------------------------------------------------- меч крупно
@@ -68,6 +73,7 @@ final class Showcase {
         cut(t0, "full", shot(grip.plus(0.62, 0.05, 2.0), grip.plus(0.55, 0, 0), 42));
         cut(t0 + 1.0, "hilt", shot(grip.plus(-0.02, 0.12, 0.5), grip.plus(-0.02, -0.02, 0), 44));
         cut(t0 + 2.0, "blade34", shot(grip.plus(1.15, -0.55, 0.85), grip.plus(0.7, 0, 0), 46));
+        cut(t0 + 2.5, "spine", shot(grip.plus(0.95, -0.85, 0.28), grip.plus(0.7, 0.0, 0), 40));
         cut(t0 + 3.0, "pommel", shot(grip.plus(-0.3, -0.1, 0.55), grip.plus(-0.26, -0.22, 0), 46));
         cut(t0 + 4.0, "eye", shot(eye(0.06, 0.04, 0.42), eye(0, 0, 0), 34));
         // Обратная сторона: глаза там нет.
@@ -100,6 +106,29 @@ final class Showcase {
         server(t0 + 4.0, srv -> ModAttachments.data(Stage.player(srv)).hollowUsed = HollowForm.BUDGET - 601);
         server(t0 + 4.33, srv -> ModAttachments.data(Stage.player(srv)).hollowUsed = HollowForm.BUDGET - 301);
         server(t0 + 4.66, srv -> ModAttachments.data(Stage.player(srv)).hollowUsed = HollowForm.BUDGET - 101);
+    }
+
+    /** Все приёмы подряд в замедлении: сбоку, спереди и глазами игрока. */
+    private void moves(String name, double t0, float yaw, boolean firstPerson) {
+        double step = 2.6;
+        scene(name, t0, t0 + step * 8.0);
+        s.firstPerson = firstPerson;
+        s.setup = srv -> Script.base(srv, 4, false);
+        speed(t0, 0.5F);
+        for (int i = 0; i < 8; i++) {
+            client(t0 + 0.1 + i * step, () -> MinecraftClient.getInstance().player.swingHand(Hand.MAIN_HAND));
+        }
+        cut(t0, name + "_all", firstPerson ? shot(p(0, 5, 5), p(0, 0, 0), 70) : shot(arc(3.4, yaw, 1.2), p(0, 1.3, -0.2), 50));
+    }
+
+    /** Трещины маски и горящие разломы меча крупно. */
+    private void damage() {
+        scene("damage", 150.0, 155.0);
+        s.settle = 70;
+        s.setup = srv -> Script.base(srv, 4, true);
+        cut(150.0, "damage_near", shot(arc(1.15, 195, 1.72), p(0, 1.68, 0), 40));
+        server(150.0, srv -> ModAttachments.data(Stage.player(srv)).hollowUsed = HollowForm.BUDGET - 101);
+        cut(152.0, "damage_side", shot(arc(1.3, 235, 1.8), p(0, 1.68, 0), 40));
     }
 
     /** Казнь: обе руки на рукояти, замах и удар. */

@@ -37,7 +37,9 @@ public final class Abilities {
     private static final double PARRY_RANGE = 4.5;
     private static final double AUTO_ATTACK_RANGE = 4.0;
     private static final int AUTO_ATTACK_COOLDOWN = 16;
-    private static final int AUTO_SLASH_TICKS = 8;
+    private static final int AUTO_SLASH_TICKS = 14;
+    /** Через сколько тиков после начала рывка клинок доходит до цели (как в приёмах на клиенте). */
+    private static final int AUTO_SLASH_HIT = 5;
 
     private static final Map<UUID, Long> NEXT_AUTO_ATTACK = new HashMap<>();
 
@@ -118,13 +120,20 @@ public final class Abilities {
         Vec3d to = target.getPos().subtract(player.getPos());
         int toward = Math.round(MathHelper.wrapDegrees((float) Math.toDegrees(Math.atan2(to.z, to.x)) - 90.0F - player.getHeadYaw()));
         Sync.animation(player, AnimationPayload.AUTO_SLASH, AUTO_SLASH_TICKS, toward);
-        Vec3d at = target.getBoundingBox().getCenter();
-        Fx.particles(world, ParticleTypes.SWEEP_ATTACK, at, 1, 0.0, 0.0);
-        Fx.particles(world, Fx.EYE_GOLD, at, 6, 0.3, 0.0);
-        Fx.sound(target, SoundEvents.ENTITY_PLAYER_ATTACK_SWEEP, 0.8F, 0.9F);
-        target.damage(world.getDamageSources().playerAttack(player), damage);
-        Vec3d push = target.getPos().subtract(player.getPos()).normalize();
-        target.takeKnockback(0.35, -push.x, -push.z);
+        // Урон — когда клинок дойдёт до цели, а не в начале замаха.
+        MobEntity victim = target;
+        Scheduler.later(AUTO_SLASH_HIT, () -> {
+            if (!victim.isAlive() || !player.isAlive() || player.isRemoved()) {
+                return;
+            }
+            Vec3d at = victim.getBoundingBox().getCenter();
+            Fx.particles(world, ParticleTypes.SWEEP_ATTACK, at, 1, 0.0, 0.0);
+            Fx.particles(world, Fx.EYE_GOLD, at, 6, 0.3, 0.0);
+            Fx.sound(victim, SoundEvents.ENTITY_PLAYER_ATTACK_SWEEP, 0.8F, 0.9F);
+            victim.damage(world.getDamageSources().playerAttack(player), damage);
+            Vec3d push = victim.getPos().subtract(player.getPos()).normalize();
+            victim.takeKnockback(0.35, -push.x, -push.z);
+        });
     }
 
     /** Злой моб, которого меч бьёт сам. Нейтральных не трогает, пока те сами не нападут. */

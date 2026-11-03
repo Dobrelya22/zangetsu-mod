@@ -26,19 +26,30 @@ public abstract class BipedEntityModelMixin {
     @Unique
     private boolean zangetsu$maimed;
 
+    /** Ванильный взмах руки с Зангецу не нужен: его заменяет приём, и он дёргал бы руку поверх него. */
+    @Inject(method = "setAngles(Lnet/minecraft/entity/LivingEntity;FFFFF)V", at = @At("HEAD"))
+    private void zangetsu$noVanillaSwing(LivingEntity entity, float limbAngle, float limbDistance, float animationProgress, float headYaw,
+            float headPitch, CallbackInfo ci) {
+        if (entity instanceof PlayerEntity && entity.getMainHandStack().isOf(ModItems.ZANGETSU)) {
+            ((BipedEntityModel<?>) (Object) this).handSwingProgress = 0.0F;
+        }
+    }
+
     @Inject(method = "setAngles(Lnet/minecraft/entity/LivingEntity;FFFFF)V", at = @At("TAIL"))
     private void zangetsu$applyLimbs(LivingEntity entity, float limbAngle, float limbDistance, float animationProgress, float headYaw,
             float headPitch, CallbackInfo ci) {
         BipedEntityModel<?> model = (BipedEntityModel<?>) (Object) this;
         if (entity instanceof PlayerEntity) {
+            // Руки могли быть укорочены прошлым кадром (модель одна на всех).
+            model.rightArm.yScale = 1.0F;
+            model.leftArm.yScale = 1.0F;
             if (FirstPersonMotion.drawingArm) {
                 return;
             }
             PlayerPoses.apply(model, entity, animationProgress);
-            // Обычный удар Зангецу — тяжёлый взмах всем корпусом вместо ванильного тычка.
-            if (ClientState.animation(entity) == null && model.handSwingProgress > 0.0F && entity.getMainHandStack().isOf(ModItems.ZANGETSU)) {
-                PlayerPoses.cleave(model, model.handSwingProgress, ClientState.swingVariant(entity));
-                model.hat.copyTransform(model.head);
+            // Удары Зангецу — приёмы всем телом вместо ванильного тычка.
+            if (ClientState.animation(entity) == null) {
+                PlayerPoses.swing(model, entity, animationProgress);
             }
             // Под маской Пустого слой волос скина торчал бы сквозь кость.
             if (ClientState.isHollow(entity)) {

@@ -19,7 +19,8 @@ import org.joml.Vector3f;
  * зубы: округлые клыки растут из-под губ, сужаются к острию и входят между зубами другого ряда. Тени в складках
  * запечены в цвет вершин, поэтому лепка читается и при ровном свете. Текстура даёт только кость, полосы и глубину
  * прорезей глаз; нарисованных контуров нет. Финальная маска (уровень V) — те же черты, но полосы чёрные и рваные,
- * глаза в чёрной обводке и один длинный рог. Трещины и сколы рисует текстура; рог на последних стадиях обломан.
+ * глаза в чёрной обводке и один длинный рог. Трещины и сколы — тоже геометрия: разломы с неровными краями и дыры с
+ * толщиной кости; рог на последних стадиях обломан.
  *
  * <p>Всё строится в координатах головы (пиксели модели: лицо смотрит в −z, вниз — +y, левая сторона маски — +x).
  * Каждый горизонтальный срез оболочки — скруглённый квадрат вокруг головы; α — угол вокруг головы (0 — середина
@@ -27,8 +28,8 @@ import org.joml.Vector3f;
  * как в tools/textures.cs (HollowMaskHD).
  */
 public final class HollowMaskRenderer {
-    private static final Identifier[] MASK = new Identifier[4];
-    private static final Identifier[] FINAL = new Identifier[4];
+    private static final Identifier MASK = ZangetsuMod.id("textures/entity/hollow_mask.png");
+    private static final Identifier FINAL = ZangetsuMod.id("textures/entity/hollow_final.png");
     private static final Identifier EYES = ZangetsuMod.id("textures/entity/hollow_mask_eyes.png");
     /** Охват: ±ALPHA градусов вокруг головы; верх лба, низ подбородка и край челюсти по бокам. */
     static final float ALPHA = 78.0F, TOP = -8.75F, CHIN = 2.8F, JAW = -1.1F;
@@ -52,13 +53,31 @@ public final class HollowMaskRenderer {
     /** Вершины зубов: зубы на месте, поэтому их тоже строим один раз. */
     private static final List<Vertex> TEETH = new ArrayList<>();
 
+    /** Цвет сечения трещины: кость у края, почти чёрное дно. */
+    private static final int[] CRACK_SHADE = {0xF2F0F4, 0xFFFFFF, 0x1C1214, 0x1C1214, 0xFFFFFF, 0xF2F0F4};
+    /** Трещины по стадиям (ломаные x, y на лице): от левого глаза по лбу, к виску, к челюсти, затем на другую сторону. */
+    private static final float[][][] CRACKS = {
+            {},
+            {{2.4F, -4.5F, 2.7F, -5.6F, 2.3F, -6.7F, 2.6F, -7.8F, 2.2F, -8.5F}, {2.9F, -5.2F, 3.7F, -5.5F, 4.3F, -5.0F}},
+            {{2.3F, -6.7F, 1.3F, -7.2F, 0.5F, -6.9F}, {3.4F, -3.1F, 3.7F, -2.4F, 3.3F, -1.9F}, {-1.0F, -6.2F, -1.6F, -7.2F, -1.3F, -8.3F}},
+            {{3.9F, -4.5F, 4.2F, -3.6F, 4.0F, -3.0F}, {-3.2F, -2.9F, -3.5F, -2.4F, -3.2F, -1.9F}, {0.5F, -6.9F, -0.3F, -5.9F, -1.0F, -6.2F}, {0.2F, 1.3F, 0.6F, 1.9F, 0.2F, 2.5F}},
+    };
+    /** Отколотые куски по стадиям: x, y, полуоси, зерно. */
+    private static final float[][][] CHIPS = {
+            {},
+            {},
+            {{2.9F, -7.3F, 0.85F, 0.65F, 98.0F}},
+            {{3.6F, -3.05F, 0.6F, 0.55F, 99.0F}, {-3.3F, -6.3F, 0.65F, 0.65F, 100.0F}, {-1.0F, 2.2F, 0.5F, 0.45F, 101.0F}},
+    };
+    /** Повреждения маски на каждой стадии; строятся один раз. */
+    private static final Damage[] DAMAGE = new Damage[4];
+
     static {
-        for (int i = 0; i < MASK.length; i++) {
-            MASK[i] = ZangetsuMod.id("textures/entity/hollow_mask_" + i + ".png");
-            FINAL[i] = ZangetsuMod.id("textures/entity/hollow_final_" + i + ".png");
-        }
         build();
         teeth();
+        for (int stage = 0; stage < DAMAGE.length; stage++) {
+            DAMAGE[stage] = damage(stage);
+        }
     }
 
     private HollowMaskRenderer() {
@@ -79,11 +98,15 @@ public final class HollowMaskRenderer {
         matrices.scale(scale, scale, scale);
         matrices.translate(0.0F, 3.0F, 4.0F);
         int alpha = (int) (MathHelper.clamp(grow, 0.0F, 1.0F) * 255.0F);
-        Identifier texture = (finalForm ? FINAL : MASK)[crack];
+        Identifier texture = finalForm ? FINAL : MASK;
+        Damage damage = DAMAGE[crack];
         int boneLight = LightmapTextureManager.pack(Math.max(LightmapTextureManager.getBlockLightCoordinates(light), MIN_BLOCK_LIGHT),
                 LightmapTextureManager.getSkyLightCoordinates(light));
         Emitter bone = new Emitter(matrices.peek(), consumers.getBuffer(RenderLayer.getEntityTranslucent(texture)), boneLight, alpha << 24);
-        face(bone);
+        face(bone, damage);
+        for (Vertex v : damage.vertices()) {
+            bone.vertex(v.p(), v.u(), v.v(), v.n(), v.rgb());
+        }
         rims(bone);
         for (Vertex v : TEETH) {
             bone.vertex(v.p(), v.u(), v.v(), v.n(), v.rgb());
@@ -291,15 +314,219 @@ public final class HollowMaskRenderer {
         return (float) j / NV * (160.0F / 256.0F);
     }
 
-    private static void face(Emitter e) {
+    private static void face(Emitter e, Damage damage) {
+        Vector3f[][] s = damage.surface();
+        boolean[][] holes = damage.holes();
         for (int i = 0; i < NU; i++) {
             for (int j = 0; j < NV; j++) {
-                e.vertex(SURFACE[i][j], faceU(i), faceV(j), NORMALS[i][j], SHADE[i][j]);
-                e.vertex(SURFACE[i][j + 1], faceU(i), faceV(j + 1), NORMALS[i][j + 1], SHADE[i][j + 1]);
-                e.vertex(SURFACE[i + 1][j + 1], faceU(i + 1), faceV(j + 1), NORMALS[i + 1][j + 1], SHADE[i + 1][j + 1]);
-                e.vertex(SURFACE[i + 1][j], faceU(i + 1), faceV(j), NORMALS[i + 1][j], SHADE[i + 1][j]);
+                if (holes != null && holes[i][j]) {
+                    continue;
+                }
+                e.vertex(s[i][j], faceU(i), faceV(j), NORMALS[i][j], SHADE[i][j]);
+                e.vertex(s[i][j + 1], faceU(i), faceV(j + 1), NORMALS[i][j + 1], SHADE[i][j + 1]);
+                e.vertex(s[i + 1][j + 1], faceU(i + 1), faceV(j + 1), NORMALS[i + 1][j + 1], SHADE[i + 1][j + 1]);
+                e.vertex(s[i + 1][j], faceU(i + 1), faceV(j), NORMALS[i + 1][j], SHADE[i + 1][j]);
             }
         }
+    }
+
+    // ---------------------------------------------------------------- повреждения
+
+    /** Псевдослучайное 0..1, одно и то же для одних и тех же чисел: форма трещин не должна меняться от кадра к кадру. */
+    private static float rand(int a, int b) {
+        int h = a * 374761393 + b * 668265263;
+        h = (h ^ (h >>> 13)) * 1274126177;
+        return ((h ^ (h >>> 16)) & 0xFFFF) / 65535.0F;
+    }
+
+    private static boolean inChip(float x, float y, int stage) {
+        for (int s = 0; s <= stage; s++) {
+            for (float[] chip : CHIPS[s]) {
+                float dx = (x - chip[0]) / chip[2], dy = (y - chip[1]) / chip[3];
+                float angle = (float) Math.atan2(dy, dx);
+                float edge = 0.86F + 0.2F * MathHelper.sin(angle * 3.0F + chip[4]) + 0.13F * MathHelper.sin(angle * 7.0F + chip[4] * 2.0F);
+                if (dx * dx + dy * dy < edge * edge) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Повреждения стадии — настоящая геометрия. Сколы — дыры в оболочке: клетки вынуты, край рваный, а по нему идёт стенка
+     * толщиной в кость. Трещины — разломы со своим рельефом (см. {@link #crack}).
+     */
+    private static Damage damage(int stage) {
+        List<Vertex> out = new ArrayList<>();
+        Vector3f[][] surface = SURFACE;
+        boolean[][] holes = null;
+        if (stage >= 2) {
+            holes = new boolean[NU][NV];
+            for (int i = 0; i < NU; i++) {
+                for (int j = 0; j < NV; j++) {
+                    holes[i][j] = inChip((FRONT_X[i][j] + FRONT_X[i + 1][j + 1]) * 0.5F, (height(i, j) + height(i + 1, j + 1)) * 0.5F, stage);
+                }
+            }
+            surface = roughened(holes);
+            chipWalls(out, surface, holes);
+        }
+        for (int s = 1; s <= stage; s++) {
+            for (int k = 0; k < CRACKS[s].length; k++) {
+                crack(out, CRACKS[s][k], s * 31 + k, stage);
+            }
+        }
+        return new Damage(surface, holes, out);
+    }
+
+    /** Копия поверхности, где вершины вокруг сколов сдвинуты вразнобой: край кости обломан, а не вырезан по сетке. */
+    private static Vector3f[][] roughened(boolean[][] holes) {
+        Vector3f[][] copy = new Vector3f[NU + 1][NV + 1];
+        for (int i = 0; i <= NU; i++) {
+            for (int j = 0; j <= NV; j++) {
+                boolean near = false, kept = false;
+                for (int ci = Math.max(0, i - 1); ci <= Math.min(NU - 1, i); ci++) {
+                    for (int cj = Math.max(0, j - 1); cj <= Math.min(NV - 1, j); cj++) {
+                        near |= holes[ci][cj];
+                        kept |= !holes[ci][cj];
+                    }
+                }
+                Vector3f p = new Vector3f(SURFACE[i][j]);
+                if (near && kept) {
+                    Vector3f du = new Vector3f(SURFACE[Math.min(NU, i + 1)][j]).sub(SURFACE[Math.max(0, i - 1)][j]).mul(0.5F);
+                    Vector3f dv = new Vector3f(SURFACE[i][Math.min(NV, j + 1)]).sub(SURFACE[i][Math.max(0, j - 1)]).mul(0.5F);
+                    p.add(du.mul((rand(i, j) - 0.5F) * 0.95F)).add(dv.mul((rand(j, i + 7) - 0.5F) * 0.95F));
+                    p.add(new Vector3f(NORMALS[i][j]).mul((rand(i + 3, j + 11) - 0.5F) * 0.14F));
+                }
+                copy[i][j] = p;
+            }
+        }
+        return copy;
+    }
+
+    /** Стенки сколов: от края кости вглубь, светлая у края и тёмная в глубине. */
+    private static void chipWalls(List<Vertex> out, Vector3f[][] s, boolean[][] holes) {
+        for (int i = 0; i < NU; i++) {
+            for (int j = 0; j < NV; j++) {
+                if (holes[i][j]) {
+                    continue;
+                }
+                // Каждый край целой клетки, за которым дыра.
+                if (i + 1 < NU && holes[i + 1][j]) {
+                    chipWall(out, s, i + 1, j, i + 1, j + 1, i, j);
+                }
+                if (i > 0 && holes[i - 1][j]) {
+                    chipWall(out, s, i, j, i, j + 1, i, j);
+                }
+                if (j + 1 < NV && holes[i][j + 1]) {
+                    chipWall(out, s, i, j + 1, i + 1, j + 1, i, j);
+                }
+                if (j > 0 && holes[i][j - 1]) {
+                    chipWall(out, s, i, j, i + 1, j, i, j);
+                }
+            }
+        }
+    }
+
+    private static void chipWall(List<Vertex> out, Vector3f[][] s, int ia, int ja, int ib, int jb, int ci, int cj) {
+        Vector3f a = s[ia][ja], b = s[ib][jb];
+        Vector3f da = new Vector3f(NORMALS[ia][ja]).mul(THICKNESS * (0.7F + 0.6F * rand(ia, ja + 40)));
+        Vector3f db = new Vector3f(NORMALS[ib][jb]).mul(THICKNESS * (0.7F + 0.6F * rand(ib, jb + 40)));
+        Vector3f deepA = new Vector3f(a).sub(da), deepB = new Vector3f(b).sub(db);
+        // Нормаль стенки — от целой клетки в сторону дыры.
+        Vector3f center = new Vector3f(s[ci][cj]).add(s[ci + 1][cj + 1]).mul(0.5F);
+        Vector3f n = new Vector3f(b).sub(a).cross(new Vector3f(NORMALS[ia][ja]));
+        if (n.dot(new Vector3f(a).sub(center)) < 0.0F) {
+            n.negate();
+        }
+        n.normalize();
+        float u0 = 64.0F / 256.0F, u1 = 128.0F / 256.0F, v0 = 224.0F / 256.0F, v1 = 1.0F;
+        out.add(new Vertex(a, u0, v0, n, 0xF0ECE4));
+        out.add(new Vertex(b, u1, v0, n, 0xF0ECE4));
+        out.add(new Vertex(deepB, u1, v1, n, 0x5C5660));
+        out.add(new Vertex(deepA, u0, v1, n, 0x5C5660));
+    }
+
+    /**
+     * Трещина — разлом со своим рельефом: узкое тёмное дно, с двух сторон стенки к неровным поднятым краям (края разной
+     * высоты, как у сместившихся плит кости) и пологий спуск обратно на поверхность. Путь неровный и у концов сходит на нет.
+     */
+    private static void crack(List<Vertex> out, float[] line, int seed, int stage) {
+        List<float[]> path = new ArrayList<>();
+        for (int i = 0; i + 3 < line.length; i += 2) {
+            float dx = line[i + 2] - line[i], dy = line[i + 3] - line[i + 1];
+            float length = MathHelper.sqrt(dx * dx + dy * dy);
+            int steps = Math.max(1, (int) (length / 0.11F));
+            for (int k = 0; k < steps; k++) {
+                float s = (float) k / steps, wander = k == 0 ? 0.0F : (rand(seed + i, k) - 0.5F) * 0.13F;
+                path.add(new float[]{line[i] + dx * s - dy / length * wander, line[i + 1] + dy * s + dx / length * wander});
+            }
+        }
+        path.add(new float[]{line[line.length - 2], line[line.length - 1]});
+        // Поперечный профиль: {смещение, высота}, заполняется для каждой точки пути.
+        Vector3f[] previousP = null, previousN = null;
+        float[] previousU = null, previousV = null;
+        int last = path.size() - 1;
+        for (int k = 0; k <= last; k++) {
+            float[] p = path.get(k), before = path.get(Math.max(0, k - 1)), after = path.get(Math.min(last, k + 1));
+            float tx = after[0] - before[0], ty = after[1] - before[1], length = Math.max(1.0E-4F, MathHelper.sqrt(tx * tx + ty * ty));
+            float nx = -ty / length, ny = tx / length;
+            float taper = MathHelper.clamp(Math.min(k, last - k) / 5.0F, 0.0F, 1.0F);
+            float floor = (0.03F + 0.035F * rand(seed, k)) * taper, lip = floor + 0.055F * taper, out0 = lip + 0.11F * taper;
+            float liftA = (0.05F + 0.1F * rand(seed + 1, k / 2)) * taper, liftB = (0.03F + 0.07F * rand(seed + 2, k / 2)) * taper;
+            float[][] profile = {{-out0, 0.012F}, {-lip, liftA}, {-floor, 0.018F}, {floor, 0.018F}, {lip, liftB}, {out0, 0.012F}};
+            Vector3f[] ps = new Vector3f[6], ns = new Vector3f[6];
+            float[] us = new float[6], vs = new float[6];
+            boolean ok = !inChip(p[0], p[1], stage);
+            for (int c = 0; c < 6 && ok; c++) {
+                ok = onFace(p[0] + nx * profile[c][0], p[1] + ny * profile[c][0], profile[c][1], c, ps, ns, us, vs);
+            }
+            if (!ok) {
+                previousP = null;
+                continue;
+            }
+            if (previousP != null) {
+                for (int c = 0; c < 5; c++) {
+                    crackQuad(out, previousP, previousN, previousU, previousV, ps, us, vs, c);
+                }
+            }
+            previousP = ps;
+            previousN = ns;
+            previousU = us;
+            previousV = vs;
+        }
+    }
+
+    /** Точка на лепной поверхности маски с подъёмом {@code lift}; false — за краем маски. */
+    private static boolean onFace(float x, float y, float lift, int c, Vector3f[] ps, Vector3f[] ns, float[] us, float[] vs) {
+        float a = alphaFor(x, y);
+        float top = top(a), bottom = bottom(a);
+        if (Math.abs(a) > ALPHA - 1.0F || y < top + 0.04F || y > bottom - 0.04F) {
+            return false;
+        }
+        Vector3f p = base(a, y), n = baseNormal(a, y);
+        ps[c] = p.add(new Vector3f(n).mul(relief(p.x, y) + lift));
+        ns[c] = n;
+        us[c] = (a + ALPHA) / (2.0F * ALPHA);
+        vs[c] = (y - top) / (bottom - top) * (160.0F / 256.0F);
+        return true;
+    }
+
+    /** Полоса разлома между двумя соседними сечениями: 0 и 4 — спуск к кости, 1 и 3 — стенки, 2 — дно. */
+    private static void crackQuad(List<Vertex> out, Vector3f[] a, Vector3f[] outward, float[] ua, float[] va, Vector3f[] b, float[] ub, float[] vb, int c) {
+        Vector3f n = new Vector3f(b[c]).sub(a[c]).cross(new Vector3f(a[c + 1]).sub(a[c]));
+        if (n.lengthSquared() < 1.0E-10F) {
+            n.set(outward[c]);
+        }
+        if (n.dot(outward[c]) < 0.0F) {
+            n.negate();
+        }
+        n.normalize();
+        int shade0 = CRACK_SHADE[c], shade1 = CRACK_SHADE[c + 1];
+        out.add(new Vertex(a[c], ua[c], va[c], n, shade0));
+        out.add(new Vertex(b[c], ub[c], vb[c], n, shade0));
+        out.add(new Vertex(b[c + 1], ub[c + 1], vb[c + 1], n, shade1));
+        out.add(new Vertex(a[c + 1], ua[c + 1], va[c + 1], n, shade1));
     }
 
     /** Свечение глаз — только клетки вокруг прорезей (остальная текстура глаз чёрная и ничего не добавляет). */
@@ -477,6 +704,10 @@ public final class HollowMaskRenderer {
     // ---------------------------------------------------------------- вывод вершин
 
     private record Vertex(Vector3f p, float u, float v, Vector3f n, int rgb) {
+    }
+
+    /** Повреждения стадии: поверхность (с рваными краями сколов), вынутые клетки (null — целая) и геометрия трещин и стенок. */
+    private record Damage(Vector3f[][] surface, boolean[][] holes, List<Vertex> vertices) {
     }
 
     private record Emitter(MatrixStack.Entry entry, VertexConsumer vertices, int light, int alpha) {

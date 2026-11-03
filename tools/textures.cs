@@ -86,20 +86,15 @@ public static class ZangetsuTextures
         previewDir = preview;
         // Меч — объёмная модель со своим атласом; глаз — отдельные 3D-детали; плоская картинка — для частиц.
         SwordPaint sp = PaintSword();
-        Canvas[] atlas = SwordAtlasHD();
-        Out(atlas[0], assets, "textures/entity/zangetsu_model.png", 2);
-        Out(atlas[1], assets, "textures/entity/zangetsu_glow.png", 2);
+        Out(SwordAtlasHD(), assets, "textures/entity/zangetsu_model.png", 2);
         Out(SwordIcon(sp), assets, "textures/item/zangetsu_icon.png", 8);
         Out(EyePartsHD(), assets, "textures/entity/zangetsu_eye.png", 2);
         Out(White(), assets, "textures/misc/white.png", 16);
         Out(Icon(), assets, "icon.png", 4);
         Out(Spirit(), assets, "textures/entity/spirit.png", 4);
         Out(SpiritEyes(), assets, "textures/entity/spirit_eyes.png", 4);
-        for (int crack = 0; crack <= 3; crack++)
-        {
-            Out(HollowMaskHD(crack, false), assets, "textures/entity/hollow_mask_" + crack + ".png", 3);
-            Out(HollowMaskHD(crack, true), assets, "textures/entity/hollow_final_" + crack + ".png", 3);
-        }
+        Out(HollowMaskHD(false), assets, "textures/entity/hollow_mask.png", 3);
+        Out(HollowMaskHD(true), assets, "textures/entity/hollow_final.png", 3);
         Out(MaskIcon(true, false), assets, "textures/gui/mask_full.png", 8);
         Out(MaskIcon(false, false), assets, "textures/gui/mask_empty.png", 8);
         Out(MaskIcon(true, true), assets, "textures/gui/mask_final_full.png", 8);
@@ -608,27 +603,6 @@ public static class ZangetsuTextures
     const double M_BLADE_U0 = 6.2, M_BLADE_U1 = 22.0, M_SPINE = -2.3, M_EDGE = 2.8, M_BEVEL = 1.1;
     const double M_EYE_U = 10.6, M_EYE_V = -0.6;
 
-    static double BladeCrack(double u, double v)
-    {
-        double[][] paths = {
-            new[] { 13.0, -0.7, 14.6, -1.2, 16.2, -0.6, 17.8, -1.4, 19.6, -0.9, 21.0, -1.6 },
-            new[] { 12.9, 0.1, 14.4, 0.7, 15.8, 0.3, 17.2, 0.9 },
-            new[] { 8.2, -0.9, 7.4, -1.5, 6.6, -1.1 },
-            new[] { 8.3, 0.0, 7.5, 0.6, 6.7, 0.3 },
-            new[] { 10.6, -1.9, 11.4, -2.2 },
-        };
-        double best = 99;
-        foreach (var p in paths)
-            for (int i = 0; i + 3 < p.Length; i += 2)
-            {
-                double ax = p[i], ay = p[i + 1], bx = p[i + 2], by = p[i + 3];
-                double vx = bx - ax, vy = by - ay;
-                double t = Sat(((u - ax) * vx + (v - ay) * vy) / (vx * vx + vy * vy));
-                double qx = ax + vx * t - u, qy = ay + vy * t - v;
-                best = Math.Min(best, Math.Sqrt(qx * qx + qy * qy));
-            }
-        return best;
-    }
 
     static bool Filled(Color[,] px, int x, int y)
     {
@@ -857,27 +831,39 @@ public static class ZangetsuTextures
      * Атлас объёмного Зангецу 512×512 (в ZangetsuItemRenderer — те же числа):
      *   клинок (0,0)-(448,160), горящий клинок (0,160)-(448,320): u 6.2..22 → x, v −2.3..2.8 → y;
      *   кожа ската под оплёткой (448,0)-(512,64), шёлковый шнур (448,64)-(512,96), тёмный металл (448,96)-(512,128),
-     *   латунь (448,128)-(512,160), сталь цепи (448,160)-(512,192).
-     * Свечение (zangetsu_glow.png, та же раскладка): раскалённые трещины горящего клинка — рисуется поверх светом.
+     *   латунь (448,128)-(512,160), сталь цепи (448,160)-(512,192), сталь обуха (448,192)-(512,256).
+     * Трещины горящего клинка — не здесь, а настоящая геометрия (ZangetsuItemRenderer).
      */
     const int BLADE_W = 448, BLADE_H = 160;
 
-    static Canvas[] SwordAtlasHD()
+    static Canvas SwordAtlasHD()
     {
         var c = new Canvas(512, 512);
-        var glow = new Canvas(512, 512);
         double[,] zan = Glyph("斬", 48), getsu = Glyph("月", 48);
-        BladeHD(c, glow, 0, false, zan, getsu);
-        BladeHD(c, glow, BLADE_H, true, zan, getsu);
+        BladeHD(c, 0, false, zan, getsu);
+        BladeHD(c, BLADE_H, true, zan, getsu);
         SameSkin(c, 448, 0);
         Cord(c, 448, 64);
         DarkMetal(c, 448, 96, 61);
         Brass(c, 448, 128);
         DarkMetal(c, 448, 160, 67);
-        return new[] { c, glow };
+        SpineSteel(c, 448, 192);
+        return c;
     }
 
-    static void BladeHD(Canvas c, Canvas glow, int y0, bool burning, double[,] zan, double[,] getsu)
+    /** Сталь обуха 64×64: поперёк обуха (x) — блик посередине, вдоль него (y) — только мягкие пятна, никаких продольных полос. */
+    static void SpineSteel(Canvas c, int x0, int y0)
+    {
+        for (int y = 0; y < 64; y++)
+            for (int x = 0; x < 64; x++)
+            {
+                double across = Math.Abs(x + 0.5 - 32) / 32;
+                Color col = Mix(C(112, 116, 128), C(44, 46, 54), Smooth(0.15, 0.95, across));
+                c.Set(x0 + x, y0 + y, Mul(col, 0.95 + Fbm(x / 22.0, y / 22.0, 69, 2) * 0.1));
+            }
+    }
+
+    static void BladeHD(Canvas c, int y0, bool burning, double[,] zan, double[,] getsu)
     {
         // Царапины поперёк клинка — у настоящего меча, побывавшего в боях.
         double[][] scratches = {
@@ -891,7 +877,7 @@ public static class ZangetsuTextures
                 double u = M_BLADE_U0 + (tx + 0.5) / BLADE_W * (M_BLADE_U1 - M_BLADE_U0);
                 double v = M_SPINE + (ty + 0.5) / BLADE_H * (M_EDGE - M_SPINE);
                 // Шлифовка вдоль клинка: длинные тонкие штрихи.
-                double grain = (Fbm(tx / 70.0, ty / 1.3, 51, 3) - 0.5) * 0.24 + (Hash(tx, ty, 52) - 0.5) * 0.05;
+                double grain = (Fbm(tx / 70.0, ty / 1.3, 51, 3) - 0.5) * 0.1 + (Hash(tx, ty, 52) - 0.5) * 0.04;
                 double hamon = M_BEVEL + 0.22 * Math.Sin(u * 1.7) + 0.1 * Math.Sin(u * 4.3 + 1.0) + (Fbm(u * 2.5, 3.0, 57, 3) - 0.5) * 0.16;
                 Color col;
                 if (v < M_SPINE + 0.13)
@@ -925,12 +911,10 @@ public static class ZangetsuTextures
                 else
                 {
                     double t = (v - hamon) / (M_EDGE - hamon);
-                    double fine = (Fbm(tx / 40.0, ty / 0.8, 55, 2) - 0.5) * 0.1;
+                    double fine = (Fbm(tx / 40.0, ty / 0.8, 55, 2) - 0.5) * 0.04;
                     col = Mul(Mix(C(130, 138, 152), C(226, 231, 240), t), 1.0 + fine);
                     if (Hash(tx, ty, 59) > 0.994) col = C(255, 255, 255);
-                    if (v > M_EDGE - 0.11) col = C(250, 252, 255);                 // заточка
-                    // Зазубрины на кромке.
-                    if (v > M_EDGE - 0.22 && Hash(tx / 9, 0, 61) > 0.9 && Hash(tx / 9, 1, 61) * 0.22 > M_EDGE - v - 0.05) col = C(60, 64, 74);
+                    if (v > M_EDGE - 0.11) col = Mix(col, C(250, 252, 255), 0.45);  // заточка
                 }
                 foreach (var s in scratches)
                 {
@@ -946,19 +930,7 @@ public static class ZangetsuTextures
                     if (lip < 0.2 && eng > 0.4) col = Mix(col, C(150, 156, 170), 0.5);
                 }
                 // Гнезда глаза здесь нет: глаз только на одной стороне, его гнездо — отдельная накладка (EyePartsHD).
-                if (burning)
-                {
-                    if (v < hamon - 0.1) col = Mix(col, C(70, 12, 8), 0.28);
-                    double crack = BladeCrack(u, v) + (Fbm(tx / 6.0, ty / 6.0, 63, 2) - 0.5) * 0.04;
-                    if (crack < 0.3)
-                    {
-                        // На самом клинке — обугленный край трещины; жар рисует слой свечения.
-                        col = Mix(col, C(30, 6, 4), Sat(1 - crack / 0.3) * 0.8);
-                        Color heat = crack < 0.045 ? C(255, 240, 190) : (crack < 0.1 ? C(255, 150, 40) : C(220, 50, 12));
-                        int alpha = Cl(255 * Sat(1.25 - crack / 0.24));
-                        glow.Set(tx, y0 + ty, Color.FromArgb(alpha, heat.R, heat.G, heat.B));
-                    }
-                }
+                if (burning && v < hamon - 0.1) col = Mix(col, C(70, 12, 8), 0.28);
                 c.Set(tx, y0 + ty, col);
             }
         }
@@ -1264,7 +1236,7 @@ public static class ZangetsuTextures
         if (stage >= 2) chunks.Add(new[] { 2.9, -7.3, 0.85, 0.65, 98.0 });
         if (stage >= 3)
         {
-            chunks.Add(new[] { 3.3, -1.0, 0.7, 0.8, 99.0 });
+            chunks.Add(new[] { 3.6, -3.05, 0.6, 0.55, 99.0 });
             chunks.Add(new[] { -3.3, -6.3, 0.65, 0.65, 100.0 });
             chunks.Add(new[] { -1.0, 2.2, 0.5, 0.45, 101.0 });
         }
@@ -1275,13 +1247,11 @@ public static class ZangetsuTextures
      * Лицо маски. Обычная (уровень IV) — чистая белая кость и две тёмно-алые полосы; финальная (уровень V) —
      * полосы чёрные, шире и с рваными краями, глаза в чёрной обводке с потёком вниз.
      */
-    static Canvas HollowMaskHD(int crack, bool final)
+    static Canvas HollowMaskHD(bool final)
     {
         int S = MASK_S;
         var c = new Canvas(256 * S, 256 * S);
         Color bone = C(252, 251, 247), paint = final ? C(18, 14, 16) : C(92, 12, 18), paintEdge = final ? C(4, 3, 4) : C(56, 6, 10);
-        var cracks = MaskCracks(crack);
-        var chunks = MaskChunks(crack);
         for (int y = 0; y < 160 * S; y++)
             for (int x = 0; x < 256 * S; x++)
             {
@@ -1321,17 +1291,8 @@ public static class ZangetsuTextures
                     double inside = Math.Min(hy - top, bottom - hy);
                     if (inside > -0.06) col = Mix(col, C(16, 7, 9), Smooth(-0.06, 0.1, inside));
                 }
-                // Трещины: тёмная сердцевина, светлые сколы по краю.
-                foreach (var p in cracks)
-                {
-                    double d = PolyDistance(fx, hy, p) + (Fbm(nx / 3.0, ny / 3.0, 97, 2) - 0.5) * 0.05;
-                    if (d < 0.05) col = C(44, 32, 36);
-                    else if (d < 0.1) col = Mix(col, C(255, 255, 252), 0.45);
-                }
-                // Отколотые куски: прозрачно, под ними видно лицо.
-                bool gone = false;
-                foreach (var k in chunks) gone |= Chunk(fx, hy, k[0], k[1], k[2], k[3], (int)k[4]);
-                c.Set(x, y, gone ? Color.FromArgb(0, 0, 0, 0) : col);
+                // Трещины и сколы здесь не рисуются: они — настоящая геометрия (HollowMaskRenderer).
+                c.Set(x, y, col);
             }
         // Рог: белая кость с кольцами роста, к острию сереет.
         for (int y = 0; y < 64 * S; y++)

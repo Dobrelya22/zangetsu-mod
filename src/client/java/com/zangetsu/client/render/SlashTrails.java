@@ -1,6 +1,8 @@
 package com.zangetsu.client.render;
 
 import com.zangetsu.ZangetsuMod;
+import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -10,6 +12,7 @@ import net.minecraft.client.render.LightmapTextureManager;
 import net.minecraft.client.render.OverlayTexture;
 import net.minecraft.client.render.RenderLayer;
 import net.minecraft.client.render.VertexConsumer;
+import net.minecraft.client.render.VertexConsumerProvider;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.util.Identifier;
@@ -18,8 +21,9 @@ import net.minecraft.util.math.Vec3d;
 import org.joml.Vector3f;
 
 /**
- * Шлейфы ударов — светящиеся дуги, которые клинок оставляет в воздухе: стальной у обычного удара, золотой,
- * когда меч рубит сам, кроваво-алый у Гецуги. Со стороны дуга лежит в плоскости удара вокруг груди бойца;
+ * Шлейфы ударов — свет, который клинок оставляет в воздухе. Обычные удары оставляют ленту по настоящему пути клинка: стальную,
+ * алую в форме Пустого, золотую, когда меч рубит сам. Гецуга — широкая кроваво-алая дуга.
+ * Со стороны дуга лежит в плоскости удара вокруг груди бойца;
  * глазами игрока — у самого клинка, поперёк взгляда, там, где проходит меч. Голова дуги несётся вслед за
  * клинком, хвост догоняет и гаснет. Лента всегда повёрнута к камере и светится (складывается со светом
  * позади), поэтому видна и на снегу, и в темноте.
@@ -40,8 +44,81 @@ public final class SlashTrails {
     }
 
     private static final List<Trail> TRAILS = new ArrayList<>();
+    /** След обычных ударов: сколько тиков живёт и сколько точек помнит. */
+    private static final float RIBBON_LIFE = 4.5F;
+    private static final int RIBBON_POINTS = 90;
+    /** Путь клинка по игрокам: {ближняя точка xyz, дальняя xyz, время, сила, цвет} — в мире. */
+    private static final Int2ObjectOpenHashMap<ArrayDeque<float[]>> WORLD_RIBBONS = new Int2ObjectOpenHashMap<>();
+    /** Свой след от первого лица — в координатах взгляда: он движется вместе с рукой. */
+    private static final ArrayDeque<float[]> VIEW_RIBBON = new ArrayDeque<>();
 
     private SlashTrails() {
+    }
+
+    /** Запомнить, где сейчас клинок удара со стороны (координаты мира). */
+    public static void sampleWorld(int id, double nx, double ny, double nz, double fx, double fy, double fz, int color, float strength) {
+        ArrayDeque<float[]> points = WORLD_RIBBONS.computeIfAbsent(id, k -> new ArrayDeque<>());
+        add(points, new float[]{(float) nx, (float) ny, (float) nz, (float) fx, (float) fy, (float) fz, now(), strength, color});
+    }
+
+    /** Запомнить, где сейчас клинок от первого лица (координаты взгляда). */
+    public static void sampleView(Vector3f near, Vector3f far, int color, float strength) {
+        add(VIEW_RIBBON, new float[]{near.x, near.y, near.z, far.x, far.y, far.z, now(), strength, color});
+    }
+
+    private static void add(ArrayDeque<float[]> points, float[] point) {
+        points.addLast(point);
+        if (points.size() > RIBBON_POINTS) {
+            points.removeFirst();
+        }
+    }
+
+    /** Нарисовать свой след прямо в проходе руки: так он точно совпадает с мечом. */
+    public static void renderView(MatrixStack.Entry entry, VertexConsumerProvider consumers) {
+        if (VIEW_RIBBON.isEmpty()) {
+            return;
+        }
+        ribbon(entry, consumers.getBuffer(RenderLayer.getEyes(TEXTURE)), VIEW_RIBBON, 0.0, 0.0, 0.0);
+    }
+
+    /**
+     * Лента между соседними положениями клинка: от острия к середине, свежая часть ярче, старая гаснет. Свет складывается,
+     * поэтому гаснет яркость; слой отбрасывает обратные грани, а след идёт в любую сторону — рисуем обе.
+     */
+    private static void ribbon(MatrixStack.Entry entry, VertexConsumer vertices, ArrayDeque<float[]> points, double ox, double oy, double oz) {
+        float time = now();
+        while (!points.isEmpty() && (time - points.peekFirst()[6] > RIBBON_LIFE || time < points.peekFirst()[6] - 40.0F)) {
+            points.removeFirst();
+        }
+        float[] a = null;
+        for (float[] b : points) {
+            if (a != null && b[6] - a[6] < 3.0F) {
+                segment(entry, vertices, a, b, time, ox, oy, oz);
+            }
+            a = b;
+        }
+    }
+
+    private static void segment(MatrixStack.Entry entry, VertexConsumer vertices, float[] a, float[] b, float time, double ox, double oy, double oz) {
+        float ka = (1.0F - (time - a[6]) / RIBBON_LIFE) * a[7], kb = (1.0F - (time - b[6]) / RIBBON_LIFE) * b[7];
+        int color = (int) a[8];
+        int r = (color >> 16) & 0xFF, g = (color >> 8) & 0xFF, bl = color & 0xFF;
+        Vector3f an = new Vector3f((float) (a[0] - ox), (float) (a[1] - oy), (float) (a[2] - oz)), af = new Vector3f((float) (a[3] - ox), (float) (a[4] - oy), (float) (a[5] - oz));
+        Vector3f bn = new Vector3f((float) (b[0] - ox), (float) (b[1] - oy), (float) (b[2] - oz)), bf = new Vector3f((float) (b[3] - ox), (float) (b[4] - oy), (float) (b[5] - oz));
+        Vector3f n = new Vector3f(af).sub(an).cross(new Vector3f(bf).sub(af));
+        if (n.lengthSquared() < 1.0E-12F) {
+            n.set(0.0F, 1.0F, 0.0F);
+        }
+        n.normalize();
+        float ua = MathHelper.clamp(ka, 0.0F, 1.0F), ub = MathHelper.clamp(kb, 0.0F, 1.0F);
+        vertex(entry, vertices, af, ua, 0.0F, r, g, bl, ka, n);
+        vertex(entry, vertices, an, ua, 1.0F, r, g, bl, ka, n);
+        vertex(entry, vertices, bn, ub, 1.0F, r, g, bl, kb, n);
+        vertex(entry, vertices, bf, ub, 0.0F, r, g, bl, kb, n);
+        vertex(entry, vertices, bf, ub, 0.0F, r, g, bl, kb, n);
+        vertex(entry, vertices, bn, ub, 1.0F, r, g, bl, kb, n);
+        vertex(entry, vertices, an, ua, 1.0F, r, g, bl, ka, n);
+        vertex(entry, vertices, af, ua, 0.0F, r, g, bl, ka, n);
     }
 
     /** Дуга вокруг бойца: взгляд {@code yaw}, наклон плоскости {@code roll} (минус — правый край выше); угол плюс — влево. */
@@ -82,37 +159,6 @@ public final class SlashTrails {
         return player == client.player && client.options.getPerspective().isFirstPerson();
     }
 
-    /** Обычный удар мечом: стальная дуга в плоскости замаха (вариант — диагональ, снизу вверх, горизонталь). */
-    public static void swing(PlayerEntity player, int variant) {
-        if (firstPerson(player)) {
-            switch (variant) {
-                case 1 -> inView(player, 0.35F, 0.45F, 1.0F, 110.0F, -55.0F, STEEL, 1.2F, 1.9F, 3.5F);
-                case 2 -> inView(player, 0.05F, 0.35F, 1.0F, -100.0F, 100.0F, STEEL, 1.2F, 1.9F, 3.5F);
-                default -> inView(player, 0.35F, 0.45F, 1.0F, -55.0F, 110.0F, STEEL, 1.2F, 1.9F, 3.5F);
-            }
-            return;
-        }
-        Vec3d chest = player.getPos().add(0.0, 1.15, 0.0);
-        float yaw = player.getHeadYaw();
-        switch (variant) {
-            case 1 -> around(chest, yaw, -34.0F, 2.0F, 75.0F, -85.0F, STEEL, 1.2F, 1.9F, 4.0F, 0.26F);
-            case 2 -> around(chest, yaw, -6.0F, 2.1F, -85.0F, 85.0F, STEEL, 1.2F, 1.9F, 4.0F, 0.24F);
-            default -> around(chest, yaw, -38.0F, 2.0F, -80.0F, 85.0F, STEEL, 1.2F, 1.9F, 4.0F, 0.26F);
-        }
-    }
-
-    /** Меч рубит сам: золотая дуга к цели ({@code toward} — угол к ней относительно взгляда). */
-    public static void auto(PlayerEntity player, float toward, int variant) {
-        if (firstPerson(player)) {
-            inView(player, 0.35F, 0.45F, 1.0F, -55.0F, 110.0F, GOLD, 2.0F, 1.6F, 4.0F);
-            return;
-        }
-        Vec3d chest = player.getPos().add(0.0, 1.15, 0.0);
-        float yaw = player.getHeadYaw() + toward;
-        boolean down = variant % 2 == 0;
-        around(chest, yaw, down ? -32.0F : 28.0F, 2.5F, down ? -75.0F : 75.0F, down ? 75.0F : -75.0F, GOLD, 2.0F, 1.6F, 5.0F, 0.3F);
-    }
-
     /** Гецуга: широкая алая дуга горизонтального взмаха — на отпускании ({@code delay} тиков после начала замаха). */
     public static void getsuga(PlayerEntity player, float delay) {
         if (firstPerson(player)) {
@@ -130,10 +176,12 @@ public final class SlashTrails {
 
     public static void clear() {
         TRAILS.clear();
+        WORLD_RIBBONS.clear();
+        VIEW_RIBBON.clear();
     }
 
     public static void render(WorldRenderContext context) {
-        if (TRAILS.isEmpty() || context.consumers() == null) {
+        if ((TRAILS.isEmpty() && WORLD_RIBBONS.isEmpty()) || context.consumers() == null) {
             return;
         }
         float time = now();
@@ -141,6 +189,14 @@ public final class SlashTrails {
         MatrixStack matrices = context.matrixStack();
         // Свет складывается с тем, что позади: на снегу дуга не сереет, в темноте горит.
         VertexConsumer vertices = context.consumers().getBuffer(RenderLayer.getEyes(TEXTURE));
+        var ribbons = WORLD_RIBBONS.values().iterator();
+        while (ribbons.hasNext()) {
+            ArrayDeque<float[]> points = ribbons.next();
+            ribbon(matrices.peek(), vertices, points, camera.x, camera.y, camera.z);
+            if (points.isEmpty()) {
+                ribbons.remove();
+            }
+        }
         Iterator<Trail> it = TRAILS.iterator();
         while (it.hasNext()) {
             Trail trail = it.next();

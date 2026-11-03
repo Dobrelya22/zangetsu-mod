@@ -7,76 +7,114 @@ import net.minecraft.client.network.AbstractClientPlayerEntity;
 import net.minecraft.client.render.VertexConsumerProvider;
 import net.minecraft.client.render.entity.PlayerEntityRenderer;
 import net.minecraft.client.util.math.MatrixStack;
-import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.util.math.MathHelper;
-import net.minecraft.util.math.RotationAxis;
 import org.joml.Matrix3f;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
 /**
- * Меч глазами игрока: вместо ванильного «тычка» — настоящие взмахи через весь экран. Три удара по очереди
- * (диагональ сверху справа, восходящий снизу слева, горизонтальный), рывок, когда меч рубит сам, и Гецуга:
- * клинок уходит высоко за правое плечо, замирает — и проносится по горизонтали.
- *
- * <p>Ключевые кадры — сдвиг и повороты руки с мечом в пространстве камеры (x — вправо, y — вверх, z — к нам),
- * вокруг кулака; между кадрами — плавный переход.
+ * Меч глазами игрока. В приёмах ({@link SwordMoves}) он не просто ходит по экрану одной стороной к камере: кулак идёт
+ * по дуге, клинок разворачивается, лезвие ведёт взмах, видны то плоскость, то обух. В двуручных приёмах вторая рука выходит из-за
+ * края экрана и ложится на рукоять. В покое меч чуть дышит. Гецуга — свой замах: клинок уходит высоко за правое плечо,
+ * замирает — и проносится по горизонтали.
  */
 public final class FirstPersonMotion {
-    /** Ключевой кадр: доля анимации, сдвиг (блоки) и повороты (градусы) вокруг X, Y, Z. */
+    /** Поза меча: кулак (в блоках от глаз), куда смотрят клинок и лезвие, насколько вторая рука на рукояти. */
+    public record Pose(Vector3f fist, Vector3f blade, Vector3f edge, float two, int color, float trail) {
+    }
+
+    /** Ключевой кадр Гецуги: доля анимации, сдвиг (блоки) и повороты (градусы) вокруг X, Y, Z относительно покоя. */
     private record Key(float t, float tx, float ty, float tz, float rx, float ry, float rz) {
     }
 
-    /** Рука от первого лица тоньше обычной, иначе широкий кулак целиком скрывал бы рукоять. */
-    private static final float ARM_SCALE = 0.7F;
-    /** Пока рисуется рука от первого лица, позы от третьего лица к модели не применяются. */
-    public static boolean drawingArm;
-
-    private static final Key REST = new Key(0, 0, 0, 0, 0, 0, 0);
-    /*
-     * Кулак — у нижнего края экрана и там остаётся (рукоять за кадром), клинок проносится дугой через верх экрана
-     * поворотом вокруг кулака (Z плюс — против часовой); в покое он смотрит вверх-влево (≈124° от «вправо»),
-     * плоскостью к нам. Горизонтальный удар в середине проходит остриём «в экран».
-     */
-    private static final Key[][] CLEAVES = {
-            // Диагональ: справа сверху — влево вниз.
-            {REST, new Key(0.2F, 0.12F, 0.08F, 0.05F, -20, 0, -70), new Key(0.45F, -0.45F, 0.05F, -0.1F, 15, 0, 75),
-                    new Key(0.62F, -0.48F, 0.0F, -0.08F, 15, 0, 78), new Key(1.0F, 0, 0, 0, 0, 0, 0)},
-            // Восходящий: слева снизу — вправо вверх.
-            {REST, new Key(0.2F, -0.4F, 0.0F, 0.0F, 10, 0, 80), new Key(0.45F, 0.12F, 0.1F, -0.1F, -15, 0, -72),
-                    new Key(0.62F, 0.14F, 0.12F, -0.08F, -15, 0, -75), new Key(1.0F, 0, 0, 0, 0, 0, 0)},
-            // Горизонтальный: справа налево, в середине — остриём в экран.
-            {REST, new Key(0.2F, 0.15F, 0.1F, 0.05F, 0, 30, -110), new Key(0.32F, -0.15F, 0.12F, -0.12F, -60, 0, -34),
-                    new Key(0.45F, -0.45F, 0.1F, -0.08F, 0, -30, 60), new Key(0.62F, -0.48F, 0.08F, -0.06F, 0, -30, 62),
-                    new Key(1.0F, 0, 0, 0, 0, 0, 0)},
-    };
-    private static final Key[] AUTO = {REST, new Key(0.25F, 0.12F, 0.08F, 0.05F, -20, 0, -70), new Key(0.42F, -0.45F, 0.05F, -0.28F, 15, 0, 75),
-            new Key(0.65F, -0.48F, 0.0F, -0.22F, 15, 0, 78), new Key(1.0F, 0, 0, 0, 0, 0, 0)};
-    private static final Key[] GETSUGA = {REST, new Key(0.33F, 0.12F, 0.25F, 0.1F, -20, 0, -25), new Key(0.37F, 0.13F, 0.26F, 0.11F, -21, 0, -26),
+    private static final Key REST_KEY = new Key(0, 0, 0, 0, 0, 0, 0);
+    private static final Key[] GETSUGA = {REST_KEY, new Key(0.33F, 0.12F, 0.25F, 0.1F, -20, 0, -25), new Key(0.37F, 0.13F, 0.26F, 0.11F, -21, 0, -26),
             new Key(0.42F, -0.15F, 0.12F, -0.15F, -60, 0, -34), new Key(0.5F, -0.48F, 0.1F, -0.12F, 0, -30, 62),
             new Key(0.62F, -0.5F, 0.08F, -0.08F, 0, -30, 64), new Key(1.0F, 0, 0, 0, 0, 0, 0)};
+    /** Где кулак в покое, относительно глаз (правая рука). */
+    private static final Vector3f BASE = new Vector3f(0.56F, -0.52F, -0.72F);
+    /** Рука от первого лица тоньше обычной, иначе широкий кулак целиком скрывал бы рукоять. */
+    private static final float ARM_SCALE = 0.7F;
+    /** Вторая рука за рукоятью и откуда она выходит на неё (из-за левого нижнего края). */
+    private static final float SECOND_HAND = 0.125F;
+    private static final Vector3f OFFSCREEN = new Vector3f(-0.75F, -1.15F, -0.45F);
+    /** Пока рисуется рука от первого лица, позы от третьего лица к модели не применяются. */
+    public static boolean drawingArm;
 
     private FirstPersonMotion() {
     }
 
-    /** Сдвинуть руку с мечом по текущей анимации; {@code side} — 1 правая рука, −1 левая (зеркально). */
-    public static void apply(MatrixStack matrices, PlayerEntity player, int side, float swingProgress, float tickDelta) {
-        Key key = REST;
-        ClientState.Animation animation = ClientState.animation(player);
+    /** Где сейчас меч; {@code side} — 1 правая рука, −1 левая (зеркально), {@code main} — это рука, которая бьёт. */
+    public static Pose pose(AbstractClientPlayerEntity player, int side, boolean main, float equip, float tickDelta) {
+        Vector3f fist, blade, edge;
+        float two = 0.0F, trail = 0.0F;
+        int color = SlashTrails.STEEL;
+        float time = player.age + tickDelta;
+        Vector3f restFist = new Vector3f(BASE).add(ZangetsuItemRenderer.firstPersonHold(true));
+        Vector3f restBlade = ZangetsuItemRenderer.restBlade(), restEdge = ZangetsuItemRenderer.restEdge();
+        ClientState.Animation animation = main ? ClientState.animation(player) : null;
+        ClientState.Swing swing = main && animation == null ? ClientState.swing(player, time) : null;
         if (animation != null && animation.type() == AnimationPayload.GETSUGA) {
-            key = sample(GETSUGA, animation.progress(player, tickDelta));
-        } else if (animation != null && animation.type() == AnimationPayload.AUTO_SLASH) {
-            key = sample(AUTO, animation.progress(player, tickDelta));
-        } else if (swingProgress > 0.0F) {
-            key = sample(CLEAVES[ClientState.swingVariant(player)], swingProgress);
+            Key key = sampleKey(GETSUGA, animation.progress(player, tickDelta));
+            Quaternionf turn = new Quaternionf().rotationY(key.ry() * MathHelper.RADIANS_PER_DEGREE)
+                    .rotateX(key.rx() * MathHelper.RADIANS_PER_DEGREE).rotateZ(key.rz() * MathHelper.RADIANS_PER_DEGREE);
+            fist = turn.transform(ZangetsuItemRenderer.firstPersonHold(true)).add(BASE).add(key.tx(), key.ty(), key.tz());
+            blade = turn.transform(new Vector3f(restBlade));
+            edge = turn.transform(new Vector3f(restEdge));
+        } else if (swing != null) {
+            SwordMoves.Move move = SwordMoves.ALL[swing.move];
+            float t = MathHelper.clamp(swing.progress(time), 0.0F, 1.0F);
+            float[] rest = new float[SwordMoves.SIZE];
+            put(rest, SwordMoves.FX, restFist);
+            put(rest, SwordMoves.BX, restBlade);
+            put(rest, SwordMoves.EX, restEdge);
+            float[] v = SwordMoves.sample(move.view(), t, rest);
+            fist = turned(v[SwordMoves.FX], v[SwordMoves.FX + 1], v[SwordMoves.FX + 2], swing.aim);
+            blade = turned(v[SwordMoves.BX], v[SwordMoves.BX + 1], v[SwordMoves.BX + 2], swing.aim).normalize();
+            edge = turned(v[SwordMoves.EX], v[SwordMoves.EX + 1], v[SwordMoves.EX + 2], swing.aim);
+            two = MathHelper.clamp(v[SwordMoves.TWO], 0.0F, 1.0F);
+            color = swing.color;
+            trail = SwordMoves.trail(move, t);
+        } else {
+            // Покой: меч чуть дышит в руке.
+            float breath = MathHelper.sin(time * 0.055F);
+            fist = new Vector3f(restFist).add(0.0F, breath * 0.006F, 0.0F);
+            blade = new Vector3f(restBlade).add(breath * 0.008F, 0.0F, breath * 0.006F).normalize();
+            edge = new Vector3f(restEdge);
         }
-        if (key == REST) {
-            return;
+        edge.sub(new Vector3f(blade).mul(edge.dot(blade))).normalize();
+        fist.y -= equip * 0.6F;
+        if (side < 0) {
+            // Зеркало: внутренняя сторона клинка должна остаться внутренней.
+            Vector3f inner = new Vector3f(blade).cross(edge);
+            fist.x = -fist.x;
+            blade.x = -blade.x;
+            inner.x = -inner.x;
+            edge = inner.cross(blade, new Vector3f()).normalize();
         }
-        matrices.translate(side * key.tx(), key.ty(), key.tz());
-        matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(side * key.ry()));
-        matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(key.rx()));
-        matrices.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(side * key.rz()));
+        return new Pose(fist, blade, edge, two, color, trail);
+    }
+
+    private static void put(float[] values, int at, Vector3f v) {
+        values[at] = v.x;
+        values[at + 1] = v.y;
+        values[at + 2] = v.z;
+    }
+
+    /** Кулак второй руки: на рукояти за первым; пока приём не двуручный — за краем экрана. */
+    public static Vector3f secondHand(Pose pose, int side) {
+        Vector3f hold = new Vector3f(pose.fist()).sub(new Vector3f(pose.blade()).mul(SECOND_HAND));
+        Vector3f away = new Vector3f(side * OFFSCREEN.x, OFFSCREEN.y, OFFSCREEN.z);
+        return away.lerp(hold, pose.two());
+    }
+
+    /** Повернуть вокруг вертикали на {@code aim} радиан вправо: рывок к цели. */
+    private static Vector3f turned(float x, float y, float z, float aim) {
+        if (aim == 0.0F) {
+            return new Vector3f(x, y, z);
+        }
+        float limited = MathHelper.clamp(aim, -0.7F, 0.7F), c = MathHelper.cos(limited), s = MathHelper.sin(limited);
+        return new Vector3f(x * c - z * s, y, x * s + z * c);
     }
 
     /**
@@ -111,7 +149,7 @@ public final class FirstPersonMotion {
         matrices.pop();
     }
 
-    private static Key sample(Key[] keys, float t) {
+    private static Key sampleKey(Key[] keys, float t) {
         t = MathHelper.clamp(t, 0.0F, 1.0F);
         for (int i = 0; i + 1 < keys.length; i++) {
             Key a = keys[i], b = keys[i + 1];
@@ -122,6 +160,6 @@ public final class FirstPersonMotion {
                         MathHelper.lerp(k, a.rx(), b.rx()), MathHelper.lerp(k, a.ry(), b.ry()), MathHelper.lerp(k, a.rz(), b.rz()));
             }
         }
-        return REST;
+        return REST_KEY;
     }
 }
