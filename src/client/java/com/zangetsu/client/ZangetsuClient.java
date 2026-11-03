@@ -3,6 +3,7 @@ package com.zangetsu.client;
 import com.zangetsu.ZangetsuMod;
 import com.zangetsu.client.render.ArrowHalfRenderer;
 import com.zangetsu.client.render.GetsugaRenderer;
+import com.zangetsu.client.render.FinalFormFeatureRenderer;
 import com.zangetsu.client.render.HollowFeatureRenderer;
 import com.zangetsu.client.render.SeveredPartRenderer;
 import com.zangetsu.client.render.SlashTrails;
@@ -53,6 +54,7 @@ public class ZangetsuClient implements ClientModInitializer {
 
         LivingEntityFeatureRendererRegistrationCallback.EVENT.register((type, renderer, helper, context) -> {
             if (renderer instanceof PlayerEntityRenderer playerRenderer) {
+                helper.register(new FinalFormFeatureRenderer(playerRenderer));
                 helper.register(new HollowFeatureRenderer(playerRenderer));
             }
         });
@@ -111,6 +113,13 @@ public class ZangetsuClient implements ClientModInitializer {
                         SwordMoves.auto(ClientState.nextSwing(player)), SwordMoves.AUTO_SPEED, SlashTrails.GOLD);
                 return;
             }
+            if (entity instanceof PlayerEntity player && (payload.animation() == AnimationPayload.EXECUTE || payload.animation() == AnimationPayload.EXECUTE_FLASH)) {
+                ZangetsuCombat.execution(player, payload.param(), payload.duration());
+                if (entity == client.player && payload.animation() == AnimationPayload.EXECUTE) {
+                    CameraDirector.begin(payload.duration() + 12, new CameraDirector.Shot(65.0F, 95.0F, 10.0F, 4.6F, 1.3F));
+                }
+                return;
+            }
             ClientState.ANIMATIONS.put(payload.entityId(), new ClientState.Animation(payload.animation(), entity.age, payload.duration(), payload.param()));
             if (entity instanceof PlayerEntity player && payload.animation() == AnimationPayload.GETSUGA) {
                 SlashTrails.getsuga(player, payload.duration() * 0.4F);
@@ -120,8 +129,6 @@ public class ZangetsuClient implements ClientModInitializer {
                 // У себя — камера облетает сбоку; превращение — спереди, чтобы видеть маску.
                 CameraDirector.begin(payload.duration() + 8, switch (payload.animation()) {
                     case AnimationPayload.TOUCH_HANDLE -> new CameraDirector.Shot(60.0F, 90.0F, 14.0F, 4.0F, 1.2F);
-                    case AnimationPayload.EXECUTE -> new CameraDirector.Shot(65.0F, 95.0F, 10.0F, 4.6F, 1.3F);
-                    case AnimationPayload.SLASH -> new CameraDirector.Shot(-65.0F, -100.0F, 8.0F, 5.6F, 1.7F);
                     case AnimationPayload.DREAM_PULL -> new CameraDirector.Shot(55.0F, 105.0F, 14.0F, 4.4F, 1.2F);
                     case AnimationPayload.HOLLOW -> new CameraDirector.Shot(150.0F, 205.0F, 4.0F, 3.6F, 0.0F);
                     default -> new CameraDirector.Shot(90.0F, 90.0F, 10.0F, 4.0F, 0.0F);

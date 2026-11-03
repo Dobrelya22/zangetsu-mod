@@ -45,6 +45,8 @@ public final class ClientState {
         public final int color, startTick;
         /** Свой удар по нажатию: в момент удара он должен нанести урон. */
         public boolean attacking, struck, whooshed;
+        /** Это казнь: её не перебить следующим ударом, а в миг удара всё замирает сильнее обычного. */
+        public boolean execution;
         public Entity target;
         private float freezeAt = -1.0F, freezeFor;
 

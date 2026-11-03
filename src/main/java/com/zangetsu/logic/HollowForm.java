@@ -133,7 +133,10 @@ public final class HollowForm {
             applyBuffs(player);
         }
         ServerWorld world = player.getServerWorld();
-        // Алая и чёрная аура — у пояса и ног, чтобы не застилать вид от первого лица.
+        // Алая и чёрная аура — у пояса и ног, чтобы не застилать вид от первого лица. В финальной форме вместо неё горит настоящий огонь.
+        if (isFinal(data)) {
+            return;
+        }
         if (player.age % 3 == 0) {
             Fx.particles(world, Fx.REIATSU_RED, player.getPos().add(0.0, 0.6, 0.0), 2, 0.45, 0.0);
         }

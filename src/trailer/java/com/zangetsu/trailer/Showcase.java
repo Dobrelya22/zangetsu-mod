@@ -6,10 +6,9 @@ import static com.zangetsu.trailer.Shots.hero;
 import static com.zangetsu.trailer.Shots.p;
 import static com.zangetsu.trailer.Shots.shot;
 
+import com.zangetsu.logic.Execution;
 import com.zangetsu.logic.Eye;
 import com.zangetsu.logic.HollowForm;
-import com.zangetsu.logic.Sync;
-import com.zangetsu.network.AnimationPayload;
 import com.zangetsu.registry.ModAttachments;
 import com.zangetsu.trailer.Shots.P;
 import com.zangetsu.trailer.TrailerCamera.Shot;
@@ -18,6 +17,7 @@ import java.util.List;
 import java.util.function.Consumer;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.entity.EntityType;
+import net.minecraft.entity.mob.MobEntity;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.util.Hand;
@@ -51,6 +51,7 @@ final class Showcase {
         mask("final", 36.0, 5);
         finalGetsuga();
         execute();
+        finalForm();
         moves("moves_side", 50.0, 270.0F, false);
         moves("moves_front", 75.0, 205.0F, false);
         moves("moves_fp", 100.0, 0.0F, true);
@@ -131,15 +132,83 @@ final class Showcase {
         cut(152.0, "damage_side", shot(arc(1.3, 235, 1.8), p(0, 1.68, 0), 40));
     }
 
-    /** Казнь: обе руки на рукояти, замах и удар. */
+    /** Казни: каждый приём на своём мобе, замедленно и сбоку. */
     private void execute() {
-        scene("exec", 43.0, 47.0);
-        s.setup = srv -> Script.base(srv, 4, false);
-        speed(43.0, 0.35F);
-        server(43.2, srv -> Sync.animation(Stage.player(srv), AnimationPayload.EXECUTE, 50));
-        cut(43.0, "exec_side", shot(arc(3.4, 275, 1.1), p(0, 1.2, -0.2), 46));
-        cut(45.0, "exec_front", shot(arc(3.2, 205, 1.3), p(0, 1.3, 0), 46));
-        server(45.2, srv -> Sync.animation(Stage.player(srv), AnimationPayload.EXECUTE, 50));
+        executionScene("zombie_behead", 160.0, EntityType.ZOMBIE, Execution.Variant.BEHEAD);
+        executionScene("zombie_waist", 164.0, EntityType.ZOMBIE, Execution.Variant.WAIST);
+        executionScene("zombie_cleave", 168.0, EntityType.ZOMBIE, Execution.Variant.CLEAVE);
+        executionScene("zombie_kesa", 172.0, EntityType.ZOMBIE, Execution.Variant.KESA);
+        executionScene("skeleton_shatter", 176.0, EntityType.SKELETON, Execution.Variant.SHATTER);
+        executionScene("wither_shatter", 180.0, EntityType.WITHER_SKELETON, Execution.Variant.SHATTER);
+        executionScene("wither_cleave", 184.0, EntityType.WITHER_SKELETON, Execution.Variant.CLEAVE);
+        executionScene("creeper_launch", 188.0, EntityType.CREEPER, Execution.Variant.LAUNCH);
+        executionScene("creeper_cleave", 192.0, EntityType.CREEPER, Execution.Variant.CLEAVE);
+        executionScene("pillager_behead", 196.0, EntityType.PILLAGER, Execution.Variant.BEHEAD);
+        executionScene("vindicator_impale", 200.0, EntityType.VINDICATOR, Execution.Variant.IMPALE);
+        executionScene("witch_kesa", 204.0, EntityType.WITCH, Execution.Variant.KESA);
+        executionScene("ravager_cleave", 208.0, EntityType.RAVAGER, Execution.Variant.CLEAVE);
+        executionScene("enderman_waist", 212.0, EntityType.ENDERMAN, Execution.Variant.WAIST);
+        executionScene("enderman_kesa", 216.0, EntityType.ENDERMAN, Execution.Variant.KESA);
+        executionScene("piglin_kesa", 220.0, EntityType.PIGLIN, Execution.Variant.KESA);
+        executionScene("piglin_behead", 224.0, EntityType.PIGLIN, Execution.Variant.BEHEAD);
+    }
+
+    /** Финальная форма целиком: плащ, цепи и огонь со всех сторон, крупно, на бегу и от первого лица; мгновенная казнь издалека. */
+    private void finalForm() {
+        scene("ff_orbit", 230.0, 236.0);
+        s.settle = 70;
+        s.setup = srv -> Script.base(srv, 5, true);
+        cut(230.0, "orbit", shot(arc(3.6, 180, 1.2, 3.6, 540, 1.2), p(0, 1.0, 0), 50));
+
+        scene("ff_close", 236.0, 240.0);
+        s.settle = 70;
+        s.setup = srv -> Script.base(srv, 5, true);
+        cut(236.0, "arm", shot(arc(1.7, 215, 1.05), p(0, 0.95, 0), 42));
+        cut(237.0, "leg", shot(arc(1.5, 150, 0.4), p(0, 0.35, 0), 42));
+        cut(238.0, "back", shot(arc(2.4, 20, 1.2), p(0, 0.85, 0), 46));
+        cut(239.0, "blade", shot(arc(2.0, 290, 1.1), p(-0.35, 0.75, -0.2), 40));
+
+        scene("ff_run", 240.0, 245.0);
+        s.settle = 70;
+        s.setup = srv -> Script.base(srv, 5, true);
+        client(240.1, () -> Director.walkTo = Stage.at(0, 0, -40));
+        cut(240.0, "run", shot(heroAt(3.4, 1.2, 3.2), heroAt(0, 1.0, 0), 50));
+
+        scene("ff_fp", 245.0, 248.0);
+        s.firstPerson = true;
+        s.settle = 70;
+        s.setup = srv -> Script.base(srv, 5, true);
+        speed(245.0, 0.5F);
+        client(245.5, () -> MinecraftClient.getInstance().player.swingHand(Hand.MAIN_HAND));
+        cut(245.0, "fp", shot(p(0, 5, 5), p(0, 0, 0), 70));
+
+        scene("ff_exec", 248.0, 256.0);
+        s.settle = 70;
+        s.setup = srv -> {
+            ServerPlayerEntity p = Script.base(srv, 5, true);
+            Stage.spawn(p, "A", EntityType.ZOMBIE, Stage.at(0, 0, -10), 0.0F, false, 0.0F);
+            Stage.spawn(p, "B", EntityType.PIGLIN, Stage.at(2, 0, -18), 0.0F, false, 0.0F);
+            Stage.spawn(p, "C", EntityType.CREEPER, Stage.at(-2, 0, -26), 0.0F, false, 0.0F);
+        };
+        speed(248.0, 0.5F);
+        server(248.5, srv -> Execution.request(Stage.player(srv), Stage.id("A")));
+        server(251.0, srv -> Execution.request(Stage.player(srv), Stage.id("B")));
+        server(253.5, srv -> Execution.request(Stage.player(srv), Stage.id("C")));
+        cut(248.0, "flash", shot(heroAt(4.8, 1.8, 4.0), heroAt(0, 1.0, -1.0), 54));
+    }
+
+    /** Точка рядом с героем, куда бы он ни убежал. */
+    private static P heroAt(double x, double y, double z) {
+        return (t, d) -> hero().at(t, d).add(x, y, z);
+    }
+
+    private void executionScene(String name, double t0, EntityType<? extends MobEntity> type, Execution.Variant variant) {
+        scene("x_" + name, t0, t0 + 3.6);
+        // Уровень II: с третьего меч сам зарубит моба, пока сцена готовится.
+        s.setup = srv -> Stage.spawn(Script.base(srv, 2, false), "V", type, Stage.at(0, 0, -2.6), 0.0F, false, 0.0F);
+        speed(t0, 0.6F);
+        server(t0 + 0.1, srv -> Stage.execute(srv, "V", variant));
+        cut(t0, name, shot(arc(4.8, 250, 1.4), p(0, 1.0, -1.3), 46));
     }
 
     /** Гецуга финальной формы: та же анимация, волна крупнее. */

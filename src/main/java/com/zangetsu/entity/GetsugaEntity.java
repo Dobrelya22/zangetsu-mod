@@ -1,6 +1,5 @@
 package com.zangetsu.entity;
 
-import com.zangetsu.logic.Abilities;
 import com.zangetsu.logic.Fx;
 import com.zangetsu.logic.HollowForm;
 import com.zangetsu.network.ClientFxPayload;
@@ -16,6 +15,7 @@ import net.minecraft.entity.data.DataTracker;
 import net.minecraft.entity.data.TrackedData;
 import net.minecraft.entity.data.TrackedDataHandlerRegistry;
 import net.minecraft.entity.mob.MobEntity;
+import net.minecraft.entity.mob.Monster;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.network.packet.s2c.play.EntitySpawnS2CPacket;
 import net.minecraft.particle.ParticleTypes;
@@ -159,7 +159,7 @@ public class GetsugaEntity extends Entity {
         }
         Box area = this.getBoundingBox().expand(3.2 * size, 1.2 * size, 3.2 * size);
         for (MobEntity mob : world.getEntitiesByClass(MobEntity.class, area,
-                m -> m.isAlive() && !this.hit.contains(m.getUuid()) && Abilities.isFoe(m, player))) {
+                m -> m.isAlive() && !this.hit.contains(m.getUuid()) && m instanceof Monster)) {
             this.hit.add(mob.getUuid());
             mob.timeUntilRegen = 0;
             mob.damage(world.getDamageSources().indirectMagic(this, player), this.dataTracker.get(FINAL_FORM) ? FINAL_DAMAGE : DAMAGE);

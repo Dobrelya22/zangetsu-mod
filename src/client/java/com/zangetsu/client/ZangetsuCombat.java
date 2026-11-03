@@ -23,7 +23,7 @@ import net.minecraft.util.math.Vec3d;
  */
 public final class ZangetsuCombat {
     /** Сколько тиков удар замирает при попадании и сколько длится толчок камеры. */
-    private static final float HIT_STOP = 2.5F, KICK_TICKS = 6.0F;
+    private static final float HIT_STOP = 2.5F, KICK_TICKS = 6.0F, EXECUTION_STOP = 3.0F;
     /** Из какой дальности ещё достаём цель, на которую замахивались (блоки в квадрате). */
     private static final double KEEP_TARGET = 4.5 * 4.5;
 
@@ -46,6 +46,9 @@ public final class ZangetsuCombat {
         }
         float now = player.age;
         ClientState.Swing swing = ClientState.swing(player, now);
+        if (swing != null && swing.execution) {
+            return true;
+        }
         if (swing != null && swing.progress(now) < SwordMoves.ALL[swing.move].chain()) {
             queued = true;
             return true;
@@ -69,6 +72,12 @@ public final class ZangetsuCombat {
         ClientState.Swing swing = new ClientState.Swing(move, player.age, definition.duration() * speed, aim, color, ClientState.ticks);
         ClientState.SWINGS.put(player.getId(), swing);
         return swing;
+    }
+
+    /** Казнь: приём {@code move}, растянутый или сжатый до {@code duration} тиков. */
+    public static void execution(PlayerEntity player, int move, int duration) {
+        start(player, 0.0F, move, duration / SwordMoves.ALL[move].duration(), trailColor(player)).execution = true;
+        queued = false;
     }
 
     private static int trailColor(PlayerEntity player) {
@@ -96,6 +105,13 @@ public final class ZangetsuCombat {
                 swing.struck = true;
                 strike(client, player, swing);
             }
+            if (swing.execution && !swing.struck && t >= move.hit()) {
+                swing.struck = true;
+                swing.freeze(player.age, EXECUTION_STOP);
+                if (player == client.player) {
+                    kickAt = ClientState.ticks;
+                }
+            }
         }
         ClientPlayerEntity player = client.player;
         if (queued && player != null) {
@@ -115,7 +131,7 @@ public final class ZangetsuCombat {
             return;
         }
         ClientState.Swing swing = ClientState.swing(player, player.age);
-        if (swing != null && (ClientState.ticks - swing.startTick <= 1 || swing.progress(player.age) < SwordMoves.ALL[swing.move].chain())) {
+        if (swing != null && (swing.execution || ClientState.ticks - swing.startTick <= 1 || swing.progress(player.age) < SwordMoves.ALL[swing.move].chain())) {
             return;
         }
         start(player, 0.0F, SwordMoves.combo(ClientState.nextSwing(player)), 1.0F, trailColor(player));

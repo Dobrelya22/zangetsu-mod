@@ -93,6 +93,10 @@ public final class Abilities {
 
     /** Уровень III+: меч сам рубит ближайшего злого моба. */
     public static void autoAttack(ServerPlayerEntity player) {
+        // Пока идёт казнь, меч занят только ею.
+        if (Execution.isBusy(player)) {
+            return;
+        }
         long now = player.getServer().getTicks();
         Long next = NEXT_AUTO_ATTACK.get(player.getUuid());
         if (next != null && now < next) {
@@ -100,7 +104,7 @@ public final class Abilities {
         }
         ServerWorld world = player.getServerWorld();
         List<MobEntity> mobs = world.getEntitiesByClass(MobEntity.class, player.getBoundingBox().expand(AUTO_ATTACK_RANGE),
-                mob -> mob.isAlive() && isFoe(mob, player) && player.canSee(mob)
+                mob -> mob.isAlive() && isFoe(mob, player) && player.canSee(mob) && !Execution.isBusy(mob)
                         && (ModAttachments.limbs(mob) & Limbs.SPLIT) == 0);
         MobEntity target = null;
         double best = Double.MAX_VALUE;

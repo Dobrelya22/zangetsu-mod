@@ -103,7 +103,62 @@ public static class ZangetsuTextures
         Out(HollowMaskEyesHD(), assets, "textures/entity/hollow_mask_eyes.png", 3);
         Out(SlashTrail(), assets, "textures/misc/slash.png", 4);
         Out(CrescentMoon(), assets, "textures/environment/crescent_moon.png", 6);
-        Out(EnderCut(), assets, "textures/entity/ender_cut.png", 16);
+        Out(Cloak(), assets, "textures/entity/cloak.png", 16);
+        Out(EnderCut(), assets, "textures/entity/cut_ender.png", 16);
+        Out(FleshCut(C(92, 14, 16), C(150, 26, 24), C(226, 196, 170), 31), assets, "textures/entity/cut_flesh.png", 16);
+        Out(FleshCut(C(58, 40, 18), C(92, 62, 24), C(120, 136, 54), 32), assets, "textures/entity/cut_rot.png", 16);
+        Out(BoneCut(C(226, 220, 196), C(148, 132, 104), C(112, 52, 40), 33), assets, "textures/entity/cut_bone.png", 16);
+        Out(BoneCut(C(46, 46, 50), C(18, 18, 20), C(224, 92, 24), 34), assets, "textures/entity/cut_soot.png", 16);
+        Out(FleshCut(C(22, 66, 24), C(46, 118, 44), C(28, 28, 30), 35), assets, "textures/entity/cut_powder.png", 16);
+    }
+
+    /** Ткань плаща: тёмное плетение почти белого цвета (цвет даёт вершина), с потёртостями. Повторяется без шва. */
+    static Canvas Cloak()
+    {
+        var c = new Canvas(64, 64);
+        for (int y = 0; y < 64; y++)
+            for (int x = 0; x < 64; x++)
+            {
+                bool warp = (x / 2 + y / 2) % 2 == 0;
+                double thread = warp ? 0.86 : 1.0;
+                double wear = Math.Sin(x * Math.PI / 32.0 + Math.Sin(y * Math.PI / 16.0)) * 0.08 + Math.Sin(y * Math.PI / 8.0 + x * Math.PI / 16.0) * 0.05;
+                double h = (Hash(x, y, 41) - 0.5) * 0.14;
+                int v = (int) (235 * (thread + wear + h));
+                c.Set(x, y, C(v, v, v));
+            }
+        return c;
+    }
+
+    /** Срез мягкого тела: разводы двух цветов и редкие вкрапления. */
+    static Canvas FleshCut(Color dark, Color light, Color fleck, int seed)
+    {
+        var c = new Canvas(32, 32);
+        for (int y = 0; y < 32; y++)
+            for (int x = 0; x < 32; x++)
+            {
+                // Волокна: повторяемые волны, чтобы шов текстуры не был виден.
+                double wave = Math.Sin((x + y * 0.5) * Math.PI / 8.0 + Math.Sin(y * Math.PI / 8.0) * 1.6) * 0.5 + 0.5;
+                double h = Hash(x, y, seed);
+                Color col = Mul(Mix(dark, light, wave * 0.75 + Hash(x / 3, y / 3, seed + 1) * 0.25), 0.9 + h * 0.2);
+                c.Set(x, y, h > 0.94 ? fleck : col);
+            }
+        return c;
+    }
+
+    /** Срез кости: плотные кольца снаружи и пористая середина. */
+    static Canvas BoneCut(Color pale, Color dark, Color marrow, int seed)
+    {
+        var c = new Canvas(32, 32);
+        for (int y = 0; y < 32; y++)
+            for (int x = 0; x < 32; x++)
+            {
+                double h = Hash(x, y, seed);
+                double ring = Math.Sin(x * Math.PI / 8.0) * Math.Sin(y * Math.PI / 8.0);
+                Color col = Mul(Mix(dark, pale, ring * 0.5 + 0.5), 0.92 + h * 0.16);
+                if (h > 0.88 && ring > -0.2) col = marrow;
+                c.Set(x, y, col);
+            }
+        return c;
     }
 
     /** Закрасить прямоугольник [x0, x1) × [y0, y1) цветом с лёгким шумом. */

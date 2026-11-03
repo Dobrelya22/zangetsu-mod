@@ -10,9 +10,15 @@ import net.minecraft.entity.attribute.EntityAttributeModifier;
 import net.minecraft.entity.attribute.EntityAttributes;
 import net.minecraft.entity.mob.AbstractPiglinEntity;
 import net.minecraft.entity.mob.AbstractSkeletonEntity;
+import net.minecraft.entity.mob.CreeperEntity;
 import net.minecraft.entity.mob.EndermanEntity;
+import net.minecraft.entity.mob.HuskEntity;
+import net.minecraft.entity.mob.IllagerEntity;
 import net.minecraft.entity.mob.MobEntity;
+import net.minecraft.entity.mob.WitchEntity;
+import net.minecraft.entity.mob.WitherSkeletonEntity;
 import net.minecraft.entity.mob.ZombieEntity;
+import net.minecraft.entity.raid.RaiderEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.particle.ParticleTypes;
 import net.minecraft.server.network.ServerPlayerEntity;
@@ -25,7 +31,7 @@ import net.minecraft.util.math.Vec3d;
 
 /**
  * Отсечение конечностей. Зомби, пиглинам и скелетам меч сначала отрубает левую руку, потом правую;
- * эндермену — подрубает левое колено, потом правое. Когда рубить больше нечего, открывается казнь.
+ * эндермену — подрубает левое колено, потом правое. Когда рубить больше нечего или моб едва жив, открывается казнь.
  */
 public final class Limbs {
     public static final int LEFT_ARM = 1;
@@ -35,6 +41,9 @@ public final class Limbs {
     public static final int RIGHT_KNEE = 16;
     /** Эндермен рассечён пополам: сам он не рисуется, вместо него летят две половины. */
     public static final int SPLIT = 32;
+
+    /** При какой доле здоровья моба можно казнить, даже если конечности на месте. */
+    private static final float EXECUTE_HEALTH = 0.35F;
 
     private static final Identifier SLOW = ZangetsuMod.id("limb_slow");
 
@@ -61,13 +70,34 @@ public final class Limbs {
         return has(limbs, LEFT_KNEE | RIGHT_KNEE);
     }
 
-    /** Можно казнить: все конечности уже отсечены, а моб ещё жив. */
-    public static boolean executable(LivingEntity entity) {
-        int limbs = ModAttachments.limbs(entity);
-        if (!entity.isAlive() || (limbs & (HEAD | SPLIT)) != 0) {
+    /** Те, кого меч умеет казнить: зомби, скелеты, пиглины, эндермены, криперы и рейдеры. */
+    public static boolean canBeExecuted(LivingEntity entity) {
+        return isHumanoid(entity) || isEnderman(entity) || entity instanceof CreeperEntity || entity instanceof RaiderEntity;
+    }
+
+    /**
+     * Можно казнить: рубить уже нечего или (с уровня II) моб едва жив. В финальной форме — кого угодно из этих и сразу.
+     * Клиент и сервер решают одинаково; {@code limbs} у них хранятся по-разному.
+     */
+    public static boolean executable(LivingEntity entity, int limbs, boolean finalForm, int level) {
+        if (!entity.isAlive() || !canBeExecuted(entity) || (limbs & (HEAD | SPLIT)) != 0) {
             return false;
         }
+        if (finalForm || (level >= 2 && entity.getHealth() <= entity.getMaxHealth() * EXECUTE_HEALTH)) {
+            return true;
+        }
         return (isHumanoid(entity) && disarmed(limbs)) || (isEnderman(entity) && hobbled(limbs));
+    }
+
+    /** Во сколько раз отрисовщик этого моба увеличивает модель. */
+    public static float modelScale(LivingEntity entity) {
+        if (entity instanceof WitherSkeletonEntity) {
+            return 1.2F;
+        }
+        if (entity instanceof IllagerEntity || entity instanceof WitchEntity) {
+            return 0.9375F;
+        }
+        return entity instanceof HuskEntity ? 1.0625F : 1.0F;
     }
 
     public static void set(LivingEntity entity, int limbs) {
@@ -94,38 +124,51 @@ public final class Limbs {
     public static void cut(LivingEntity target, ServerPlayerEntity player, int part) {
         ServerWorld world = (ServerWorld) target.getWorld();
         int limbs = ModAttachments.limbs(target) | part;
-        set(target, limbs);
 
-        // Отрубленная часть отлетает в сторону.
-        int severed;
+        // Отрубленная часть отлетает в сторону: тот же кусок настоящей модели, с той позой, что была до удара.
+        int before = ModAttachments.limbs(target);
+        float[][] planes;
+        float px, py;
         Vec3d at;
         Vec3d side;
+        float fall;
         float yawRad = (float) Math.toRadians(180.0F - target.getBodyYaw());
         Vec3d left = new Vec3d(-1, 0, 0).rotateY(yawRad);
         switch (part) {
             case LEFT_ARM -> {
-                severed = SeveredPartEntity.LEFT_ARM;
-                at = modelToWorld(target, 5.0, 6.0, 0.0);
+                planes = new float[][]{{1.0F, 0.0F, 0.0F, 4.01F}, {0.0F, 1.0F, 0.0F, -0.5F}};
+                px = 6.0F;
+                py = 5.0F;
                 side = left;
+                fall = 180.0F;
             }
             case RIGHT_ARM -> {
-                severed = SeveredPartEntity.RIGHT_ARM;
-                at = modelToWorld(target, -5.0, 6.0, 0.0);
+                planes = new float[][]{{-1.0F, 0.0F, 0.0F, 4.01F}, {0.0F, 1.0F, 0.0F, -0.5F}};
+                px = -6.0F;
+                py = 5.0F;
                 side = left.negate();
+                fall = 0.0F;
             }
             case LEFT_KNEE -> {
-                severed = SeveredPartEntity.LEFT_SHIN;
-                at = modelToWorld(target, 2.0, 17.0, 0.0);
+                planes = new float[][]{{1.0F, 0.0F, 0.0F, 0.0F}, {-1.0F, 0.0F, 0.0F, -3.5F}, {0.0F, 1.0F, 0.0F, 8.5F}};
+                px = 2.0F;
+                py = 16.0F;
                 side = left;
+                fall = 180.0F;
             }
             default -> {
-                severed = SeveredPartEntity.RIGHT_SHIN;
-                at = modelToWorld(target, -2.0, 17.0, 0.0);
+                planes = new float[][]{{-1.0F, 0.0F, 0.0F, 0.0F}, {1.0F, 0.0F, 0.0F, -3.5F}, {0.0F, 1.0F, 0.0F, 8.5F}};
+                px = -2.0F;
+                py = 16.0F;
                 side = left.negate();
+                fall = 0.0F;
             }
         }
+        at = modelToWorld(target, px, py, 0.0);
         Vec3d velocity = side.multiply(0.22).add(0.0, 0.28, 0.0).add(target.getRotationVector().multiply(-0.05));
-        SeveredPartEntity.spawn(world, target, severed, at, velocity, target.getBodyYaw());
+        SeveredPartEntity.spawn(world, target, before, new SeveredPartEntity.Piece(planes, px, py, 0.0F, 0.1F, velocity, fall, SeveredPartEntity.FREE,
+                22.0F + target.getRandom().nextFloat() * 16.0F));
+        set(target, limbs);
 
         if (target instanceof MobEntity mob) {
             // Отрубленная рука роняет то, что держала.
@@ -153,7 +196,7 @@ public final class Limbs {
             case LEFT_KNEE -> "left_knee";
             default -> "right_knee";
         }).formatted(Formatting.RED);
-        if (target.isAlive() && executable(target)) {
+        if (target.isAlive() && executable(target, limbs, false, 0)) {
             message = Text.translatable("zangetsu.cut.execute_hint", Text.keybind("key.zangetsu.execute")).formatted(Formatting.DARK_RED, Formatting.BOLD);
         }
         player.sendMessage(message, true);
@@ -189,7 +232,7 @@ public final class Limbs {
      * как её ставит LivingEntityRenderer: поворот по телу, разворот осей и сдвиг на 1,501 блока.
      */
     public static Vec3d modelToWorld(LivingEntity entity, double mx, double my, double mz) {
-        Vec3d local = new Vec3d(-mx / 16.0, 1.501 - my / 16.0, mz / 16.0).multiply(entity.getScale());
+        Vec3d local = new Vec3d(-mx / 16.0, 1.501 - my / 16.0, mz / 16.0).multiply(entity.getScale() * modelScale(entity));
         return entity.getPos().add(local.rotateY((float) Math.toRadians(180.0F - entity.getBodyYaw())));
     }
 }

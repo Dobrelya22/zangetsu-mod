@@ -1,6 +1,7 @@
 package com.zangetsu.client.render;
 
 import com.zangetsu.ZangetsuMod;
+import com.zangetsu.client.ClientState;
 import com.zangetsu.logic.Eye;
 import com.zangetsu.registry.ModComponents;
 import java.util.ArrayList;
@@ -13,6 +14,7 @@ import net.minecraft.client.render.VertexConsumer;
 import net.minecraft.client.render.VertexConsumerProvider;
 import net.minecraft.client.render.model.json.ModelTransformationMode;
 import net.minecraft.client.util.math.MatrixStack;
+import net.minecraft.entity.Entity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.MathHelper;
@@ -131,7 +133,7 @@ public class ZangetsuItemRenderer implements BuiltinItemRendererRegistry.Dynamic
         collar(mesh);
         blade(mesh, burning);
         if (burning) {
-            burnCracks(mesh, matrices, consumers, overlay);
+            burnCracks(mesh, matrices, consumers, overlay, mode);
         }
         renderEye(eye, mode, matrices, consumers, light, overlay);
         matrices.pop();
@@ -383,28 +385,63 @@ public class ZangetsuItemRenderer implements BuiltinItemRendererRegistry.Dynamic
         return 192.0F + (u - BLADE_START) / (BLADE_END - BLADE_START) * 64.0F;
     }
 
-    // ---------------------------------------------------------------- трещины горящего клинка
+    // ---------------------------------------------------------------- жилы горящего клинка
 
-    /** Пути трещин по клинку (u, v): от гнезда глаза к острию и к рукояти. */
+    /**
+     * Жилы по клинку: первое число — толщина, дальше точки (u, v). Главная идёт от самой гарды над глазом к острию, вторая — вдоль линии
+     * закалки, между ними ветвятся тонкие, как у молнии, а последняя обводит режущую кромку.
+     */
     private static final float[][] BURN_PATHS = {
-            {13.0F, -0.7F, 14.6F, -1.2F, 16.2F, -0.6F, 17.8F, -1.4F, 19.6F, -0.9F, 21.0F, -1.6F},
-            {12.9F, 0.1F, 14.4F, 0.7F, 15.8F, 0.3F, 17.2F, 0.9F},
-            {8.2F, -0.9F, 7.4F, -1.5F, 6.6F, -1.1F},
-            {8.3F, 0.0F, 7.5F, 0.6F, 6.7F, 0.3F},
-            {10.6F, -1.9F, 11.4F, -2.15F},
+            {1.0F, 6.5F, -1.25F, 7.4F, -1.72F, 8.5F, -1.98F, 10.0F, -2.02F, 11.6F, -1.98F, 12.9F, -1.72F, 14.2F, -1.05F, 15.5F, -1.5F, 16.8F, -0.85F, 18.1F, -1.2F, 19.4F, -0.85F, 20.6F, -1.35F, 21.7F, -1.6F},
+            {0.85F, 6.7F, 0.6F, 7.9F, 0.9F, 9.3F, 0.72F, 10.8F, 0.95F, 12.2F, 0.72F, 13.6F, 0.92F, 14.8F, 0.5F, 16.0F, 0.85F, 17.2F, 0.45F, 18.4F, 0.4F},
+            {0.6F, 14.2F, -1.05F, 14.9F, -0.35F, 15.5F, 0.2F, 16.0F, 0.85F},
+            {0.6F, 16.8F, -0.85F, 17.4F, -0.25F, 18.1F, 0.12F},
+            {0.5F, 19.4F, -0.85F, 19.9F, -0.35F, 20.25F, -0.05F},
+            {0.5F, 14.2F, -1.05F, 14.8F, -1.72F, 15.2F, -2.05F},
+            {0.5F, 16.8F, -0.85F, 17.5F, -1.6F, 17.9F, -2.02F},
+            {0.42F, 18.1F, -1.2F, 18.7F, -1.8F},
+            {0.5F, 7.4F, -1.72F, 7.85F, -0.95F, 8.1F, -0.25F},
+            {0.5F, 9.3F, 0.72F, 9.9F, 1.4F, 10.3F, 1.85F},
+            {0.5F, 12.2F, 0.72F, 12.8F, 1.45F, 13.1F, 1.9F},
+            {0.42F, 13.6F, 0.92F, 14.2F, 1.55F, 14.6F, 1.95F},
+            {0.42F, 16.0F, 0.85F, 16.5F, 1.35F},
+            {0.5F, 12.9F, -0.55F, 13.6F, -0.3F, 14.4F, 0.2F, 14.9F, 0.55F},
+            {0.34F, 6.7F, 2.48F, 10.0F, 2.52F, 14.0F, 2.48F, 18.2F, 2.46F, 19.2F, 1.72F, 20.0F, 0.82F, 20.9F, -0.46F},
     };
-    /** Свет по сечению разлома: от края багровый, к стенкам оранжевый, по самой середине дна почти белый. */
-    private static final int[] BURN_LIGHT = {0x000000, 0x9A1208, 0xFF6A12, 0xFFE9A8, 0xFF6A12, 0x9A1208, 0x000000};
-    /** Сталь по тому же сечению: обугленные края, тёмное дно (свет ложится поверх). */
+    /** Обугленная сталь по сечению разлома (свет ложится поверх). */
     private static final int[] BURN_STEEL = {0x6A3A34, 0x6A3A34, 0x301008, 0x301008, 0x301008, 0x6A3A34, 0x6A3A34};
+    /** Накал по столбцам сечения: дно разлома, стенки и последние два — ореол над поверхностью. */
+    private static final float[] BURN_HEAT = {0.0F, 0.34F, 0.72F, 1.0F, 0.72F, 0.34F, 0.0F, 0.24F, 0.0F};
+    /** То же в финальной форме: по дну идёт чёрная сердцевина, а горят её края. */
+    private static final float[] BURN_HEAT_FINAL = {0.0F, 0.5F, 0.92F, 0.1F, 0.92F, 0.5F, 0.0F, 0.34F, 0.0F};
+    /** Цвет накала: от чёрного через багровый и оранжевый к почти белому. */
+    private static final int[] BURN_RAMP = heatRamp(new int[]{0x000000, 0x7A0A06, 0xE8240A, 0xFF8A20, 0xFFF0C8});
+    /** В финальной форме — кровавый, а в гребне бегущей волны белый. */
+    private static final int[] BURN_RAMP_FINAL = heatRamp(new int[]{0x000000, 0x6A0010, 0xE00A18, 0xFF3A30, 0xFFE0D0});
+    private static final int FLOW_STEPS = 96;
 
-    /** Вершина разлома: положение, координаты в атласе (для обугленных краёв), нормаль и цвет. */
-    private record BurnVertex(Vector3f p, float tu, float tv, Vector3f n, int rgb) {
+    private static int[] heatRamp(int[] stops) {
+        int[] ramp = new int[64];
+        for (int i = 0; i < ramp.length; i++) {
+            float k = i / (ramp.length - 1.0F) * (stops.length - 1);
+            int a = Math.min(stops.length - 2, (int) k);
+            float m = k - a;
+            int red = (int) MathHelper.lerp(m, (stops[a] >> 16) & 0xFF, (stops[a + 1] >> 16) & 0xFF);
+            int green = (int) MathHelper.lerp(m, (stops[a] >> 8) & 0xFF, (stops[a + 1] >> 8) & 0xFF);
+            int blue = (int) MathHelper.lerp(m, stops[a] & 0xFF, stops[a + 1] & 0xFF);
+            ramp[i] = (red << 16) | (green << 8) | blue;
+        }
+        return ramp;
     }
 
-    /** Обугленные края разломов и их светящаяся часть (четвёрками вершин); считается один раз. */
+    /** Вершина разлома: положение, координаты в атласе (для обугленных краёв), нормаль, цвет стали, где она вдоль клинка и какой столбец сечения. */
+    private record BurnVertex(Vector3f p, float tu, float tv, Vector3f n, int rgb, float u, int column) {
+    }
+
+    /** Обугленные края разломов, их светящаяся часть (четвёрками вершин) и точки на дне, откуда летят искры; считается один раз. */
     private static final List<BurnVertex> BURN_EDGES = new ArrayList<>();
     private static final List<BurnVertex> BURN_GLOW = new ArrayList<>();
+    private static final List<float[]> BURN_POINTS = new ArrayList<>();
 
     static {
         for (int side = -1; side <= 1; side += 2) {
@@ -428,29 +465,31 @@ public class ZangetsuItemRenderer implements BuiltinItemRendererRegistry.Dynamic
     }
 
     /**
-     * Разлом на стали: посередине дно, раскалённое добела, по бокам стенки от жара к багровому и обугленные вздутые края,
-     * с которых свечение ещё немного ложится на клинок. Края неровные, у концов разлом сходит на нет.
+     * Жила на стали: посередине дно, по бокам стенки и обугленные вздутые края, вокруг слабый ореол прямо над поверхностью.
+     * Края неровные, к концам жила сходит на нет, тонкие ветки уже главных.
      */
     private static void burnPath(float[] line, int side, int seed) {
+        float width = line[0];
         List<float[]> path = new ArrayList<>();
-        for (int i = 0; i + 3 < line.length; i += 2) {
+        for (int i = 1; i + 3 < line.length; i += 2) {
             float du = line[i + 2] - line[i], dv = line[i + 3] - line[i + 1];
             float length = MathHelper.sqrt(du * du + dv * dv);
-            int steps = Math.max(2, (int) (length / 0.16F));
+            int steps = Math.max(2, (int) (length / 0.2F));
             for (int k = 0; k < steps; k++) {
-                float s = (float) k / steps, wander = k == 0 ? 0.0F : (burnRand(seed + i, k) - 0.5F) * 0.16F;
+                float s = (float) k / steps, wander = k == 0 ? 0.0F : (burnRand(seed + i, k) - 0.5F) * 0.14F * width;
                 path.add(new float[]{line[i] + du * s - dv / length * wander, line[i + 1] + dv * s + du / length * wander});
             }
         }
         path.add(new float[]{line[line.length - 2], line[line.length - 1]});
         int last = path.size() - 1;
         float[][] previous = null;
+        float[][] previousHalo = null;
         for (int k = 0; k <= last; k++) {
             float[] p = path.get(k), before = path.get(Math.max(0, k - 1)), after = path.get(Math.min(last, k + 1));
             float tu = after[0] - before[0], tv = after[1] - before[1], length = Math.max(1.0E-4F, MathHelper.sqrt(tu * tu + tv * tv));
             float nu = -tv / length, nv = tu / length;
-            float taper = MathHelper.clamp(Math.min(k, last - k) / 4.0F, 0.0F, 1.0F);
-            float floor = (0.07F + 0.05F * burnRand(seed, k)) * taper, lip = floor + 0.07F * taper, slope = lip + 0.22F * taper;
+            float taper = width * MathHelper.clamp(Math.min(k, last - k) / 4.0F, 0.0F, 1.0F);
+            float floor = (0.08F + 0.05F * burnRand(seed, k)) * taper, lip = floor + 0.08F * taper, slope = lip + 0.22F * taper;
             float liftA = (0.08F + 0.1F * burnRand(seed + 1, k)) * taper, liftB = (0.08F + 0.1F * burnRand(seed + 2, k)) * taper;
             float[][] profile = {{-slope, 0.012F}, {-lip, liftA}, {-floor, 0.02F}, {0.0F, 0.02F}, {floor, 0.02F}, {lip, liftB}, {slope, 0.012F}};
             // Каждое сечение — {u, v, w} семи точек.
@@ -464,6 +503,7 @@ public class ZangetsuItemRenderer implements BuiltinItemRendererRegistry.Dynamic
             }
             if (!ok) {
                 previous = null;
+                previousHalo = null;
                 continue;
             }
             if (previous != null) {
@@ -472,6 +512,27 @@ public class ZangetsuItemRenderer implements BuiltinItemRendererRegistry.Dynamic
                 }
             }
             previous = row;
+            BURN_POINTS.add(new float[]{p[0], p[1], side * (bladeSurface(p[0], p[1]) + 0.02F), side});
+            // Ореол: те же точки дальше в стороны, чуть над поверхностью.
+            float halo = slope * 2.2F;
+            float[][] haloRow = new float[3][];
+            boolean haloOk = true;
+            for (int c = 0; c < 3; c++) {
+                float d = (c - 1) * halo;
+                float u = p[0] + nu * d, v = p[1] + nv * d;
+                float[] s = section(u);
+                haloOk &= v > s[0] + 0.02F && v < s[2] - 0.02F;
+                haloRow[c] = new float[]{u, v, side * (bladeSurface(u, v) + 0.05F)};
+            }
+            if (!haloOk) {
+                previousHalo = null;
+                continue;
+            }
+            if (previousHalo != null) {
+                haloQuad(previousHalo, haloRow, 0, 8, 7, side);
+                haloQuad(previousHalo, haloRow, 1, 7, 8, side);
+            }
+            previousHalo = haloRow;
         }
     }
 
@@ -487,33 +548,118 @@ public class ZangetsuItemRenderer implements BuiltinItemRendererRegistry.Dynamic
         }
         n.normalize();
         float tu = 448.0F + (a[c][0] * 7.0F) % 64.0F, tv = 100.0F + c * 3.0F;
-        BURN_EDGES.add(new BurnVertex(a0, tu, tv, n, BURN_STEEL[c]));
-        BURN_EDGES.add(new BurnVertex(b0, tu, tv, n, BURN_STEEL[c]));
-        BURN_EDGES.add(new BurnVertex(b1, tu, tv, n, BURN_STEEL[c + 1]));
-        BURN_EDGES.add(new BurnVertex(a1, tu, tv, n, BURN_STEEL[c + 1]));
-        BURN_GLOW.add(new BurnVertex(a0, 0.0F, 0.0F, n, BURN_LIGHT[c]));
-        BURN_GLOW.add(new BurnVertex(b0, 0.0F, 1.0F, n, BURN_LIGHT[c]));
-        BURN_GLOW.add(new BurnVertex(b1, 1.0F, 1.0F, n, BURN_LIGHT[c + 1]));
-        BURN_GLOW.add(new BurnVertex(a1, 1.0F, 0.0F, n, BURN_LIGHT[c + 1]));
+        BURN_EDGES.add(new BurnVertex(a0, tu, tv, n, BURN_STEEL[c], a[c][0], c));
+        BURN_EDGES.add(new BurnVertex(b0, tu, tv, n, BURN_STEEL[c], b[c][0], c));
+        BURN_EDGES.add(new BurnVertex(b1, tu, tv, n, BURN_STEEL[c + 1], b[c + 1][0], c + 1));
+        BURN_EDGES.add(new BurnVertex(a1, tu, tv, n, BURN_STEEL[c + 1], a[c + 1][0], c + 1));
+        BURN_GLOW.add(new BurnVertex(a0, 0.0F, 0.0F, n, 0, a[c][0], c));
+        BURN_GLOW.add(new BurnVertex(b0, 0.0F, 1.0F, n, 0, b[c][0], c));
+        BURN_GLOW.add(new BurnVertex(b1, 1.0F, 1.0F, n, 0, b[c + 1][0], c + 1));
+        BURN_GLOW.add(new BurnVertex(a1, 1.0F, 0.0F, n, 0, a[c + 1][0], c + 1));
     }
 
-    /** Разломы горящего клинка: края — сталью, внутренность — светом, который чуть дышит. */
-    private static void burnCracks(Mesh mesh, MatrixStack matrices, VertexConsumerProvider consumers, int overlay) {
+    private static void haloQuad(float[][] a, float[][] b, int c, int columnFrom, int columnTo, int side) {
+        Vector3f a0 = toModel(a[c][0], a[c][1], a[c][2]), a1 = toModel(a[c + 1][0], a[c + 1][1], a[c + 1][2]);
+        Vector3f b0 = toModel(b[c][0], b[c][1], b[c][2]), b1 = toModel(b[c + 1][0], b[c + 1][1], b[c + 1][2]);
+        Vector3f n = new Vector3f(0.0F, 0.0F, side);
+        BURN_GLOW.add(new BurnVertex(a0, 0.0F, 0.0F, n, 0, a[c][0], columnFrom));
+        BURN_GLOW.add(new BurnVertex(b0, 0.0F, 1.0F, n, 0, b[c][0], columnFrom));
+        BURN_GLOW.add(new BurnVertex(b1, 1.0F, 1.0F, n, 0, b[c + 1][0], columnTo));
+        BURN_GLOW.add(new BurnVertex(a1, 1.0F, 0.0F, n, 0, a[c + 1][0], columnTo));
+    }
+
+    /**
+     * Жилы горящего клинка: края — сталью, внутренность — светом. Свет не просто дышит, а течёт: от рукояти к острию бегут две волны жара,
+     * в гребне которых жила раскаляется добела, с неё срываются искры. В финальной форме сердцевина жил чёрная, а по обуху и кромке идёт огонь.
+     */
+    private static void burnCracks(Mesh mesh, MatrixStack matrices, VertexConsumerProvider consumers, int overlay, ModelTransformationMode mode) {
         for (BurnVertex v : BURN_EDGES) {
             mesh.colored(v.p(), v.tu(), v.tv(), v.n(), v.rgb());
         }
         float time = animationTime();
-        float pulse = 0.82F + 0.18F * MathHelper.sin(time * 0.22F);
+        Entity holder = EyeTracker.holder();
+        boolean finalForm = holder != null && ClientState.isFinal(holder);
+        float[] heat = finalForm ? BURN_HEAT_FINAL : BURN_HEAT;
+        int[] ramp = finalForm ? BURN_RAMP_FINAL : BURN_RAMP;
+        float breath = 0.62F + 0.1F * MathHelper.sin(time * 0.17F);
+        float[] flow = new float[FLOW_STEPS];
+        for (int i = 0; i < FLOW_STEPS; i++) {
+            float u = BLADE_START + (BLADE_END - BLADE_START) * i / (FLOW_STEPS - 1.0F);
+            float first = Math.max(0.0F, MathHelper.sin(u * 0.82F - time * 0.34F));
+            float second = Math.max(0.0F, MathHelper.sin(u * 0.47F - time * 0.21F + 1.7F));
+            first *= first * first;
+            second = second * second * second * second;
+            flow[i] = breath + 0.75F * first * first + 0.5F * second;
+        }
         Mesh glow = new Mesh(matrices.peek(), consumers.getBuffer(RenderLayer.getEyes(GLOW_TEXTURE)), LightmapTextureManager.MAX_LIGHT_COORDINATE, overlay);
+        int[] colors = new int[4];
         for (int i = 0; i + 3 < BURN_GLOW.size(); i += 4) {
-            float flicker = pulse * (0.9F + 0.1F * MathHelper.sin(time * 0.6F + BURN_GLOW.get(i).p().x * 40.0F));
+            for (int k = 0; k < 4; k++) {
+                BurnVertex v = BURN_GLOW.get(i + k);
+                int step = MathHelper.clamp((int) ((v.u() - BLADE_START) / (BLADE_END - BLADE_START) * (FLOW_STEPS - 1)), 0, FLOW_STEPS - 1);
+                float level = heat[v.column()] * flow[step];
+                // В финальной форме гребень волны прожигает и чёрную сердцевину.
+                if (finalForm && v.column() == 3) {
+                    level += Math.max(0.0F, flow[step] - 0.85F) * 1.3F;
+                }
+                colors[k] = ramp[MathHelper.clamp((int) (level * (ramp.length - 1)), 0, ramp.length - 1)];
+            }
             // Светящийся слой отбрасывает обратные грани, а стороны клинка смотрят в разные стороны — рисуем обе.
             for (int k = 0; k < 4; k++) {
-                glow.lit(BURN_GLOW.get(i + k), flicker);
+                glow.lit(BURN_GLOW.get(i + k), colors[k]);
             }
             for (int k = 3; k >= 0; k--) {
-                glow.lit(BURN_GLOW.get(i + k), flicker);
+                glow.lit(BURN_GLOW.get(i + k), colors[k]);
             }
+        }
+        if (mode == ModelTransformationMode.GUI) {
+            return;
+        }
+        // Искры срываются с жил и улетают от клинка.
+        Matrix4f matrix = matrices.peek().getPositionMatrix();
+        VertexConsumer light = glow.vertices();
+        for (int i = 0; i < 14; i++) {
+            float life = time * 0.045F + i * 0.618F;
+            int generation = MathHelper.floor(life);
+            float p = life - generation;
+            float[] point = BURN_POINTS.get(Math.floorMod(generation * 31 + i * 17, BURN_POINTS.size()));
+            float wobble = 0.2F * MathHelper.sin(p * 9.0F + i);
+            Vector3f at = toModel(point[0] + p * 0.9F, point[1] + wobble * p, point[2] + point[3] * p * 1.7F);
+            int green = (int) (170.0F * (1.0F - p) * (1.0F - p));
+            Flames.spark(light, matrix, at.x, at.y, at.z, 0.016F * (1.0F - p * p), (255 << 16) | (green << 8) | (int) (34.0F * (1.0F - p)));
+        }
+        if (finalForm) {
+            bladeFire(consumers, matrices, holder, mode, time);
+        }
+    }
+
+    /** Огонь финальной формы вдоль обуха и у острия: те же языки, что на руках, только мельче. */
+    private static void bladeFire(VertexConsumerProvider consumers, MatrixStack matrices, Entity holder, ModelTransformationMode mode, float time) {
+        Vector3f up = new Vector3f(0.0F, 1.0F, 0.0F);
+        Vector3f wind = new Vector3f((float) (holder.prevX - holder.getX()), 0.0F, (float) (holder.prevZ - holder.getZ())).mul(1.3F);
+        if (mode == ModelTransformationMode.FIRST_PERSON_RIGHT_HAND || mode == ModelTransformationMode.FIRST_PERSON_LEFT_HAND) {
+            Quaternionf toView = new Quaternionf(MinecraftClient.getInstance().gameRenderer.getCamera().getRotation()).conjugate();
+            toView.transform(up);
+            toView.transform(wind);
+        }
+        Flames.Frame frame = new Flames.Frame(matrices.peek(), up, wind, time);
+        float px = 1.0F / 16.0F;
+        VertexConsumer blend = consumers.getBuffer(RenderLayer.getEntityTranslucentEmissive(GLOW_TEXTURE));
+        for (int i = 0; i < 13; i++) {
+            float u = BLADE_START + 0.6F + i * 1.2F;
+            float[] s = section(u);
+            Vector3f spine = toModel(u, s[0] + 0.05F, 0.0F);
+            Flames.flame(blend, frame, spine.x, spine.y, spine.z, (2.4F + 1.6F * burnRand(i, 7)) * px, 0.42F * px, i * 1.3F, 0.95F);
+            if (i % 2 == 0) {
+                Vector3f edge = toModel(u, s[2] - 0.08F, 0.0F);
+                Flames.flame(blend, frame, edge.x, edge.y, edge.z, 1.7F * px, 0.3F * px, i * 2.1F, 0.8F);
+            }
+        }
+        VertexConsumer light = consumers.getBuffer(RenderLayer.getEyes(GLOW_TEXTURE));
+        for (int i = 0; i < 13; i++) {
+            float u = BLADE_START + 0.6F + i * 1.2F;
+            Vector3f spine = toModel(u, section(u)[0] + 0.05F, 0.0F);
+            Flames.tongue(light, frame, spine.x, spine.y, spine.z, 1.5F * px, 0.2F * px, i * 1.3F + 0.4F, Flames.INNER, 0.8F);
         }
     }
 
@@ -778,10 +924,9 @@ public class ZangetsuItemRenderer implements BuiltinItemRendererRegistry.Dynamic
                     .overlay(this.overlay).light(this.light).normal(this.entry, n.x, n.y, n.z);
         }
 
-        /** Вершина светящегося слоя: цвет вершины умножен на яркость (свет складывается, так что тёмное просто не видно). */
-        void lit(BurnVertex v, float brightness) {
-            int r = (int) (((v.rgb() >> 16) & 0xFF) * brightness), g = (int) (((v.rgb() >> 8) & 0xFF) * brightness), b = (int) ((v.rgb() & 0xFF) * brightness);
-            this.vertices.vertex(this.entry.getPositionMatrix(), v.p().x, v.p().y, v.p().z).color(r, g, b, 255).texture(v.tu(), v.tv())
+        /** Вершина светящегося слоя: цвет складывается с тем, что позади, так что чёрное просто не видно. */
+        void lit(BurnVertex v, int rgb) {
+            this.vertices.vertex(this.entry.getPositionMatrix(), v.p().x, v.p().y, v.p().z).color(0xFF000000 | rgb).texture(v.tu(), v.tv())
                     .overlay(this.overlay).light(this.light).normal(this.entry, v.n().x, v.n().y, v.n().z);
         }
     }

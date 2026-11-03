@@ -146,6 +146,8 @@ public final class FirstPersonMotion {
             renderer.renderLeftArm(matrices, consumers, light, player);
         }
         drawingArm = false;
+        // Цепи и огонь рисуются уже вне setAngles, в тех же координатах, где только что нарисована рука.
+        FinalFormFeatureRenderer.firstPersonArm(matrices, consumers, light, player, right ? renderer.getModel().rightArm : renderer.getModel().leftArm, right);
         matrices.pop();
     }
 

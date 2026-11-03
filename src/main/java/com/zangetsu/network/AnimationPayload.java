@@ -12,14 +12,16 @@ import net.minecraft.network.packet.CustomPayload;
  */
 public record AnimationPayload(int entityId, int animation, int duration, int param) implements CustomPayload {
     public static final int TOUCH_HANDLE = 1;
+    /** Казнь: приём меча номер {@code param}, растянутый на всю длительность, камера облетает сбоку. */
     public static final int EXECUTE = 2;
-    public static final int SLASH = 3;
     public static final int DREAM_PULL = 4;
     public static final int HOLLOW = 5;
     /** Меч сам рвётся к злому мобу и рубит (рука — следом). */
     public static final int AUTO_SLASH = 6;
     /** Гецуга Теншо: замах над плечом, горизонтальный взмах — и волна срывается с клинка. */
     public static final int GETSUGA = 7;
+    /** Казнь в финальной форме: тот же приём, но быстрый и без смены камеры. */
+    public static final int EXECUTE_FLASH = 8;
 
     public static final CustomPayload.Id<AnimationPayload> ID = new CustomPayload.Id<>(ZangetsuMod.id("animation"));
     public static final PacketCodec<ByteBuf, AnimationPayload> CODEC = PacketCodec.tuple(

@@ -375,6 +375,19 @@ public final class Stage {
         }
     }
 
+    /** Казнить моба заданным приёмом. */
+    public static void execute(MinecraftServer server, String name, Execution.Variant variant) {
+        ServerPlayerEntity player = player(server);
+        Entity e = entity(server, name);
+        if (e != null) {
+            e.setInvulnerable(false);
+            if (e instanceof LivingEntity living) {
+                living.setHealth(1.0F);
+            }
+            Execution.request(player, e.getId(), variant);
+        }
+    }
+
     public static void swing(MinecraftServer server, String name) {
         if (entity(server, name) instanceof LivingEntity mob) {
             mob.swingHand(Hand.MAIN_HAND, true);

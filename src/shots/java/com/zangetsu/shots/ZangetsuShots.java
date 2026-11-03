@@ -1,7 +1,9 @@
 package com.zangetsu.shots;
 
 import com.zangetsu.ZangetsuMod;
+import com.zangetsu.client.KeyBindings;
 import com.zangetsu.entity.GetsugaEntity;
+import com.zangetsu.entity.SeveredPartEntity;
 import com.zangetsu.entity.ThrownZangetsuEntity;
 import com.zangetsu.logic.Awakening;
 import com.zangetsu.logic.Bond;
@@ -315,6 +317,21 @@ public class ZangetsuShots implements ClientModInitializer {
         shot("ender_halves");
         pause(30);
 
+        // ---- Казнь без отсечений: целого нельзя, едва живого можно. Конечностей у крипера нет, так что только так.
+        onServer(s -> {
+            this.attacker = summon(player(s), EntityType.CREEPER, 3.0);
+            Execution.request(player(s), this.attacker.getId());
+        });
+        pause(40);
+        onServer(s -> {
+            check("здорового крипера без финальной формы казнить нельзя", this.attacker.isAlive());
+            this.attacker.setHealth(this.attacker.getMaxHealth() * 0.3F);
+            Execution.request(player(s), this.attacker.getId());
+        });
+        pause(60);
+        onServer(s -> check("едва живого крипера можно казнить", !this.attacker.isAlive()));
+        pause(10);
+
         // ---- Проверки в настоящем бою (не постановка).
         look(180.0F, 10.0F);
         onServer(s -> this.attacker = summonHostile(player(s), EntityType.ZOMBIE, 1.8));
@@ -503,7 +520,62 @@ public class ZangetsuShots implements ClientModInitializer {
             boolean big = !player.getServerWorld().getEntitiesByClass(GetsugaEntity.class, player.getBoundingBox().expand(30.0), g -> g.scale() > 1.0F).isEmpty();
             check("Гецуга финальной формы крупнее обычной", big);
         });
-        pause(20);
+        pause(40);
+
+        // Гецуга бьёт и тех, кто не нападает: пиглин мирный, пока на него не напали.
+        look(180.0F, 2.0F);
+        onServer(s -> this.attacker = summon(player(s), EntityType.PIGLIN, 7.0));
+        pause(4);
+        onServer(s -> HollowForm.tryGetsuga(player(s)));
+        pause(HollowForm.GETSUGA_WINDUP + 24);
+        onServer(s -> {
+            check("Гецуга бьёт пиглина, даже мирного", !this.attacker.isAlive() || this.attacker.getHealth() < this.attacker.getMaxHealth());
+            this.attacker.discard();
+        });
+        pause(10);
+
+        // Финальная форма: целого моба можно казнить сразу и издалека, шаг сам выносит к нему.
+        look(180.0F, 2.0F);
+        onServer(s -> this.attacker = summon(player(s), EntityType.ZOMBIE, 11.0));
+        pause(4);
+        act(c -> check("в финальной форме R видит цель издалека", KeyBindings.executionTarget(c) != null));
+        onServer(s -> Execution.request(player(s), this.attacker.getId()));
+        pause(3);
+        onServer(s -> check("шаг вынес игрока к мобу", player(s).distanceTo(this.attacker) < 4.5F));
+        pause(30);
+        onServer(s -> {
+            check("в финальной форме целый моб казнён сразу", !this.attacker.isAlive());
+            ServerPlayerEntity player = player(s);
+            check("от моба остались куски", !player.getServerWorld().getEntitiesByClass(SeveredPartEntity.class, player.getBoundingBox().expand(12.0), p -> true).isEmpty());
+        });
+        // У каждого вида свой набор приёмов, и все они убивают; взрыв крипера никому не вредит.
+        for (EntityType<? extends MobEntity> type : List.of(EntityType.SKELETON, EntityType.WITHER_SKELETON, EntityType.CREEPER, EntityType.PILLAGER,
+                EntityType.VINDICATOR, EntityType.WITCH, EntityType.ENDERMAN, EntityType.PIGLIN, EntityType.ZOMBIE)) {
+            look(180.0F, 2.0F);
+            onServer(s -> {
+                this.healthBefore = player(s).getHealth();
+                this.attacker = summon(player(s), type, 6.0);
+                Execution.request(player(s), this.attacker.getId());
+            });
+            pause(34);
+            onServer(s -> {
+                check("казнь в финальной форме: " + type.getUntranslatedName(), !this.attacker.isAlive());
+                check("казнь не ранит игрока: " + type.getUntranslatedName(), player(s).getHealth() >= this.healthBefore);
+            });
+        }
+        // Крипера можно подбросить: приём задан явно, чтобы проверить именно его.
+        look(180.0F, 2.0F);
+        onServer(s -> {
+            this.healthBefore = player(s).getHealth();
+            this.attacker = summon(player(s), EntityType.CREEPER, 6.0);
+            Execution.request(player(s), this.attacker.getId(), Execution.Variant.LAUNCH);
+        });
+        pause(34);
+        onServer(s -> {
+            check("подброшенный крипер рвётся в воздухе", !this.attacker.isAlive());
+            check("взрыв крипера никого не задел", player(s).getHealth() >= this.healthBefore);
+        });
+        pause(10);
         onServer(s -> HollowForm.toggle(player(s)));
         view(Perspective.FIRST_PERSON);
         pause(10);

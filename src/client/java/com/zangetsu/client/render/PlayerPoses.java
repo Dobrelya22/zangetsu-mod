@@ -14,9 +14,8 @@ import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
 /**
- * Позы игрока в сценах: тянется к рукояти и поднимает меч; замах двумя руками и удар сверху (казнь);
- * горизонтальный взмах (эндермен пополам); вытаскивает меч из земли во сне; раскидывает руки и
- * запрокидывает голову, превращаясь в Пустого. В бою с Зангецу — приёмы из {@link SwordMoves}
+ * Позы игрока в сценах: тянется к рукояти и поднимает меч; вытаскивает меч из земли во сне; раскидывает
+ * руки и запрокидывает голову, превращаясь в Пустого. В бою с Зангецу и в казнях — приёмы из {@link SwordMoves}
  * и Гецуга: замах высоко за правое плечо, левая рука указывает цель — и взмах по горизонтали.
  */
 public final class PlayerPoses {
@@ -43,8 +42,6 @@ public final class PlayerPoses {
         switch (animation.type()) {
             case AnimationPayload.TOUCH_HANDLE -> touch(model, t, animationProgress, false);
             case AnimationPayload.DREAM_PULL -> touch(model, t, animationProgress, true);
-            case AnimationPayload.EXECUTE -> execute(model, t);
-            case AnimationPayload.SLASH -> slash(model, t);
             case AnimationPayload.HOLLOW -> hollow(model, t, animationProgress);
             case AnimationPayload.GETSUGA -> getsuga(model, t, animationProgress);
             default -> {
@@ -79,56 +76,10 @@ public final class PlayerPoses {
         model.head.pitch = MathHelper.lerp(raise, MathHelper.lerp(reach, model.head.pitch, 0.55F), -0.35F);
     }
 
-    /**
-     * Казнь: обе руки на рукояти. Замах — кулаки перед лбом, клинок поднят над головой; резкий удар вперёд и вниз; пауза.
-     * Правая рука идёт по двум точкам, левая каждый кадр ложится на рукоять за ней.
-     */
-    private static void execute(BipedEntityModel<?> model, float t) {
-        float wind = phase(t, 0.0F, 0.4F);
-        float strike = phase(t, 0.42F, 0.52F);
-        float recover = phase(t, 0.8F, 1.0F);
-        float[] up = aim(model.rightArm, 0.0F, -3.0F, -4.6F), down = aim(model.rightArm, -0.6F, 6.5F, -4.8F);
-        float pitch = MathHelper.lerp(strike, MathHelper.lerp(wind, model.rightArm.pitch, up[0]), down[0]);
-        float yaw = MathHelper.lerp(strike, MathHelper.lerp(wind, model.rightArm.yaw, up[1]), down[1]);
-        model.rightArm.pitch = MathHelper.lerp(recover, pitch, 0.0F);
-        model.rightArm.yaw = MathHelper.lerp(recover, yaw, 0.0F);
-        model.rightArm.roll = 0.0F;
-        leftHandOnHilt(model, flip(AnimationPayload.EXECUTE, t), wind * (1.0F - recover));
-        model.body.pitch = (-0.18F * wind * (1.0F - strike) + 0.35F * strike) * (1.0F - recover);
-        model.head.pitch = 0.25F * strike * (1.0F - recover);
-    }
-
     /** Питч и рыск руки, чтобы кулак смотрел из плеча в точку (x, y, z) модели. */
     private static float[] aim(ModelPart arm, float x, float y, float z) {
         float dx = x - arm.pivotX, dy = y - arm.pivotY, dz = z - arm.pivotZ;
         return new float[]{(float) Math.atan2(-MathHelper.sqrt(dx * dx + dz * dz), dy), (float) Math.atan2(-dx, -dz)};
-    }
-
-    /** Левая рука ложится на рукоять за правым кулаком, ближе к навершию ({@code k} — насколько). */
-    private static void leftHandOnHilt(BipedEntityModel<?> model, float flip, float k) {
-        Quaternionf right = new Quaternionf().rotationZYX(model.rightArm.roll, model.rightArm.yaw, model.rightArm.pitch);
-        float tilt = (GRIP_TO_ARM - BLADE_FLIP * flip) * MathHelper.RADIANS_PER_DEGREE;
-        Vector3f hilt = right.transform(new Vector3f(0.0F, MathHelper.cos(tilt), -MathHelper.sin(tilt)));
-        Vector3f fist = right.transform(new Vector3f(-1.0F, FIST_Y, 0.0F)).add(model.rightArm.pivotX, model.rightArm.pivotY, model.rightArm.pivotZ);
-        Vector3f target = fist.sub(hilt.mul(SECOND_HAND));
-        float[] pose = aim(model.leftArm, target.x, target.y, target.z);
-        model.leftArm.pitch = MathHelper.lerp(k, model.leftArm.pitch, pose[0]);
-        model.leftArm.yaw = MathHelper.lerp(k, model.leftArm.yaw, pose[1]);
-        model.leftArm.roll = MathHelper.lerp(k, model.leftArm.roll, 0.0F);
-    }
-
-    /** Горизонтальный взмах: рука уходит влево за корпус и проносится вправо. */
-    private static void slash(BipedEntityModel<?> model, float t) {
-        float wind = phase(t, 0.0F, 0.4F);
-        float strike = phase(t, 0.43F, 0.53F);
-        float recover = phase(t, 0.8F, 1.0F);
-        float yaw = MathHelper.lerp(strike, -1.25F * wind, 1.35F);
-        model.rightArm.pitch = MathHelper.lerp(recover, -1.5F * Math.max(wind, strike), 0.0F);
-        model.rightArm.yaw = MathHelper.lerp(recover, yaw, 0.0F);
-        model.rightArm.roll = 0.0F;
-        model.leftArm.pitch = -0.3F * (1.0F - recover);
-        model.leftArm.roll = -0.3F * (1.0F - recover);
-        model.body.yaw = MathHelper.lerp(recover, MathHelper.lerp(strike, -0.35F * wind, 0.3F), 0.0F);
     }
 
     /**
@@ -148,7 +99,6 @@ public final class PlayerPoses {
         }
         return switch (animation) {
             case AnimationPayload.GETSUGA -> phase(t, 0.2F, 0.38F) * (1.0F - phase(t, 0.62F, 1.0F));
-            case AnimationPayload.EXECUTE, AnimationPayload.SLASH -> phase(t, 0.42F, 0.52F) * (1.0F - phase(t, 0.8F, 1.0F));
             default -> 0.0F;
         };
     }
