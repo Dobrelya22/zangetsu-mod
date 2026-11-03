@@ -2,7 +2,9 @@ package com.zangetsu.entity;
 
 import com.zangetsu.logic.Abilities;
 import com.zangetsu.logic.Fx;
+import com.zangetsu.logic.HollowForm;
 import com.zangetsu.network.ClientFxPayload;
+import com.zangetsu.registry.ModAttachments;
 import com.zangetsu.registry.ModEntities;
 import java.util.HashSet;
 import java.util.Set;
@@ -11,6 +13,8 @@ import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.damage.DamageSource;
 import net.minecraft.entity.data.DataTracker;
+import net.minecraft.entity.data.TrackedData;
+import net.minecraft.entity.data.TrackedDataHandlerRegistry;
 import net.minecraft.entity.mob.MobEntity;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.network.packet.s2c.play.EntitySpawnS2CPacket;
@@ -35,8 +39,12 @@ import org.joml.Vector3f;
 public class GetsugaEntity extends Entity {
     public static final int LIFETIME = 26;
     public static final float DAMAGE = 18.0F;
+    /** Гецуга финальной формы: урон и во сколько раз волна крупнее. */
+    public static final float FINAL_DAMAGE = 28.0F;
+    public static final float FINAL_SCALE = 1.45F;
     private static final double SPEED = 1.35;
     private static final double SPAN = Math.toRadians(74.0);
+    private static final TrackedData<Boolean> FINAL_FORM = DataTracker.registerData(GetsugaEntity.class, TrackedDataHandlerRegistry.BOOLEAN);
 
     private UUID owner;
     private final Set<UUID> hit = new HashSet<>();
@@ -54,6 +62,7 @@ public class GetsugaEntity extends Entity {
         getsuga.refreshPositionAndAngles(start.x, start.y, start.z, player.getYaw(), player.getPitch());
         getsuga.setVelocity(look.multiply(SPEED));
         getsuga.owner = player.getUuid();
+        getsuga.dataTracker.set(FINAL_FORM, HollowForm.isFinal(ModAttachments.data(player)));
         world.spawnEntity(getsuga);
         Fx.sound(player, SoundEvents.ENTITY_WITHER_SHOOT, 0.9F, 0.55F);
         Fx.sound(player, SoundEvents.ENTITY_PLAYER_ATTACK_SWEEP, 1.2F, 0.45F);
@@ -67,6 +76,11 @@ public class GetsugaEntity extends Entity {
     public static float size(float age) {
         float t = MathHelper.clamp(age / 6.0F, 0.0F, 1.0F);
         return 0.35F + 0.65F * (1.0F - (1.0F - t) * (1.0F - t));
+    }
+
+    /** Во сколько раз эта волна крупнее обычной. */
+    public float scale() {
+        return this.dataTracker.get(FINAL_FORM) ? FINAL_SCALE : 1.0F;
     }
 
     /** Насколько серп виден: в последние тики гаснет. */
@@ -109,13 +123,14 @@ public class GetsugaEntity extends Entity {
 
     @Override
     protected void initDataTracker(DataTracker.Builder builder) {
+        builder.add(FINAL_FORM, false);
     }
 
     @Override
     public void tick() {
         super.tick();
         this.setPosition(this.getPos().add(this.getVelocity()));
-        float size = size(this.age);
+        float size = size(this.age) * this.scale();
         if (this.getWorld().isClient) {
             if (this.age > 1) {
                 // Искры и дым срываются с кромки и кончиков серпа.
@@ -147,7 +162,7 @@ public class GetsugaEntity extends Entity {
                 m -> m.isAlive() && !this.hit.contains(m.getUuid()) && Abilities.isFoe(m, player))) {
             this.hit.add(mob.getUuid());
             mob.timeUntilRegen = 0;
-            mob.damage(world.getDamageSources().indirectMagic(this, player), DAMAGE);
+            mob.damage(world.getDamageSources().indirectMagic(this, player), this.dataTracker.get(FINAL_FORM) ? FINAL_DAMAGE : DAMAGE);
             Vec3d push = this.getVelocity().normalize();
             mob.takeKnockback(0.9, -push.x, -push.z);
             Vec3d at = mob.getBoundingBox().getCenter();

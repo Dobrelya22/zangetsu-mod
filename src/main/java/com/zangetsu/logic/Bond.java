@@ -27,13 +27,16 @@ import net.minecraft.util.Formatting;
  *   <li>I «Пробуждение» — в темноте глаз открывается, меч рассекает летящие стрелы;</li>
  *   <li>II «Доверие» — меч парирует удары и отсекает конечности, открывается казнь;</li>
  *   <li>III «Единство» — меч сам бьёт ближайших злых мобов;</li>
- *   <li>IV «Пустой» — две минуты в день формы Пустого и Гецуга Теншо.</li>
+ *   <li>IV «Пустой» — две минуты в день формы Пустого и Гецуга Теншо;</li>
+ *   <li>V «Финальная форма» — маска с одним рогом, форма Пустого сильнее, Гецуга крупнее и больнее.</li>
  * </ul>
  */
 public final class Bond {
-    /** Сколько дружбы нужно для уровней II, III и IV. */
-    public static final int[] THRESHOLDS = {0, 50, 150, 350};
-    public static final int MAX_LEVEL = 4;
+    /** Сколько дружбы нужно для каждого уровня. */
+    public static final int[] THRESHOLDS = {0, 50, 150, 350, 700};
+    public static final int MAX_LEVEL = 5;
+    public static final int HOLLOW_LEVEL = 4;
+    public static final int FINAL_LEVEL = 5;
     public static final int EXECUTION_BONUS = 4;
 
     private Bond() {
@@ -117,5 +120,9 @@ public final class Bond {
         }
         SwordStacks.refreshAll(player);
         Sync.player(player);
+        // Уровень сменился прямо в форме Пустого — маска меняется сразу (финальная или обычная).
+        if (after != before && data.hollowActive) {
+            Sync.hollow(player, true);
+        }
     }
 }

@@ -97,10 +97,13 @@ public static class ZangetsuTextures
         Out(SpiritEyes(), assets, "textures/entity/spirit_eyes.png", 4);
         for (int crack = 0; crack <= 3; crack++)
         {
-            Out(HollowMaskHD(crack), assets, "textures/entity/hollow_mask_" + crack + ".png", 3);
+            Out(HollowMaskHD(crack, false), assets, "textures/entity/hollow_mask_" + crack + ".png", 3);
+            Out(HollowMaskHD(crack, true), assets, "textures/entity/hollow_final_" + crack + ".png", 3);
         }
-        Out(MaskIcon(true), assets, "textures/gui/mask_full.png", 8);
-        Out(MaskIcon(false), assets, "textures/gui/mask_empty.png", 8);
+        Out(MaskIcon(true, false), assets, "textures/gui/mask_full.png", 8);
+        Out(MaskIcon(false, false), assets, "textures/gui/mask_empty.png", 8);
+        Out(MaskIcon(true, true), assets, "textures/gui/mask_final_full.png", 8);
+        Out(MaskIcon(false, true), assets, "textures/gui/mask_final_empty.png", 8);
         Out(MaskIconCracks(), assets, "textures/gui/mask_cracks.png", 8);
         Out(HollowMaskEyesHD(), assets, "textures/entity/hollow_mask_eyes.png", 3);
         Out(SlashTrail(), assets, "textures/misc/slash.png", 4);
@@ -219,88 +222,80 @@ public static class ZangetsuTextures
 
     // ------------------------------------------------------------------ маска в интерфейсе
 
-    /** Силуэт маски для значка: внутри ли точка (координаты значка 32×32). */
+    /* Значок 32×32 — та же маска анфас: координаты головы (x, y) переводятся в значок двумя этими масштабами. */
+    const double ICON_SX = 1.9, ICON_SY = 2.42, ICON_Y0 = 2.5;
+
+    static double IconHeadX(double px) { return (px - 16) / ICON_SX; }
+    static double IconHeadY(double py) { return (py - ICON_Y0) / ICON_SY + MASK_TOP; }
+
+    /** Силуэт маски на значке — как у настоящей: арка лба, ниже глаз сужается к длинному подбородку. */
     static bool MaskFace(double x, double y)
     {
-        double dx = (x - 16.0) / 9.6, dy = (y - 17.0) / 11.0;
-        if (dy > 0) dx /= 1.0 - dy * 0.28;  // подбородок уже лба
-        return dx * dx + dy * dy < 1.0;
+        double hy = IconHeadY(y);
+        if (hy < MASK_TOP || hy > MASK_CHIN) return false;
+        double arch = hy < -7 ? Math.Sqrt(Sat(1 - (-7 - hy) * (-7 - hy) / (1.75 * 1.75))) : 1;
+        return Math.Abs(x - 16) < (MASK_A0 - MaskJaw(hy)) * arch * ICON_SX;
     }
 
-    /** Рог значка: толстая дуга от виска вверх и в сторону; side = −1 — левый, 1 — правый. */
-    static double HornDistance(double x, double y, int side, out double along)
+    /** Рог финальной маски на значке: дуга от виска вверх и в сторону (меньше 0 — внутри). */
+    static double IconHorn(double x, double y, out double along)
     {
         double best = 99;
         along = 0;
         for (int i = 0; i <= 40; i++)
         {
             double t = i / 40.0;
-            double hx = 16 + side * (7.0 + 5.5 * t + 1.5 * t * t), hy = 9.5 - 9.0 * t + 1.2 * t * t * t;
-            double r = 1.9 * (1.0 - t) + 0.35;
-            double d = Math.Sqrt((x - hx) * (x - hx) + (y - hy) * (y - hy)) - r;
+            double hx = 22.5 + 6.0 * t + 1.5 * t * t, hy = 6.5 - 6.5 * t + 0.5 * t * t;
+            double d = Math.Sqrt((x - hx) * (x - hx) + (y - hy) * (y - hy)) - (1.9 * (1 - t) + 0.3);
             if (d < best) { best = d; along = t; }
         }
         return best;
     }
 
-    static bool MaskEyeHole(double x, double y, out bool iris)
+    /** Лицо на значке: белая кость, полосы, прорези глаз и оскал — те же формулы, что у настоящей маски. */
+    static Color IconFace(double px, double py, bool final)
     {
-        iris = false;
-        foreach (int side in new[] { -1, 1 })
+        double x = IconHeadX(px), y = IconHeadY(py), ax = Math.Abs(x);
+        Color paint = final ? C(18, 14, 16) : C(122, 16, 24);
+        Color col = Mix(C(248, 246, 240), C(200, 196, 214), Sat(ax / 5.0) * 0.6);
+        if (Math.Abs(ax - MaskStripeX(y)) < MaskStripeHalf(y) * (final ? 1.4 : 1.0) + 0.08) col = paint;
+        if (final && MaskEyeLens(x, y, 2.2) < 1) col = paint;
+        if (MaskEyeLens(x, y, 0.4) < 1)
         {
-            double cx = 16 + side * 4.6, cy = 14.6;
-            double dx = x - cx, dy = (y - cy) + side * dx * 0.28;   // косые прорези
-            double e = (dx / 3.2) * (dx / 3.2) + (dy / 1.75) * (dy / 1.75);
-            if (e < 1.0)
+            double dx = (ax - MASK_EYE_X) * ICON_SX, dy = (y - MASK_EYE_Y) * ICON_SY;
+            col = dx * dx + dy * dy < 1.3 ? C(255, 214, 50) : C(12, 9, 12);
+        }
+        if (ax < MASK_MOUTH_HALF)
+        {
+            double top = MaskMouthTop(x), bottom = MaskMouthBottom(x);
+            if (y > top && y < bottom)
             {
-                iris = Math.Abs(dx + side * 0.3) < 1.2 && Math.Abs(dy) < 1.2;
-                return true;
+                // В 32 пикселях отдельные зубы сливаются — оскал рисуем тёмным зигзагом между двумя рядами.
+                double phase = (x + MASK_MOUTH_HALF) / 1.9, f = phase - Math.Floor(phase);
+                double zigzag = (top + bottom) / 2 + (Math.Abs(2 * f - 1) - 0.5) * 3.0 / ICON_SY;
+                col = Math.Abs(y - zigzag) * ICON_SY < 1.0 ? C(22, 10, 12) : C(246, 244, 238);
             }
         }
-        return false;
+        return col;
     }
 
-    /** Значок маски: {@code full} — живая (белая кость, алые полосы, горящие глаза), иначе тёмный силуэт. */
-    static Canvas MaskIcon(bool full)
+    /** Значок маски: {@code full} — живая, иначе тёмный силуэт; {@code final} — чёрные полосы и один рог. */
+    static Canvas MaskIcon(bool full, bool final)
     {
         var c = new Canvas(32, 32);
         var inside = new bool[32, 32];
         for (int y = 0; y < 32; y++)
             for (int x = 0; x < 32; x++)
             {
-                double px = x + 0.5, py = y + 0.5;
-                double alongL, alongR;
+                double px = x + 0.5, py = y + 0.5, along = 0;
                 bool face = MaskFace(px, py);
-                double hl = HornDistance(px, py, -1, out alongL);
-                double hr = HornDistance(px, py, 1, out alongR);
-                bool horn = !face && (hl < 0 || hr < 0);
-                double a = hl < 0 ? alongL : alongR;
+                bool horn = final && !face && IconHorn(px, py, out along) < 0;
                 if (!face && !horn) continue;
                 inside[x, y] = true;
                 Color col;
-                if (!full)
-                {
-                    col = Color.FromArgb(215, 40, 34, 38);
-                }
-                else if (horn)
-                {
-                    col = a > 0.78 ? C(46, 34, 32) : Mix(C(232, 226, 212), C(176, 166, 150), a);
-                }
-                else
-                {
-                    col = Mix(C(244, 240, 230), C(196, 188, 176), Sat((py - 6) / 24.0) * 0.6 + Math.Abs(px - 16) / 20.0);
-                    // Алые полосы на левой стороне лица (от лба до челюсти).
-                    if ((Math.Abs(px - 10.5) < 0.9 || Math.Abs(px - 13.0) < 0.7) && py > 6.5 && py < 22.5) col = C(184, 18, 26);
-                    // Оскал.
-                    if (py > 22.5 && py < 26.0 && px > 10 && px < 22) col = ((int)px % 2 == 0) ? C(236, 230, 218) : C(34, 24, 26);
-                    // Тень носа.
-                    if (Math.Abs(px - 16) < 1.0 && py > 17.5 && py < 19.5) col = C(170, 160, 150);
-                }
-                bool iris;
-                if (MaskEyeHole(px, py, out iris))
-                {
-                    col = full && iris ? C(255, 214, 50) : C(10, 6, 8);
-                }
+                if (!full) col = Color.FromArgb(215, 40, 34, 38);
+                else if (horn) col = Mix(C(248, 246, 240), C(176, 172, 178), along);
+                else col = IconFace(px, py, final);
                 c.Set(x, y, col);
             }
         // Тёмный контур по силуэту.
@@ -314,19 +309,7 @@ public static class ZangetsuTextures
         return c;
     }
 
-    /** Скол на значке: круг выбитой кости (только в пределах лица). */
-    static void Chip(Canvas c, int o, double cx, double cy, double r, Color col)
-    {
-        for (int y = 0; y < 32; y++)
-            for (int x = 0; x < 32; x++)
-            {
-                double dx = x + 0.5 - cx, dy = y + 0.5 - cy;
-                double wobble = r * (0.8 + 0.35 * Hash(x, y, 61));
-                if (dx * dx + dy * dy < wobble * wobble && MaskFace(x + 0.5, y + 0.5)) c.Set(o + x, y, col);
-            }
-    }
-
-    /** Трещины значка: три кадра 32×32 подряд — трещина, скол, почти рассыпалась. */
+    /** Трещины значка: три кадра 32×32 подряд — те же трещины и сколы, что на настоящей маске. */
     static Canvas MaskIconCracks()
     {
         var c = new Canvas(96, 32);
@@ -334,20 +317,31 @@ public static class ZangetsuTextures
         for (int stage = 1; stage <= 3; stage++)
         {
             int o = (stage - 1) * 32;
-            Dots(c, line, o + 17, 6, o + 17, 7, o + 18, 8, o + 18, 9, o + 19, 10, o + 19, 11, o + 20, 12);
-            if (stage >= 2)
-            {
-                Chip(c, o, 22.5, 24.0, 2.6, chip);
-                Dots(c, line, o + 11, 18, o + 10, 19, o + 10, 20, o + 9, 21, o + 21, 17, o + 22, 18, o + 22, 19, o + 23, 20);
-                Dots(c, line, o + 14, 8, o + 13, 9, o + 13, 10);
-            }
-            if (stage >= 3)
-            {
-                Chip(c, o, 9.5, 9.0, 2.8, chip);
-                Chip(c, o, 14.5, 25.5, 2.2, chip);
-                Dots(c, line, o + 15, 12, o + 15, 13, o + 16, 14, o + 16, 15, o + 16, 16, o + 7, 16, o + 8, 17, o + 8, 18, o + 24, 13, o + 25, 14, o + 24, 15);
-                Dots(c, line, o + 12, 20, o + 13, 21, o + 13, 22, o + 19, 19, o + 18, 20, o + 19, 21);
-            }
+            var cracks = MaskCracks(stage);
+            var chunks = MaskChunks(stage);
+            for (int y = 0; y < 32; y++)
+                for (int x = 0; x < 32; x++)
+                {
+                    double px = x + 0.5, py = y + 0.5;
+                    if (!MaskFace(px, py)) continue;
+                    double hx = IconHeadX(px), hy = IconHeadY(py);
+                    bool gone = false;
+                    foreach (var k in chunks) gone |= Chunk(hx, hy, k[0], k[1], k[2] * 1.2, k[3] * 1.2, (int)k[4]);
+                    bool cracked = false;
+                    foreach (var p in cracks)
+                    {
+                        // Расстояние считаем в пикселях значка, а не головы: масштабы по осям разные.
+                        var scaled = new double[p.Length];
+                        for (int i = 0; i + 1 < p.Length; i += 2)
+                        {
+                            scaled[i] = 16 + p[i] * ICON_SX;
+                            scaled[i + 1] = ICON_Y0 + (p[i + 1] - MASK_TOP) * ICON_SY;
+                        }
+                        cracked |= PolyDistance(px, py, scaled) < 0.6;
+                    }
+                    if (gone) c.Set(o + x, y, chip);
+                    else if (cracked) c.Set(o + x, y, line);
+                }
         }
         return c;
     }
@@ -1147,173 +1141,247 @@ public static class ZangetsuTextures
     // ------------------------------------------------------------------ маска Пустого в высоком разрешении
 
     /*
-     * Маска — вылепленная 3D-оболочка (HollowMaskRenderer), текстура 256×256:
-     *   лицо (0,0)-(256,160): θ −100°..100° → x (θ &gt; 0 — левая сторона маски), φ 80°..−85° → y;
-     *   рог (0,160)-(256,224): вдоль рога → x, вокруг → y; зубы (0,224)-(64,256); торец кости (64,224)-(128,256);
-     *   глубина глазниц (128,224)-(160,256).
-     * Глаза — отдельно, hollow_mask_eyes.png (те же координаты лица), рисуются светом.
+     * Маска Ичиго — 3D-оболочка (HollowMaskRenderer), текстура 512×512:
+     *   лицо (0,0)-(512,320): α −78°..78° → x (α > 0 — левая сторона маски), от верхнего края до нижнего → y;
+     *   рог финальной маски (0,320)-(512,448): вдоль рога → x, вокруг → y; зуб (0,448)-(128,512): треугольник,
+     *   корень сверху; торец кости (128,448)-(256,512); скол рога (256,448)-(320,512).
+     * Черты лица заданы во фронтальных координатах головы (x, y, пиксели модели) — те же числа и формулы, что
+     * в HollowMaskRenderer. Глаза — отдельно, hollow_mask_eyes.png (те же координаты лица), рисуются светом.
      */
-    const double MASK_T0 = -100, MASK_T1 = 100, MASK_P0 = 80, MASK_P1 = -85;
-    const double MASK_EYE_T = 22, MASK_EYE_P = 2, MASK_EYE_DT = 12.5, MASK_EYE_DP = 7.5;
+    const int MASK_S = 2;
+    const double MASK_ALPHA = 78, MASK_TOP = -8.75, MASK_CHIN = 2.8, MASK_JAW = -1.1;
+    const double MASK_A0 = 4.55, MASK_B0 = 4.62, MASK_N = 8;
+    const double MASK_EYE_X = 2.05, MASK_EYE_Y = -3.85, MASK_EYE_HALF = 1.4, MASK_EYE_H = 0.4, MASK_EYE_TILT = 0.18;
+    const double MASK_MOUTH_TOP = -2.15, MASK_MOUTH_H = 2.85, MASK_MOUTH_HALF = 3.35;
 
-    static double MaskX(double theta) { return (theta - MASK_T0) / (MASK_T1 - MASK_T0) * 256; }
-    static double MaskY(double phi) { return (MASK_P0 - phi) / (MASK_P0 - MASK_P1) * 160; }
-
-    /** Внутри глазницы (эллипс, наружный уголок опущен): 0 — центр, 1 — край. */
-    static double MaskEye(double theta, double phi)
+    /** Верхний край маски: плавный купол, выше всего посередине лба. */
+    static double MaskTopY(double alpha)
     {
-        double best = 99;
-        foreach (int side in new[] { -1, 1 })
-        {
-            double dt = theta - side * MASK_EYE_T;
-            double dp = phi - MASK_EYE_P + side * dt * 0.32;
-            best = Math.Min(best, Math.Sqrt((dt / MASK_EYE_DT) * (dt / MASK_EYE_DT) + (dp / MASK_EYE_DP) * (dp / MASK_EYE_DP)));
-        }
-        return best;
+        double s = Math.Abs(alpha) / MASK_ALPHA;
+        return MASK_TOP + 2.5 * s * s;
     }
 
-    /** Линия рта (φ в зависимости от θ): уголки чуть приподняты — оскал. */
-    static double MaskMouth(double theta) { return -27 + 0.0035 * theta * theta; }
-
-    static Canvas HollowMaskHD(int crack)
+    static double MaskBottomY(double alpha)
     {
-        var c = new Canvas(256, 256);
-        Color bone = C(240, 236, 226), red = C(176, 14, 22);
-        // Трещины по стадиям: от левой глазницы по лбу, к виску, к челюсти (в градусах θ, φ).
+        return MASK_CHIN + (MASK_JAW - MASK_CHIN) * Smooth(0.12, 0.7, Math.Abs(alpha) / MASK_ALPHA);
+    }
+
+    /** Насколько лицо у́же на высоте y: ниже глаз сужается к длинному подбородку. */
+    static double MaskJaw(double y)
+    {
+        double t = Sat((y + 3.4) / 6.2);
+        return 2.85 * (0.75 * t + 0.25 * t * t);
+    }
+
+    /** Фронтальный x точки оболочки (α, y). */
+    static double MaskFrontX(double alpha, double y)
+    {
+        double lean = Smooth(-7.7, MASK_TOP, y), chin = Smooth(-1.6, MASK_CHIN, y);
+        double a = MASK_A0 * (1 - 0.16 * lean) - MaskJaw(y), b = MASK_B0 * (1 - 0.2 * lean) * (1 - 0.05 * chin);
+        double rad = alpha * Math.PI / 180, dx = Math.Sin(rad), dz = -Math.Cos(rad);
+        return dx * Math.Pow(Math.Pow(Math.Abs(dx / a), MASK_N) + Math.Pow(Math.Abs(dz / b), MASK_N), -1 / MASK_N);
+    }
+
+    /** Какой точке лица соответствует пиксель текстуры. */
+    static void MaskTexel(int x, int y, out double alpha, out double hy, out double fx)
+    {
+        alpha = MASK_ALPHA * ((x + 0.5) / (128 * MASK_S) - 1);
+        double top = MaskTopY(alpha);
+        hy = top + (y + 0.5) / (160 * MASK_S) * (MaskBottomY(alpha) - top);
+        fx = MaskFrontX(alpha, hy);
+    }
+
+    /** Прорезь глаза-«линза» с острыми уголками: меньше 1 — внутри; {@code grow} расширяет её (ободок). */
+    static double MaskEyeLens(double x, double y, double grow)
+    {
+        double ax = Math.Abs(x), dx = (ax - MASK_EYE_X) / (MASK_EYE_HALF + 0.2 * grow);
+        if (Math.Abs(dx) >= 1) return 9;
+        double h = (MASK_EYE_H + 0.17 * grow) * (1 - dx * dx);
+        return Math.Abs(y - (MASK_EYE_Y - MASK_EYE_TILT * (ax - MASK_EYE_X))) / Math.Max(h, 1e-3);
+    }
+
+    static double MaskMouthTop(double x) { return MASK_MOUTH_TOP + 0.04 * x * x; }
+
+    /** Нижняя губа: глубокая дуга, у уголков сходится с верхней. */
+    static double MaskMouthBottom(double x)
+    {
+        double s = Math.Abs(x) / MASK_MOUTH_HALF;
+        return MaskMouthTop(x) + MASK_MOUTH_H * Math.Sqrt(Math.Max(0, 1 - s * s * s));
+    }
+
+    /** Середина полосы по |x| на высоте y: со лба через наружную половину глаза, ниже — внутрь, к подбородку. */
+    static double MaskStripeX(double y)
+    {
+        return y < MASK_EYE_Y ? 2.56 + 0.0245 * (MASK_EYE_Y - y) : 2.56 - 0.19 * (y - MASK_EYE_Y);
+    }
+
+    /** Полуширина полосы: шире на лбу, тоньше к подбородку, у самого края сходит на нет. */
+    static double MaskStripeHalf(double y)
+    {
+        double half = y < MASK_EYE_Y ? 0.62 + 0.02 * (MASK_EYE_Y - y) : 0.62 - 0.035 * (y - MASK_EYE_Y);
+        return half * Smooth(2.75, 2.0, y);
+    }
+
+    /** Трещины стадии (ломаные x, y): от левого глаза по лбу, к виску, к челюсти, затем на другую сторону. */
+    static System.Collections.Generic.List<double[]> MaskCracks(int stage)
+    {
         var cracks = new System.Collections.Generic.List<double[]>();
-        if (crack >= 1)
+        if (stage >= 1)
         {
-            cracks.Add(new[] { 31.0, 9.0, 34.0, 22.0, 29.0, 34.0, 33.0, 48.0, 27.0, 62.0 });
-            cracks.Add(new[] { 34.0, 6.0, 46.0, 10.0, 55.0, 6.0, 66.0, 11.0 });
+            cracks.Add(new[] { 2.4, -4.5, 2.7, -5.6, 2.3, -6.7, 2.6, -7.8, 2.2, -8.7 });
+            cracks.Add(new[] { 2.9, -5.2, 3.7, -5.5, 4.3, -5.0 });
         }
-        if (crack >= 2)
+        if (stage >= 2)
         {
-            cracks.Add(new[] { 29.0, 34.0, 18.0, 41.0, 8.0, 38.0 });
-            cracks.Add(new[] { 24.0, -6.0, 28.0, -18.0, 23.0, -30.0, 27.0, -36.0 });
-            cracks.Add(new[] { -12.0, 30.0, -20.0, 18.0, -16.0, 8.0 });
+            cracks.Add(new[] { 2.3, -6.7, 1.3, -7.2, 0.5, -6.9 });
+            cracks.Add(new[] { 3.4, -3.1, 3.7, -2.4, 3.3, -1.3 });
+            cracks.Add(new[] { -1.0, -6.2, -1.6, -7.2, -1.3, -8.3 });
         }
-        if (crack >= 3)
+        if (stage >= 3)
         {
-            cracks.Add(new[] { 46.0, 10.0, 52.0, -8.0, 47.0, -24.0, 55.0, -42.0, 50.0, -60.0 });
-            cracks.Add(new[] { -24.0, -8.0, -30.0, -22.0, -26.0, -36.0 });
-            cracks.Add(new[] { 8.0, 38.0, -4.0, 52.0, -14.0, 50.0, -24.0, 64.0 });
-            cracks.Add(new[] { 0.0, -20.0, 6.0, -28.0, 2.0, -34.0 });
+            cracks.Add(new[] { 3.9, -4.5, 4.2, -3.2, 3.8, -2.4, 3.6, -1.4 });
+            cracks.Add(new[] { -3.2, -2.9, -3.5, -2.2, -3.2, -1.3 });
+            cracks.Add(new[] { 0.5, -6.9, -0.3, -5.9, -1.0, -6.2 });
+            cracks.Add(new[] { 0.2, 1.2, 0.6, 1.9, 0.2, 2.5 });
         }
-        for (int y = 0; y < 160; y++)
-            for (int x = 0; x < 256; x++)
+        return cracks;
+    }
+
+    /** Отколотые куски стадии: x, y, полуоси и зерно шума. */
+    static System.Collections.Generic.List<double[]> MaskChunks(int stage)
+    {
+        var chunks = new System.Collections.Generic.List<double[]>();
+        if (stage >= 2) chunks.Add(new[] { 2.9, -7.3, 0.85, 0.65, 98.0 });
+        if (stage >= 3)
+        {
+            chunks.Add(new[] { 3.3, -1.0, 0.7, 0.8, 99.0 });
+            chunks.Add(new[] { -3.3, -6.3, 0.65, 0.65, 100.0 });
+            chunks.Add(new[] { -1.0, 2.2, 0.5, 0.45, 101.0 });
+        }
+        return chunks;
+    }
+
+    /**
+     * Лицо маски. Обычная (уровень IV) — чистая белая кость и две тёмно-алые полосы; финальная (уровень V) —
+     * полосы чёрные, шире и с рваными краями, глаза в чёрной обводке с потёком вниз.
+     */
+    static Canvas HollowMaskHD(int crack, bool final)
+    {
+        int S = MASK_S;
+        var c = new Canvas(256 * S, 256 * S);
+        Color bone = C(252, 251, 247), paint = final ? C(18, 14, 16) : C(120, 16, 24), paintEdge = final ? C(4, 3, 4) : C(76, 8, 14);
+        var cracks = MaskCracks(crack);
+        var chunks = MaskChunks(crack);
+        for (int y = 0; y < 160 * S; y++)
+            for (int x = 0; x < 256 * S; x++)
             {
-                double theta = MASK_T0 + (x + 0.5) / 256 * (MASK_T1 - MASK_T0);
-                double phi = MASK_P0 - (y + 0.5) / 160 * (MASK_P0 - MASK_P1);
-                // Кость: тёплые пятна, поры, тень к краям оболочки.
-                Color col = Mul(bone, 0.92 + Fbm(x / 18.0, y / 18.0, 91, 3) * 0.12);
-                col = Mix(col, C(222, 210, 186), Fbm(x / 40.0, y / 40.0, 92, 2) * 0.35);
-                if (Hash(x, y, 93) > 0.93) col = Mul(col, 0.9);
-                double edge = Math.Max(Smooth(70, 100, Math.Abs(theta)), Math.Max(Smooth(62, 80, phi), Smooth(-62, -85, phi)));
-                col = Mul(col, 1 - edge * 0.22);
-                // Тонкие старые трещинки кости.
-                if (Math.Abs(Fbm(x / 9.0, y / 9.0, 94, 3) - 0.5) < 0.008) col = Mul(col, 0.86);
-                // Алые полосы на левой стороне: от темени через глаз к челюсти, рваные края.
-                double jag = (Fbm(phi / 6.0, 1, 95, 2) - 0.5) * 5;
-                double s1 = Math.Abs(theta - (16 + 3 * Math.Sin(phi * 0.05) + jag)), s2 = Math.Abs(theta - (36 + 2 * Math.Sin(phi * 0.07 + 1) + jag * 0.8));
-                bool stripe = (s1 < 4.2 && phi < 79 && phi > -72) || (s2 < 3.2 && phi < 70 && phi > -58);
-                if (stripe)
+                double alpha, hy, fx;
+                MaskTexel(x, y, out alpha, out hy, out fx);
+                double ax = Math.Abs(fx), side = fx > 0 ? 3 : 7;
+                double nx = (double)x / S, ny = (double)y / S;
+                // Кость: чистая и гладкая, чуть заметные пятна; к краям и под подбородком — сиреневатая тень.
+                Color col = Mul(bone, 0.98 + Fbm(nx / 14.0, ny / 14.0, 91, 3) * 0.03);
+                if (Hash(x, y, 93) > 0.985) col = Mul(col, 0.98);
+                col = Mix(col, C(200, 194, 218), Smooth(46, 78, Math.Abs(alpha)) * 0.5);
+                col = Mix(col, C(200, 194, 218), Smooth(1.2, 2.8, hy) * 0.3);
+                // Полосы со лба к подбородку.
+                double jag = (Fbm(hy * 1.7, side, 95, 3) - 0.5) * (final ? 0.55 : 0.14);
+                double half = MaskStripeHalf(hy) * (final ? 1.4 : 1.0);
+                double sd = Math.Abs(ax - MaskStripeX(hy) - jag);
+                if (half > 0 && sd < half)
                 {
-                    double brush = 0.85 + Fbm(x / 3.0, y / 9.0, 96, 2) * 0.3;
-                    col = Mul(red, brush);
+                    col = Mix(Mul(paint, 0.94 + Fbm(nx / 4.0, ny / 12.0, 96, 2) * 0.12), paintEdge, Smooth(0.65, 1.0, sd / half));
                 }
-                // Грязь в складках: вокруг глазниц, у рта, вдоль носа.
-                double eye = MaskEye(theta, phi);
-                if (eye < 1.0)
+                // Шов по лбу, ниже глаз расходится двумя линиями носа к верхней губе.
+                bool seam = ax < 0.03 && hy < -4.6;
+                seam |= PolyDistance(ax, hy, new[] { 0.0, -4.6, 0.48, -2.35 }) < 0.028;
+                if (seam) col = Mix(col, C(120, 116, 128), 0.75);
+                if (final)
                 {
-                    col = C(8, 5, 6);
+                    // Чёрная обводка глаз и потёк вниз от наружной половины.
+                    double wild = (Fbm(nx / 5.0, ny / 5.0, 107, 2) - 0.5) * 0.5;
+                    if (MaskEyeLens(fx, hy, 2.2) < 1 + wild) col = paint;
+                    double drip = (hy - MASK_EYE_Y) / 2.2;
+                    if (drip > 0 && drip < 1 && Math.Abs(ax - 2.9) < 0.42 * (1 - drip) + wild * 0.2) col = paint;
                 }
-                else if (eye < 1.4)
+                // Прорези глаз: светлый ободок с тонким контуром и тёмная глубина.
+                double lens = MaskEyeLens(fx, hy, 0), rim = MaskEyeLens(fx, hy, 1);
+                if (lens < 1)
                 {
-                    col = Mix(col, C(60, 44, 40), (1.4 - eye) / 0.4 * 0.75);
+                    col = final ? C(6, 4, 6) : Mix(C(16, 14, 18), C(36, 32, 40), lens);
                 }
-                double mouth = phi - MaskMouth(theta);
-                if (Math.Abs(theta) < 38)
+                else if (rim < 1)
                 {
-                    if (Math.Abs(mouth) < 3.0) col = C(12, 6, 8);
-                    else if (Math.Abs(mouth) < 5.0) col = Mix(col, C(70, 50, 46), (5 - Math.Abs(mouth)) / 2 * 0.6);
+                    col = final ? C(26, 20, 22) : (rim > 0.86 || lens < 1.1 ? C(62, 56, 64) : C(214, 210, 218));
                 }
-                if (Math.Abs(theta) < 6 && phi < -4 && phi > -18) col = Mul(col, 1 - (1 - Math.Abs(theta) / 6) * 0.12);
+                // Рот: тёмный провал и контур губ; зубы — настоящие, поверх.
+                double top = MaskMouthTop(fx), bottom = MaskMouthBottom(fx);
+                if (ax < MASK_MOUTH_HALF && hy > top && hy < bottom) col = C(20, 9, 11);
+                else if (ax < MASK_MOUTH_HALF + 0.05 && hy > top - 0.05 && hy < bottom + 0.05) col = C(58, 50, 56);
                 // Трещины: тёмная сердцевина, светлые сколы по краю.
                 foreach (var p in cracks)
                 {
-                    double d = PolyDistance(theta, phi, p) + (Fbm(x / 3.0, y / 3.0, 97, 2) - 0.5) * 0.8;
-                    if (d < 0.9) col = C(40, 28, 28);
-                    else if (d < 1.6) col = Mix(col, C(255, 252, 244), 0.4);
+                    double d = PolyDistance(fx, hy, p) + (Fbm(nx / 3.0, ny / 3.0, 97, 2) - 0.5) * 0.05;
+                    if (d < 0.05) col = C(44, 32, 36);
+                    else if (d < 0.1) col = Mix(col, C(255, 255, 252), 0.45);
                 }
                 // Отколотые куски: прозрачно, под ними видно лицо.
                 bool gone = false;
-                if (crack >= 2) gone |= Chunk(theta, phi, 38, 64, 9, 7, 98);
-                if (crack >= 3)
-                {
-                    gone |= Chunk(theta, phi, 40, -58, 11, 9, 99);
-                    gone |= Chunk(theta, phi, -32, -16, 6, 6, 100);
-                    gone |= Chunk(theta, phi, -18, 66, 8, 6, 101);
-                }
+                foreach (var k in chunks) gone |= Chunk(fx, hy, k[0], k[1], k[2], k[3], (int)k[4]);
                 c.Set(x, y, gone ? Color.FromArgb(0, 0, 0, 0) : col);
             }
-        // Рог: костяные кольца, алая полоса сверху, темнеет к кончику.
-        for (int y = 0; y < 64; y++)
-            for (int x = 0; x < 256; x++)
+        // Рог: белая кость с кольцами роста, к острию сереет.
+        for (int y = 0; y < 64 * S; y++)
+            for (int x = 0; x < 256 * S; x++)
             {
-                double s = (x + 0.5) / 256, around = (y + 0.5) / 64;
-                double ring = 0.9 + 0.1 * Math.Sin(x * 0.34 + Fbm(x / 20.0, y / 8.0, 102, 2) * 2);
-                Color col = Mul(Mix(C(236, 230, 216), C(150, 136, 122), Smooth(0.45, 1.0, s)), ring * (0.94 + Fbm(x / 6.0, y / 6.0, 103, 2) * 0.12));
-                if (Math.Abs(around - 0.5) < 0.08 + 0.04 * (1 - s) && s < 0.85) col = Mul(red, 0.9 + Hash(x, y, 104) * 0.15);
-                if (s > 0.9) col = Mix(col, C(60, 44, 40), (s - 0.9) / 0.1);
-                c.Set(x, 160 + y, col);
+                double s = (x + 0.5) / (256 * S), nx = (double)x / S, ny = (double)y / S;
+                double ring = 0.95 + 0.05 * Math.Sin(nx * 0.34 + Fbm(nx / 20.0, ny / 8.0, 102, 2) * 2);
+                Color col = Mul(Mix(C(252, 250, 244), C(180, 176, 184), Smooth(0.55, 1.0, s)), ring * (0.97 + Fbm(nx / 6.0, ny / 6.0, 103, 2) * 0.05));
+                c.Set(x, 160 * S + y, col);
             }
-        // Зубы: корень темнее, кончик почти белый.
-        for (int y = 0; y < 32; y++)
-            for (int x = 0; x < 64; x++)
+        // Зуб: белый треугольник с тонким контуром; снаружи контура — цвет боковых граней.
+        for (int y = 0; y < 32 * S; y++)
+            for (int x = 0; x < 64 * S; x++)
             {
-                Color col = Mix(C(196, 184, 160), C(252, 250, 242), y / 31.0);
-                if (x % 16 == 0 || x % 16 == 15) col = Mul(col, 0.7);
-                c.Set(x, 224 + y, Mul(col, 0.95 + Hash(x, y, 105) * 0.1));
+                double u = (x + 0.5) / S, v = (y + 0.5) / S;
+                double d = 32 * (1 - v / 32) - Math.Abs(u - 32);
+                Color col = d < 1.6 ? C(52, 44, 50) : Mix(C(232, 230, 226), C(255, 255, 252), v / 16.0);
+                c.Set(x, 224 * S + y, col);
             }
-        Paint(c, 64, 224, 128, 256, C(206, 198, 182), 0.12, 106);
-        Paint(c, 128, 224, 160, 256, C(6, 4, 5), 0.0, 0);
+        Paint(c, 64 * S, 224 * S, 128 * S, 256 * S, C(232, 230, 226), 0.04, 106);
+        Paint(c, 128 * S, 224 * S, 160 * S, 256 * S, C(40, 34, 34), 0.0, 0);
         return c;
     }
 
-    /** Отколотый кусок: рваный эллипс вокруг (θ, φ). */
-    static bool Chunk(double theta, double phi, double t0, double p0, double rt, double rp, int seed)
+    /** Отколотый кусок: рваный эллипс вокруг точки. */
+    static bool Chunk(double x, double y, double x0, double y0, double rx, double ry, int seed)
     {
-        double dt = (theta - t0) / rt, dp = (phi - p0) / rp;
-        double ang = Math.Atan2(dp, dt);
+        double dx = (x - x0) / rx, dy = (y - y0) / ry;
+        double ang = Math.Atan2(dy, dx);
         double r = 0.75 + 0.35 * Fbm(ang * 2 + 10, 0, seed, 2) + 0.15 * Math.Sin(ang * 7);
-        return dt * dt + dp * dp < r * r;
+        return dx * dx + dy * dy < r * r;
     }
 
-    /** Глаза маски: жёлтые светящиеся радужки с узким зрачком в глубине глазниц (координаты лица). */
+    /** Глаза маски: маленькая жёлтая светящаяся радужка с тёмным зрачком; цвет уже умножен на яркость (свет складывается). */
     static Canvas HollowMaskEyesHD()
     {
-        var c = new Canvas(256, 256);
-        for (int y = 0; y < 160; y++)
-            for (int x = 0; x < 256; x++)
+        var c = new Canvas(256 * MASK_S, 256 * MASK_S);
+        for (int y = 0; y < 160 * MASK_S; y++)
+            for (int x = 0; x < 256 * MASK_S; x++)
             {
-                double theta = MASK_T0 + (x + 0.5) / 256 * (MASK_T1 - MASK_T0);
-                double phi = MASK_P0 - (y + 0.5) / 160 * (MASK_P0 - MASK_P1);
-                double e = MaskEye(theta, phi);
-                if (e > 0.78) continue;
-                double side = theta > 0 ? 1 : -1;
-                double dt = (theta - side * (MASK_EYE_T - 1.5)) / 5.2, dp = (phi - MASK_EYE_P + 0.5) / 5.2;
-                double r = Math.Sqrt(dt * dt + dp * dp);
+                double alpha, hy, fx;
+                MaskTexel(x, y, out alpha, out hy, out fx);
+                double lens = MaskEyeLens(fx, hy, 0);
+                if (lens >= 1) continue;
+                double dx = Math.Abs(fx) - MASK_EYE_X, dy = hy - MASK_EYE_Y;
+                double r = Math.Sqrt(dx * dx + dy * dy) / 0.29;
                 Color col;
-                if (r < 1)
-                {
-                    col = Mix(C(255, 250, 170), C(255, 150, 20), r);
-                    if (Math.Abs(dt) < 0.16 && Math.Abs(dp) < 0.8) col = C(30, 6, 0);
-                }
+                if (r < 0.28) col = C(40, 12, 0);
+                else if (r < 1) col = Mix(C(255, 240, 110), C(255, 170, 20), r);
                 else
                 {
-                    double a = Sat(1.4 - r) * 0.55;
-                    if (a <= 0) continue;
-                    col = CA(Cl(255 * a), 255, 120, 10);
+                    double a = 0.07 * (1 - lens);
+                    col = C(Cl(255 * a), Cl(110 * a), Cl(8 * a));
                 }
                 c.Set(x, y, col);
             }

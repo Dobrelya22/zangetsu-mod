@@ -34,7 +34,7 @@ public class GetsugaRenderer extends EntityRenderer<GetsugaEntity> {
     @Override
     public void render(GetsugaEntity entity, float yaw, float tickDelta, MatrixStack matrices, VertexConsumerProvider consumers, int light) {
         float age = entity.age + tickDelta;
-        float size = GetsugaEntity.size(age);
+        float size = GetsugaEntity.size(age) * entity.scale();
         float alpha = GetsugaEntity.alpha(age);
         if (alpha <= 0.0F) {
             return;

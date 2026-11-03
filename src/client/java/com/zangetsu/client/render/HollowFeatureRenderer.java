@@ -12,7 +12,7 @@ import net.minecraft.util.math.MathHelper;
 
 /**
  * Рисует маску Пустого на игроке, который принял эту форму. Во время превращения маска нарастает,
- * к концу трескается: трещина, скол (обломан кончик рога), почти рассыпалась (рога сломаны).
+ * к концу трескается: трещина, скол, почти рассыпалась. На уровне V — финальная маска с одним рогом.
  */
 public class HollowFeatureRenderer extends FeatureRenderer<AbstractClientPlayerEntity, PlayerEntityModel<AbstractClientPlayerEntity>> {
     public HollowFeatureRenderer(FeatureRendererContext<AbstractClientPlayerEntity, PlayerEntityModel<AbstractClientPlayerEntity>> context) {
@@ -39,7 +39,7 @@ public class HollowFeatureRenderer extends FeatureRenderer<AbstractClientPlayerE
         int glow = crack == 3 ? (int) (alpha * (0.55F + 0.45F * Math.abs(MathHelper.sin(animationProgress * 0.9F)))) : alpha;
         matrices.push();
         this.getContextModel().head.rotate(matrices);
-        HollowMaskRenderer.render(matrices, consumers, light, crack, grow, glow);
+        HollowMaskRenderer.render(matrices, consumers, light, crack, grow, glow, ClientState.isFinal(player));
         matrices.pop();
     }
 }

@@ -68,7 +68,8 @@ public final class Sync {
     }
 
     public static void hollow(ServerPlayerEntity player, boolean active) {
-        toSelfAndTrackers(player, new HollowPayload(player.getId(), active, active ? HollowForm.crack(player) : 0));
+        toSelfAndTrackers(player, new HollowPayload(player.getId(), active, active ? HollowForm.crack(player) : 0,
+                active && HollowForm.isFinal(ModAttachments.data(player))));
     }
 
     public static void fx(ServerPlayerEntity player, int effect, int duration) {

@@ -1,6 +1,7 @@
 package com.zangetsu.shots;
 
 import com.zangetsu.ZangetsuMod;
+import com.zangetsu.entity.GetsugaEntity;
 import com.zangetsu.entity.ThrownZangetsuEntity;
 import com.zangetsu.logic.Awakening;
 import com.zangetsu.logic.Bond;
@@ -34,6 +35,8 @@ import net.minecraft.entity.EntityType;
 import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.SpawnReason;
+import net.minecraft.entity.effect.StatusEffectInstance;
+import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.entity.mob.MobEntity;
 import net.minecraft.entity.projectile.ArrowEntity;
 import net.minecraft.item.ItemStack;
@@ -438,6 +441,43 @@ public class ZangetsuShots implements ClientModInitializer {
         onServer(s -> check("через 2 минуты маска ломается сама", !ModAttachments.data(player(s)).hollowActive));
         pause(20);
         shot("mask_hud_tomorrow");
+
+        // ---- Финальная форма (уровень V): маска с одним рогом, эффекты сильнее, Гецуга крупнее.
+        onServer(s -> {
+            ModAttachments.data(player(s)).hollowUsed = 0;
+            HollowForm.toggle(player(s));
+        });
+        pause(40);
+        act(c -> check("на IV уровне маска обычная, без рога", ClientState.isHollow(c.player) && !ClientState.isFinal(c.player)));
+        // Новый уровень прямо в форме Пустого: маска сразу становится финальной.
+        onServer(s -> Bond.change(player(s), Bond.THRESHOLDS[4] - ModAttachments.data(player(s)).bond));
+        // Заголовок нового уровня не должен закрывать маску на снимке.
+        pause(90);
+        view(Perspective.THIRD_PERSON_FRONT);
+        look(180.0F, 5.0F);
+        pause(6);
+        shot("final_mask");
+        onServer(s -> {
+            ServerPlayerEntity player = player(s);
+            check("на V уровне форма Пустого финальная", ModAttachments.data(player).hollowActive && HollowForm.isFinal(ModAttachments.data(player)));
+            StatusEffectInstance strength = player.getStatusEffect(StatusEffects.STRENGTH);
+            check("в финальной форме сила выше", strength != null && strength.getAmplifier() == 2);
+        });
+        act(c -> check("клиент рисует финальную маску", ClientState.isFinal(c.player)));
+        view(Perspective.THIRD_PERSON_BACK);
+        pause(4);
+        onServer(s -> HollowForm.tryGetsuga(player(s)));
+        pause(HollowForm.GETSUGA_WINDUP + 4);
+        shot("final_getsuga");
+        onServer(s -> {
+            ServerPlayerEntity player = player(s);
+            boolean big = !player.getServerWorld().getEntitiesByClass(GetsugaEntity.class, player.getBoundingBox().expand(30.0), g -> g.scale() > 1.0F).isEmpty();
+            check("Гецуга финальной формы крупнее обычной", big);
+        });
+        pause(20);
+        onServer(s -> HollowForm.toggle(player(s)));
+        view(Perspective.FIRST_PERSON);
+        pause(10);
 
         // ---- Сон с мечами.
         onServer(s -> Dream.forceBegin(player(s)));

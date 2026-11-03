@@ -41,11 +41,13 @@ final class Showcase {
         sword("sword", 0.0, Eye.OPEN);
         sword("burning", 5.0, Eye.BURNING);
         held();
-        mask();
+        mask("mask", 12.0, 4);
         swings();
         auto();
         getsuga();
         firstPerson();
+        mask("final", 36.0, 5);
+        finalGetsuga();
     }
 
     // ---------------------------------------------------------------- меч крупно
@@ -78,18 +80,29 @@ final class Showcase {
 
     // ---------------------------------------------------------------- маска
 
-    private void mask() {
-        scene("mask", 12.0, 17.0);
+    /** Маска со всех сторон и её трещины: уровень 4 — обычная, уровень 5 — финальная с рогом. */
+    private void mask(String name, double t0, int level) {
+        scene(name, t0, t0 + 5.0);
         s.settle = 70;
-        s.setup = srv -> Script.base(srv, 4, true);
-        cut(12.0, "mask_front", shot(arc(1.35, 180, 1.62), p(0, 1.62, 0), 40));
-        cut(13.0, "mask_34", shot(arc(1.4, 215, 1.75), p(0, 1.62, 0), 40));
-        cut(14.0, "mask_side", shot(arc(1.5, 270, 1.65), p(0, 1.66, 0), 40));
-        cut(15.0, "mask_top", shot(arc(1.4, 160, 2.3), p(0, 1.6, 0), 42));
-        cut(16.0, "mask_crack", shot(arc(1.35, 190, 1.62), p(0, 1.62, 0), 40));
-        server(16.0, srv -> ModAttachments.data(Stage.player(srv)).hollowUsed = HollowForm.BUDGET - 601);
-        server(16.33, srv -> ModAttachments.data(Stage.player(srv)).hollowUsed = HollowForm.BUDGET - 301);
-        server(16.66, srv -> ModAttachments.data(Stage.player(srv)).hollowUsed = HollowForm.BUDGET - 101);
+        s.setup = srv -> Script.base(srv, level, true);
+        cut(t0, name + "_front", shot(arc(1.75, 180, 1.55), p(0, 1.55, 0), 40));
+        cut(t0 + 1.0, name + "_34", shot(arc(1.85, 215, 1.65), p(0, 1.58, 0), 40));
+        cut(t0 + 2.0, name + "_side", shot(arc(2.0, 270, 1.6), p(0, 1.62, 0), 40));
+        cut(t0 + 3.0, name + "_top", shot(arc(1.4, 160, 2.3), p(0, 1.6, 0), 42));
+        cut(t0 + 4.0, name + "_crack", shot(arc(1.75, 190, 1.55), p(0, 1.55, 0), 40));
+        server(t0 + 4.0, srv -> ModAttachments.data(Stage.player(srv)).hollowUsed = HollowForm.BUDGET - 601);
+        server(t0 + 4.33, srv -> ModAttachments.data(Stage.player(srv)).hollowUsed = HollowForm.BUDGET - 301);
+        server(t0 + 4.66, srv -> ModAttachments.data(Stage.player(srv)).hollowUsed = HollowForm.BUDGET - 101);
+    }
+
+    /** Гецуга финальной формы: та же анимация, волна крупнее. */
+    private void finalGetsuga() {
+        scene("final_getsuga", 41.0, 43.0);
+        s.settle = 70;
+        s.setup = srv -> Script.base(srv, 5, true);
+        speed(41.0, 0.4F);
+        server(41.2, srv -> Stage.getsuga(srv, 180.0F));
+        cut(41.0, "wave", shot(arc(3.4, 25, 1.6), p(0, 1.3, -2.0), 52));
     }
 
     // ---------------------------------------------------------------- анимации со стороны

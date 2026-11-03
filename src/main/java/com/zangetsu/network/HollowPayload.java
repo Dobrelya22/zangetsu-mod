@@ -6,13 +6,17 @@ import net.minecraft.network.codec.PacketCodec;
 import net.minecraft.network.codec.PacketCodecs;
 import net.minecraft.network.packet.CustomPayload;
 
-/** Сервер → клиент: игрок {@code entityId} принял или сбросил форму Пустого; {@code crack} — насколько треснула маска (0–3). */
-public record HollowPayload(int entityId, boolean active, int crack) implements CustomPayload {
+/**
+ * Сервер → клиент: игрок {@code entityId} принял или сбросил форму Пустого; {@code crack} — насколько треснула
+ * маска (0–3), {@code finalForm} — финальная маска с рогом (уровень V).
+ */
+public record HollowPayload(int entityId, boolean active, int crack, boolean finalForm) implements CustomPayload {
     public static final CustomPayload.Id<HollowPayload> ID = new CustomPayload.Id<>(ZangetsuMod.id("hollow"));
     public static final PacketCodec<ByteBuf, HollowPayload> CODEC = PacketCodec.tuple(
             PacketCodecs.VAR_INT, HollowPayload::entityId,
             PacketCodecs.BOOL, HollowPayload::active,
             PacketCodecs.VAR_INT, HollowPayload::crack,
+            PacketCodecs.BOOL, HollowPayload::finalForm,
             HollowPayload::new);
 
     @Override

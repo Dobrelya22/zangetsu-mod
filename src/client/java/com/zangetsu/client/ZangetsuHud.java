@@ -20,10 +20,12 @@ import net.minecraft.util.math.MathHelper;
 
 /** Надписи на экране: уровень и дружба меча, время формы Пустого, подсказка казни и вспышки сцен. */
 public final class ZangetsuHud {
-    private static final String[] ROMAN = {"I", "II", "III", "IV"};
+    private static final String[] ROMAN = {"I", "II", "III", "IV", "V"};
     private static final ItemStack ICON = new ItemStack(ModItems.ZANGETSU);
     private static final Identifier MASK_FULL = ZangetsuMod.id("textures/gui/mask_full.png");
     private static final Identifier MASK_EMPTY = ZangetsuMod.id("textures/gui/mask_empty.png");
+    private static final Identifier FINAL_FULL = ZangetsuMod.id("textures/gui/mask_final_full.png");
+    private static final Identifier FINAL_EMPTY = ZangetsuMod.id("textures/gui/mask_final_empty.png");
     private static final Identifier MASK_CRACKS = ZangetsuMod.id("textures/gui/mask_cracks.png");
     private static final int MASK_SIZE = 30;
 
@@ -74,8 +76,8 @@ public final class ZangetsuHud {
             context.drawTextWithShadow(font, Text.translatable("zangetsu.hud.lost"), x, line, 0xAAAAAA);
             line += 11;
         }
-        if (level >= Bond.MAX_LEVEL) {
-            renderMask(context, font, state, x, line, tickDelta);
+        if (level >= Bond.HOLLOW_LEVEL) {
+            renderMask(context, font, state, level >= Bond.FINAL_LEVEL, x, line, tickDelta);
         }
 
         // Подсказка казни под прицелом.
@@ -96,7 +98,8 @@ public final class ZangetsuHud {
      * тёмный силуэт. Маска трескается вместе с настоящей: на 30, 15 и 5 секундах. В форме Пустого вокруг
      * неё пульсирует алое свечение, а когда сила на сегодня кончилась — маска разбита и темна.
      */
-    private static void renderMask(DrawContext context, TextRenderer font, PlayerStatePayload state, int x, int y, float tickDelta) {
+    private static void renderMask(DrawContext context, TextRenderer font, PlayerStatePayload state, boolean finalForm, int x, int y, float tickDelta) {
+        Identifier full = finalForm ? FINAL_FULL : MASK_FULL, empty = finalForm ? FINAL_EMPTY : MASK_EMPTY;
         int size = MASK_SIZE;
         float fraction = MathHelper.clamp(state.hollowLeft() / (float) HollowForm.BUDGET, 0.0F, 1.0F);
         int crack = state.hollowLeft() <= 0 ? 3 : HollowForm.crackFor(state.hollowLeft());
@@ -113,18 +116,18 @@ public final class ZangetsuHud {
             context.getMatrices().translate(16.0F, 16.0F, 0.0F);
             context.getMatrices().scale(1.22F, 1.22F, 1.0F);
             context.getMatrices().translate(-16.0F, -16.0F, 0.0F);
-            context.drawTexture(MASK_FULL, 0, 0, 0.0F, 0.0F, 32, 32, 32, 32);
+            context.drawTexture(full, 0, 0, 0.0F, 0.0F, 32, 32, 32, 32);
             context.getMatrices().pop();
             context.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
         }
-        context.drawTexture(MASK_EMPTY, 0, 0, 0.0F, 0.0F, 32, 32, 32, 32);
+        context.drawTexture(empty, 0, 0, 0.0F, 0.0F, 32, 32, 32, 32);
         // Светлая часть — оставшееся время: тает сверху вниз.
         int lit = Math.round(32.0F * fraction);
         if (lit > 0) {
             if (!state.hollowActive()) {
                 context.setShaderColor(0.62F, 0.6F, 0.6F, 1.0F);
             }
-            context.drawTexture(MASK_FULL, 0, 32 - lit, 32, lit, 0.0F, 32 - lit, 32, lit, 32, 32);
+            context.drawTexture(full, 0, 32 - lit, 32, lit, 0.0F, 32 - lit, 32, lit, 32, 32);
             context.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
         }
         if (crack > 0) {

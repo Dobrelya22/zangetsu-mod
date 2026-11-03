@@ -3,6 +3,7 @@ package com.zangetsu.client;
 import com.zangetsu.network.PlayerStatePayload;
 import it.unimi.dsi.fastutil.ints.Int2IntOpenHashMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
+import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
 import net.minecraft.entity.Entity;
 
 /** Что клиент знает о мече: своя связь, чужие отрубленные руки, анимации и маски Пустого. */
@@ -14,6 +15,8 @@ public final class ClientState {
     public static final Int2ObjectOpenHashMap<Animation> ANIMATIONS = new Int2ObjectOpenHashMap<>();
     /** id игроков в форме Пустого → насколько треснула их маска (0–3). */
     public static final Int2IntOpenHashMap HOLLOW = new Int2IntOpenHashMap();
+    /** id игроков в финальной форме (маска с рогом). */
+    public static final IntOpenHashSet FINAL = new IntOpenHashSet();
     /** id игрока → какой из трёх ударов мечом он сейчас наносит (идут по кругу). */
     public static final Int2IntOpenHashMap SWING_VARIANT = new Int2IntOpenHashMap();
 
@@ -66,6 +69,10 @@ public final class ClientState {
         return HOLLOW.getOrDefault(entity.getId(), 0);
     }
 
+    public static boolean isFinal(Entity entity) {
+        return FINAL.contains(entity.getId());
+    }
+
     public static void flash(int type, int duration) {
         flashType = type;
         flashStart = ticks;
@@ -76,6 +83,7 @@ public final class ClientState {
         LIMBS.remove(entityId);
         ANIMATIONS.remove(entityId);
         HOLLOW.remove(entityId);
+        FINAL.remove(entityId);
         SWING_VARIANT.remove(entityId);
     }
 
@@ -84,6 +92,7 @@ public final class ClientState {
         LIMBS.clear();
         ANIMATIONS.clear();
         HOLLOW.clear();
+        FINAL.clear();
         SWING_VARIANT.clear();
         flashStart = -1;
     }

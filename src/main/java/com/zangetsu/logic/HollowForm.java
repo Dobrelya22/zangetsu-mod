@@ -22,8 +22,9 @@ import net.minecraft.util.Formatting;
 import net.minecraft.util.math.Vec3d;
 
 /**
- * Форма Пустого (уровень IV): рогатая маска, горящий глаз меча, серповидная луна в небе
- * и Гецуга Теншо по правой кнопке. Две минуты в игровые сутки; время можно тратить частями.
+ * Форма Пустого (уровень IV): маска, горящий глаз меча, серповидная луна в небе и Гецуга Теншо по правой
+ * кнопке. Две минуты в игровые сутки; время можно тратить частями. На уровне V это финальная форма: маска
+ * с одним рогом, эффекты сильнее, Гецуга крупнее и больнее.
  */
 public final class HollowForm {
     public static final int BUDGET = 2 * 60 * 20;
@@ -39,8 +40,14 @@ public final class HollowForm {
             StatusEffects.STRENGTH, StatusEffects.SPEED, StatusEffects.RESISTANCE, StatusEffects.REGENERATION, StatusEffects.JUMP_BOOST
     };
     private static final int[] BUFF_LEVELS = {1, 1, 1, 0, 0};
+    private static final int[] FINAL_BUFF_LEVELS = {2, 2, 1, 1, 1};
 
     private HollowForm() {
+    }
+
+    /** Финальная форма: Пустой на уровне V. */
+    public static boolean isFinal(ZangetsuData data) {
+        return data.level() >= Bond.FINAL_LEVEL;
     }
 
     private static long day(ServerPlayerEntity player) {
@@ -69,7 +76,7 @@ public final class HollowForm {
             end(player, false);
             return;
         }
-        if (data.level() < Bond.MAX_LEVEL) {
+        if (data.level() < Bond.HOLLOW_LEVEL) {
             player.sendMessage(Text.translatable("zangetsu.hollow.locked").formatted(Formatting.GRAY), true);
             return;
         }
@@ -100,7 +107,8 @@ public final class HollowForm {
         Fx.particles(world, Fx.REIATSU_RED, chest, 30, 0.9, 0.05);
         Fx.particles(world, ParticleTypes.SONIC_BOOM, chest, 1, 0.0, 0.0);
         Fx.ring(world, ParticleTypes.LARGE_SMOKE, player.getPos().add(0, 0.2, 0), 2.5, 30);
-        player.sendMessage(Text.translatable("zangetsu.hollow.on").formatted(Formatting.DARK_RED, Formatting.BOLD), true);
+        player.sendMessage(Text.translatable(isFinal(data) ? "zangetsu.hollow.on.final" : "zangetsu.hollow.on")
+                .formatted(Formatting.DARK_RED, Formatting.BOLD), true);
         applyBuffs(player);
         SwordStacks.refreshAll(player);
         Sync.player(player);
@@ -162,8 +170,9 @@ public final class HollowForm {
     }
 
     private static void applyBuffs(ServerPlayerEntity player) {
+        int[] levels = isFinal(ModAttachments.data(player)) ? FINAL_BUFF_LEVELS : BUFF_LEVELS;
         for (int i = 0; i < BUFFS.length; i++) {
-            player.addStatusEffect(new StatusEffectInstance(BUFFS[i], 60, BUFF_LEVELS[i], false, false, true));
+            player.addStatusEffect(new StatusEffectInstance(BUFFS[i], 60, levels[i], false, false, true));
         }
     }
 

@@ -100,8 +100,14 @@ public class ZangetsuClient implements ClientModInitializer {
         ClientPlayNetworking.registerGlobalReceiver(HollowPayload.ID, (payload, context) -> {
             if (payload.active()) {
                 ClientState.HOLLOW.put(payload.entityId(), payload.crack());
+                if (payload.finalForm()) {
+                    ClientState.FINAL.add(payload.entityId());
+                } else {
+                    ClientState.FINAL.remove(payload.entityId());
+                }
             } else {
                 ClientState.HOLLOW.remove(payload.entityId());
+                ClientState.FINAL.remove(payload.entityId());
             }
         });
         ClientPlayNetworking.registerGlobalReceiver(AnimationPayload.ID, (payload, context) -> {
