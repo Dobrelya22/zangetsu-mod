@@ -2,10 +2,17 @@ package com.zangetsu.client.render;
 
 import com.zangetsu.client.ClientState;
 import com.zangetsu.network.AnimationPayload;
+import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.network.AbstractClientPlayerEntity;
+import net.minecraft.client.render.VertexConsumerProvider;
+import net.minecraft.client.render.entity.PlayerEntityRenderer;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.RotationAxis;
+import org.joml.Matrix3f;
+import org.joml.Quaternionf;
+import org.joml.Vector3f;
 
 /**
  * Меч глазами игрока: вместо ванильного «тычка» — настоящие взмахи через весь экран. Три удара по очереди
@@ -19,6 +26,11 @@ public final class FirstPersonMotion {
     /** Ключевой кадр: доля анимации, сдвиг (блоки) и повороты (градусы) вокруг X, Y, Z. */
     private record Key(float t, float tx, float ty, float tz, float rx, float ry, float rz) {
     }
+
+    /** Рука от первого лица тоньше обычной, иначе широкий кулак целиком скрывал бы рукоять. */
+    private static final float ARM_SCALE = 0.7F;
+    /** Пока рисуется рука от первого лица, позы от третьего лица к модели не применяются. */
+    public static boolean drawingArm;
 
     private static final Key REST = new Key(0, 0, 0, 0, 0, 0, 0);
     /*
@@ -65,6 +77,38 @@ public final class FirstPersonMotion {
         matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(side * key.ry()));
         matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(key.rx()));
         matrices.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(side * key.rz()));
+    }
+
+    /**
+     * Рука на рукояти: кулак — в точке хвата {@code fist}, предплечье тянется к нему от плеча за нижним углом экрана,
+     * поэтому во всех взмахах меч остаётся в кулаке, а рука следует за ним.
+     */
+    public static void renderArm(MatrixStack matrices, VertexConsumerProvider consumers, int light, AbstractClientPlayerEntity player, boolean right, Vector3f fist) {
+        if (player.isInvisible()) {
+            return;
+        }
+        float side = right ? 1.0F : -1.0F;
+        Vector3f toHand = new Vector3f(fist).sub(side * 0.62F, -0.95F, 0.25F).normalize();
+        // Ось руки в модели — +y к кисти, перед руки (−z) смотрит вверх.
+        Vector3f back = new Vector3f(0.0F, -1.0F, 0.0F);
+        back.sub(new Vector3f(toHand).mul(back.dot(toHand))).normalize();
+        Vector3f across = new Vector3f(toHand).cross(back).normalize();
+        Quaternionf rotation = new Quaternionf().setFromNormalized(new Matrix3f(across, toHand, back));
+        matrices.push();
+        matrices.translate(fist.x, fist.y, fist.z);
+        matrices.multiply(rotation);
+        matrices.scale(ARM_SCALE, ARM_SCALE, ARM_SCALE);
+        // Кулак в координатах модели игрока: плечо (∓5, 2) и рука до середины кисти.
+        matrices.translate(side * 6.0F / 16.0F, -10.6F / 16.0F, 0.0F);
+        PlayerEntityRenderer renderer = (PlayerEntityRenderer) MinecraftClient.getInstance().getEntityRenderDispatcher().getRenderer(player);
+        drawingArm = true;
+        if (right) {
+            renderer.renderRightArm(matrices, consumers, light, player);
+        } else {
+            renderer.renderLeftArm(matrices, consumers, light, player);
+        }
+        drawingArm = false;
+        matrices.pop();
     }
 
     private static Key sample(Key[] keys, float t) {

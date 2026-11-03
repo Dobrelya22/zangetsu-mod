@@ -14,11 +14,12 @@ import net.minecraft.util.math.MathHelper;
 import org.joml.Vector3f;
 
 /**
- * Маска Пустого — как у Ичиго: гладкая белая кость облегает лицо до ушей и внизу вытягивается в длинный
- * подбородок. Две тёмно-алые полосы идут со лба через глаза к подбородку, глаза — узкие косые прорези с жёлтой
- * радужкой, поперёк нижней половины — оскал из крупных сомкнутых зубов: верхний ряд свисает, нижний стоит,
- * зубы входят между собой. Финальная маска (уровень V) — те же черты, но полосы чёрные и рваные, глаза в чёрной
- * обводке и один длинный рог. Трещины и сколы рисует текстура; рог на последних стадиях обломан.
+ * Маска Пустого — вылепленная из кости, а не разрисованная: надбровья, глубокие глазницы, переносица и нос, скулы
+ * с впадинами под ними, выступающая челюсть с губами вокруг тёмного провала рта. В провале — настоящие объёмные
+ * зубы: округлые клыки растут из-под губ, сужаются к острию и входят между зубами другого ряда. Тени в складках
+ * запечены в цвет вершин, поэтому лепка читается и при ровном свете. Текстура даёт только кость, полосы и глубину
+ * прорезей глаз; нарисованных контуров нет. Финальная маска (уровень V) — те же черты, но полосы чёрные и рваные,
+ * глаза в чёрной обводке и один длинный рог. Трещины и сколы рисует текстура; рог на последних стадиях обломан.
  *
  * <p>Всё строится в координатах головы (пиксели модели: лицо смотрит в −z, вниз — +y, левая сторона маски — +x).
  * Каждый горизонтальный срез оболочки — скруглённый квадрат вокруг головы; α — угол вокруг головы (0 — середина
@@ -37,13 +38,16 @@ public final class HollowMaskRenderer {
     static final float EYE_X = 2.05F, EYE_Y = -3.85F, EYE_HALF = 1.4F, EYE_H = 0.4F, EYE_TILT = 0.18F;
     /** Рот: верхняя губа посередине, высота и полуширина. */
     static final float MOUTH_TOP = -2.15F, MOUTH_H = 2.85F, MOUTH_HALF = 3.35F;
+    /** Дно провала рта относительно челюсти — до него уходят бока зубов. */
+    private static final float MOUTH_FLOOR = -0.7F;
     /** Кость не темнеет вместе с миром: маска должна оставаться белой и ночью. */
     private static final int MIN_BLOCK_LIGHT = 11;
-    private static final int NU = 64, NV = 48;
+    private static final int NU = 72, NV = 72;
     private static final float THICKNESS = 0.4F;
-    /** Готовая поверхность (пиксели), нормали и фронтальный x без рельефа; форма одна на всех — считаем один раз. */
+    /** Готовая поверхность (пиксели), нормали, тени в складках (RGB) и фронтальный x; форма одна на всех — считаем один раз. */
     private static final Vector3f[][] SURFACE = new Vector3f[NU + 1][NV + 1];
     private static final Vector3f[][] NORMALS = new Vector3f[NU + 1][NV + 1];
+    private static final int[][] SHADE = new int[NU + 1][NV + 1];
     private static final float[][] FRONT_X = new float[NU + 1][NV + 1];
     /** Вершины зубов: зубы на месте, поэтому их тоже строим один раз. */
     private static final List<Vertex> TEETH = new ArrayList<>();
@@ -74,23 +78,22 @@ public final class HollowMaskRenderer {
         matrices.translate(0.0F, -3.0F, -4.0F);
         matrices.scale(scale, scale, scale);
         matrices.translate(0.0F, 3.0F, 4.0F);
-        int color = ((int) (MathHelper.clamp(grow, 0.0F, 1.0F) * 255.0F) << 24) | 0xFFFFFF;
+        int alpha = (int) (MathHelper.clamp(grow, 0.0F, 1.0F) * 255.0F);
         Identifier texture = (finalForm ? FINAL : MASK)[crack];
         int boneLight = LightmapTextureManager.pack(Math.max(LightmapTextureManager.getBlockLightCoordinates(light), MIN_BLOCK_LIGHT),
                 LightmapTextureManager.getSkyLightCoordinates(light));
-        Emitter bone = new Emitter(matrices.peek(), consumers.getBuffer(RenderLayer.getEntityTranslucent(texture)), boneLight, color);
+        Emitter bone = new Emitter(matrices.peek(), consumers.getBuffer(RenderLayer.getEntityTranslucent(texture)), boneLight, alpha << 24);
         face(bone);
         rims(bone);
         for (Vertex v : TEETH) {
-            bone.vertex(v.p(), v.u(), v.v(), v.n());
+            bone.vertex(v.p(), v.u(), v.v(), v.n(), v.rgb());
         }
         if (finalForm) {
             horn(bone, 1, crack >= 3 ? 0.45F : (crack >= 2 ? 0.8F : 1.0F));
         }
         if (glow > 0) {
-            Emitter eyes = new Emitter(matrices.peek(), consumers.getBuffer(RenderLayer.getEyes(EYES)), LightmapTextureManager.MAX_LIGHT_COORDINATE,
-                    (255 << 24) | (glow << 16) | (glow << 8) | glow);
-            eyeCells(eyes);
+            Emitter eyes = new Emitter(matrices.peek(), consumers.getBuffer(RenderLayer.getEyes(EYES)), LightmapTextureManager.MAX_LIGHT_COORDINATE, 255 << 24);
+            eyeCells(eyes, (glow << 16) | (glow << 8) | glow);
         }
         matrices.pop();
     }
@@ -162,7 +165,7 @@ public final class HollowMaskRenderer {
         return (lo + hi) * 0.5F;
     }
 
-    /** Прорезь глаза-«линза» с острыми уголками: меньше 1 — внутри; {@code grow} расширяет её (ободок). */
+    /** Прорезь глаза-«линза» с острыми уголками: меньше 1 — внутри; {@code grow} расширяет её. */
     static float eye(float x, float y, float grow) {
         float ax = Math.abs(x);
         float dx = (ax - EYE_X) / (EYE_HALF + 0.2F * grow);
@@ -184,21 +187,39 @@ public final class HollowMaskRenderer {
         return mouthTop(x) + MOUTH_H * MathHelper.sqrt(Math.max(0.0F, 1.0F - s * s * s));
     }
 
+    /** Челюсть выдаётся вперёд: глубокому рту есть куда уходить, не задевая голову. */
+    private static float muzzle(float x, float y) {
+        return 0.38F * gauss((y + 0.7F) / 2.0F) * gauss(x / 3.6F);
+    }
+
     /**
-     * Рельеф (пиксели вдоль нормали): плавные углубления глаз, надбровья, нос, скулы, провал рта, подбородок.
-     * Ступеньки здесь нельзя: сетка крупнее прорези глаза и превратит их в рваные шипы; чёткие края рисует текстура.
+     * Лепка лица (пиксели вдоль нормали). Всё плавное: сетка крупнее прорези глаза, ступеньки превратились бы в
+     * рваные шипы; чёткие края рисует текстура.
      */
     private static float relief(float x, float y) {
         float ax = Math.abs(x);
-        float d = 0.0F;
-        float ex = (ax - EYE_X) / (EYE_HALF + 0.3F), ey = (y - (EYE_Y - EYE_TILT * (ax - EYE_X))) / (EYE_H + 0.3F);
-        d -= 0.28F * smooth(1.0F, 0.4F, MathHelper.sqrt(ex * ex + ey * ey));
-        d += 0.12F * gauss((y - (EYE_Y - 1.0F - EYE_TILT * (ax - EYE_X))) / 0.45F) * band(ax, 0.3F, 3.8F, 0.5F);
-        d += 0.2F * gauss(x / 0.55F) * band(y, -7.2F, -2.6F, 0.8F);
-        d += 0.18F * gauss(x / 0.8F) * gauss((y + 2.75F) / 0.5F);
-        d += 0.12F * gauss((ax - 2.9F) / 0.8F) * gauss((y + 2.0F) / 0.7F);
-        d -= 0.32F * band(y, mouthTop(x), mouthBottom(x), 0.25F) * band(ax, -1.0F, MOUTH_HALF, 0.3F);
-        d += 0.15F * gauss((y - 2.0F) / 0.8F) * gauss(x / 1.4F);
+        float d = muzzle(x, y);
+        // Глазница — широкая впадина вокруг прорези.
+        float eyeLine = EYE_Y - EYE_TILT * (ax - EYE_X);
+        float ex = (ax - EYE_X) / (EYE_HALF + 0.55F), ey = (y - eyeLine) / (EYE_H + 0.55F);
+        d -= 0.42F * smooth(1.0F, 0.35F, MathHelper.sqrt(ex * ex + ey * ey));
+        // Злые надбровья: дуга над глазницей, к переносице опускается.
+        d += 0.35F * gauss((y - (eyeLine - 0.78F - 0.12F * (ax - 0.6F))) / 0.42F) * band(ax, 0.2F, 4.2F, 0.6F);
+        // Лоб и шов посередине него.
+        d += 0.15F * gauss((y + 6.8F) / 1.2F) * gauss(x / 2.2F);
+        d -= 0.1F * gauss(x / 0.22F) * band(y, -8.7F, -5.2F, 0.6F);
+        // Переносица и нос с ноздрями.
+        d += 0.28F * gauss(x / (0.42F + 0.05F * (y + 5.2F))) * band(y, -5.3F, -2.6F, 0.6F);
+        d += 0.38F * gauss(x / 0.7F) * gauss((y + 2.8F) / 0.42F);
+        d -= 0.12F * gauss((ax - 0.46F) / 0.2F) * gauss((y + 2.52F) / 0.18F);
+        // Скулы и впадины под ними.
+        d += 0.3F * gauss((ax - 3.1F) / 0.75F) * gauss((y + 2.75F) / 0.55F);
+        d -= 0.18F * gauss((ax - 3.7F) / 0.5F) * gauss((y + 1.25F) / 0.6F);
+        // Губы и провал рта: m — насколько точка внутри рта (минус — снаружи).
+        float m = Math.min(Math.min(y - mouthTop(x), mouthBottom(x) - y), MOUTH_HALF - ax);
+        d += 0.22F * gauss(m / 0.32F) + MOUTH_FLOOR * smooth(-0.05F, 0.38F, m);
+        // Подбородок.
+        d += 0.28F * gauss((y - 1.9F) / 0.7F) * gauss(x / 1.2F);
         return d;
     }
 
@@ -212,19 +233,40 @@ public final class HollowMaskRenderer {
     }
 
     private static void build() {
+        float[][] heights = new float[NU + 1][NV + 1];
         for (int i = 0; i <= NU; i++) {
             for (int j = 0; j <= NV; j++) {
                 float a = alpha(i), y = height(i, j);
                 Vector3f p = base(a, y);
                 FRONT_X[i][j] = p.x;
-                SURFACE[i][j] = p.add(baseNormal(a, y).mul(relief(p.x, y)));
+                heights[i][j] = relief(p.x, y);
+                SURFACE[i][j] = p.add(baseNormal(a, y).mul(heights[i][j]));
             }
         }
         for (int i = 0; i <= NU; i++) {
             for (int j = 0; j <= NV; j++) {
                 NORMALS[i][j] = normal(i, j);
+                SHADE[i][j] = cavityShade(heights, i, j);
             }
         }
+    }
+
+    /** Тень в складке: чем точка глубже соседей и глубже самой кости, тем темнее; тень чуть сиреневая, как у кости в аниме. */
+    private static int cavityShade(float[][] heights, int i, int j) {
+        float sum = 0.0F;
+        for (int di = -2; di <= 2; di += 2) {
+            for (int dj = -2; dj <= 2; dj += 2) {
+                sum += heights[MathHelper.clamp(i + di, 0, NU)][MathHelper.clamp(j + dj, 0, NV)];
+            }
+        }
+        float h = heights[i][j];
+        float cavity = MathHelper.clamp((sum / 9.0F - h) * 3.2F, 0.0F, 0.45F) + MathHelper.clamp(-h * 0.55F, 0.0F, 0.35F);
+        return rgb(1.0F - cavity * 0.95F, 1.0F - cavity * 1.05F, 1.0F - cavity * 0.8F);
+    }
+
+    private static int rgb(float r, float g, float b) {
+        return ((int) (MathHelper.clamp(r, 0.0F, 1.0F) * 255.0F) << 16) | ((int) (MathHelper.clamp(g, 0.0F, 1.0F) * 255.0F) << 8)
+                | (int) (MathHelper.clamp(b, 0.0F, 1.0F) * 255.0F);
     }
 
     /** Нормаль сетки наружу (от оси головы). */
@@ -252,25 +294,24 @@ public final class HollowMaskRenderer {
     private static void face(Emitter e) {
         for (int i = 0; i < NU; i++) {
             for (int j = 0; j < NV; j++) {
-                cell(e, i, j);
+                e.vertex(SURFACE[i][j], faceU(i), faceV(j), NORMALS[i][j], SHADE[i][j]);
+                e.vertex(SURFACE[i][j + 1], faceU(i), faceV(j + 1), NORMALS[i][j + 1], SHADE[i][j + 1]);
+                e.vertex(SURFACE[i + 1][j + 1], faceU(i + 1), faceV(j + 1), NORMALS[i + 1][j + 1], SHADE[i + 1][j + 1]);
+                e.vertex(SURFACE[i + 1][j], faceU(i + 1), faceV(j), NORMALS[i + 1][j], SHADE[i + 1][j]);
             }
         }
     }
 
-    private static void cell(Emitter e, int i, int j) {
-        e.vertex(SURFACE[i][j], faceU(i), faceV(j), NORMALS[i][j]);
-        e.vertex(SURFACE[i][j + 1], faceU(i), faceV(j + 1), NORMALS[i][j + 1]);
-        e.vertex(SURFACE[i + 1][j + 1], faceU(i + 1), faceV(j + 1), NORMALS[i + 1][j + 1]);
-        e.vertex(SURFACE[i + 1][j], faceU(i + 1), faceV(j), NORMALS[i + 1][j]);
-    }
-
     /** Свечение глаз — только клетки вокруг прорезей (остальная текстура глаз чёрная и ничего не добавляет). */
-    private static void eyeCells(Emitter e) {
+    private static void eyeCells(Emitter e, int rgb) {
         for (int i = 0; i < NU; i++) {
             for (int j = 0; j < NV; j++) {
                 float x = (FRONT_X[i][j] + FRONT_X[i + 1][j + 1]) * 0.5F, y = (height(i, j) + height(i + 1, j + 1)) * 0.5F;
                 if (eye(x, y, 2.5F) < 1.0F) {
-                    cell(e, i, j);
+                    e.vertex(SURFACE[i][j], faceU(i), faceV(j), NORMALS[i][j], rgb);
+                    e.vertex(SURFACE[i][j + 1], faceU(i), faceV(j + 1), NORMALS[i][j + 1], rgb);
+                    e.vertex(SURFACE[i + 1][j + 1], faceU(i + 1), faceV(j + 1), NORMALS[i + 1][j + 1], rgb);
+                    e.vertex(SURFACE[i + 1][j], faceU(i + 1), faceV(j), NORMALS[i + 1][j], rgb);
                 }
             }
         }
@@ -292,63 +333,80 @@ public final class HollowMaskRenderer {
     private static void rim(Emitter e, Vector3f a, Vector3f b, Vector3f na, Vector3f nb, float u0, float v0, float u1, float v1) {
         Vector3f ia = new Vector3f(a).sub(new Vector3f(na).mul(THICKNESS)), ib = new Vector3f(b).sub(new Vector3f(nb).mul(THICKNESS));
         Vector3f n = new Vector3f(b).sub(a).cross(new Vector3f(na)).normalize();
-        e.vertex(a, u0, v0, n);
-        e.vertex(b, u1, v0, n);
-        e.vertex(ib, u1, v1, n);
-        e.vertex(ia, u0, v1, n);
-    }
-
-    /** Точка оболочки (без рельефа) по фронтальным координатам и нормаль в ней — для зубов. */
-    private static Vector3f[] onShell(float x, float y) {
-        float a = alphaFor(x, y);
-        return new Vector3f[]{base(a, y), baseNormal(a, y)};
+        e.vertex(a, u0, v0, n, 0xFFFFFF);
+        e.vertex(b, u1, v0, n, 0xFFFFFF);
+        e.vertex(ib, u1, v1, n, 0xC8C4D0);
+        e.vertex(ia, u0, v1, n, 0xC8C4D0);
     }
 
     /**
-     * Оскал: восемь широких зубов верхнего ряда свисают с верхней губы, семь нижних стоят на нижней, и острия
-     * входят в щели между зубами другого ряда — между рядами остаётся только тонкая тёмная линия. Нижний ряд у́же
-     * верхнего, поэтому острия чуть сведены к середине. Зубы — клинья: выступают из маски и уходят в провал рта.
+     * Оскал: восемь зубов верхнего ряда растут из-под верхней губы, семь нижних — из-под нижней, острия входят
+     * между зубами другого ряда. Нижний ряд у́же верхнего, поэтому острия чуть сведены к середине. Клыки длиннее.
      */
     private static void teeth() {
-        float gap = 0.2F, inward = 0.92F;
+        float inward = 0.92F;
         for (int k = 0; k < 8; k++) {
-            float x = (k - 3.5F) * 0.84F, half = 0.42F, tipX = x * inward;
-            tooth(x - half, mouthTop(x - half) - 0.03F, x + half, mouthTop(x + half) - 0.03F, tipX, mouthBottom(tipX) - gap);
+            float x = (k - 3.5F) * 0.84F, half = 0.44F, tipX = x * inward;
+            float reach = (mouthBottom(tipX) - mouthTop(x)) * (k == 1 || k == 6 ? 0.88F : 0.78F);
+            tooth(x - half, mouthTop(x - half) - 0.05F, x + half, mouthTop(x + half) - 0.05F, tipX, mouthTop(x) + reach);
         }
         for (int k = 0; k < 7; k++) {
-            float x = (k - 3.0F) * 0.84F * inward, half = 0.42F * inward, tipX = x / inward;
-            tooth(x - half, mouthBottom(x - half) + 0.03F, x + half, mouthBottom(x + half) + 0.03F, tipX, mouthTop(tipX) + gap);
+            float x = (k - 3.0F) * 0.84F * inward, half = 0.42F, tipX = x / inward;
+            float reach = (mouthBottom(x) - mouthTop(tipX)) * (k == 1 || k == 5 ? 0.86F : 0.76F);
+            tooth(x - half, mouthBottom(x - half) + 0.05F, x + half, mouthBottom(x + half) + 0.05F, tipX, mouthBottom(x) - reach);
         }
     }
 
-    /** Зуб-клин: две точки корня на губе и острие (фронтальные координаты). */
+    /**
+     * Настоящий зуб: сечение — полуокружность от дна рта до выпуклой передней стороны, вдоль зуба оно сужается к
+     * острию, а передняя сторона выгибается наружу и у острия снова уходит внутрь. Нормали гладкие, у корня и
+     * по бокам — тень.
+     */
     private static void tooth(float x0, float y0, float x1, float y1, float tipX, float tipY) {
-        Vector3f[] l = onShell(x0, y0), r = onShell(x1, y1), t = onShell(tipX, tipY);
-        Vector3f lf = new Vector3f(l[0]).add(new Vector3f(l[1]).mul(0.1F)), rf = new Vector3f(r[0]).add(new Vector3f(r[1]).mul(0.1F));
-        Vector3f tf = new Vector3f(t[0]).add(new Vector3f(t[1]).mul(0.2F));
-        Vector3f lb = new Vector3f(l[0]).sub(new Vector3f(l[1]).mul(0.3F)), rb = new Vector3f(r[0]).sub(new Vector3f(r[1]).mul(0.3F));
-        Vector3f tb = new Vector3f(t[0]).sub(new Vector3f(t[1]).mul(0.3F));
-        float u0 = 0.0F, u1 = 64.0F / 256.0F, vRoot = 224.0F / 256.0F, vTip = 1.0F;
-        Vector3f front = new Vector3f(rf).sub(lf).cross(new Vector3f(tf).sub(lf));
-        if (front.dot(t[1]) < 0.0F) {
-            front.negate();
+        int ns = 9, na = 6;
+        float rootX = (x0 + x1) * 0.5F, rootY = (y0 + y1) * 0.5F, halfX = (x1 - x0) * 0.5F, halfY = (y1 - y0) * 0.5F;
+        Vector3f[][] points = new Vector3f[ns + 1][na + 1];
+        int[][] shade = new int[ns + 1][na + 1];
+        for (int k = 0; k <= ns; k++) {
+            float s = (float) k / ns;
+            float width = (float) Math.pow(1.0F - s, 0.7F);
+            float x = MathHelper.lerp(s, rootX, tipX), y = MathHelper.lerp(s, rootY, tipY);
+            float front = 0.02F + 0.26F * MathHelper.sin(MathHelper.PI * s) - 0.2F * s * s;
+            for (int j = 0; j <= na; j++) {
+                float angle = MathHelper.PI * j / na, across = -MathHelper.cos(angle), arc = MathHelper.sin(angle);
+                float fx = x + halfX * across * width, fy = y + halfY * across * width;
+                float alpha = alphaFor(fx, fy);
+                Vector3f n = baseNormal(alpha, fy);
+                float lift = muzzle(fx, fy) + MOUTH_FLOOR + (front - MOUTH_FLOOR) * arc;
+                points[k][j] = base(alpha, fy).add(new Vector3f(n).mul(lift));
+                float ao = (0.74F + 0.26F * arc) * (0.8F + 0.2F * smooth(0.0F, 0.32F, s));
+                shade[k][j] = rgb(ao, ao * 0.99F, ao * 1.02F);
+            }
         }
-        front.normalize();
-        TEETH.add(new Vertex(lf, u0, vRoot, front));
-        TEETH.add(new Vertex(rf, u1, vRoot, front));
-        TEETH.add(new Vertex(tf, (u0 + u1) * 0.5F, vTip, front));
-        TEETH.add(new Vertex(tf, (u0 + u1) * 0.5F, vTip, front));
-        // Боковые грани — тёмным краем текстуры, как контур зуба.
-        side(lf, tf, tb, lb, u0 + 0.004F, vRoot, vTip);
-        side(rf, tf, tb, rb, u1 - 0.004F, vRoot, vTip);
-    }
-
-    private static void side(Vector3f rootFront, Vector3f tipFront, Vector3f tipBack, Vector3f rootBack, float u, float vRoot, float vTip) {
-        Vector3f n = new Vector3f(tipFront).sub(rootFront).cross(new Vector3f(rootBack).sub(rootFront)).normalize();
-        TEETH.add(new Vertex(rootFront, u, vRoot, n));
-        TEETH.add(new Vertex(tipFront, u, vTip, n));
-        TEETH.add(new Vertex(tipBack, u, vTip, n));
-        TEETH.add(new Vertex(rootBack, u, vRoot, n));
+        Vector3f[][] normals = new Vector3f[ns + 1][na + 1];
+        for (int k = 0; k <= ns; k++) {
+            // У самого острия сетка сходится в точку — там берём нормаль предыдущего ряда.
+            int row = Math.min(k, ns - 1);
+            for (int j = 0; j <= na; j++) {
+                Vector3f along = new Vector3f(points[row + 1][j]).sub(points[Math.max(0, row - 1)][j]);
+                Vector3f side = new Vector3f(points[row][Math.min(na, j + 1)]).sub(points[row][Math.max(0, j - 1)]);
+                Vector3f n = along.cross(side);
+                if (n.z > 0.0F) {
+                    n.negate();
+                }
+                normals[k][j] = n.lengthSquared() < 1.0E-10F ? new Vector3f(0.0F, 0.0F, -1.0F) : n.normalize();
+            }
+        }
+        float uSpan = 64.0F / 256.0F, vRoot = 224.0F / 256.0F, vSpan = 32.0F / 256.0F;
+        for (int k = 0; k < ns; k++) {
+            for (int j = 0; j < na; j++) {
+                float u0 = uSpan * j / na, u1 = uSpan * (j + 1) / na, v0 = vRoot + vSpan * k / ns, v1 = vRoot + vSpan * (k + 1) / ns;
+                TEETH.add(new Vertex(points[k][j], u0, v0, normals[k][j], shade[k][j]));
+                TEETH.add(new Vertex(points[k + 1][j], u0, v1, normals[k + 1][j], shade[k + 1][j]));
+                TEETH.add(new Vertex(points[k + 1][j + 1], u1, v1, normals[k + 1][j + 1], shade[k + 1][j + 1]));
+                TEETH.add(new Vertex(points[k][j + 1], u1, v0, normals[k][j + 1], shade[k][j + 1]));
+            }
+        }
     }
 
     /**
@@ -397,10 +455,10 @@ public final class HollowMaskRenderer {
                 Vector3f n = new Vector3f(p00).add(p01).add(p10).add(p11).mul(0.25F).sub(new Vector3f(centers[k]).lerp(centers[k + 1], 0.5F)).normalize();
                 float u0 = keep * k / segments, u1 = keep * (k + 1) / segments;
                 float v0 = vOff + vSpan * a / around, v1 = vOff + vSpan * (a + 1) / around;
-                e.vertex(p00, u0, v0, n);
-                e.vertex(p10, u1, v0, n);
-                e.vertex(p11, u1, v1, n);
-                e.vertex(p01, u0, v1, n);
+                e.vertex(p00, u0, v0, n, 0xFFFFFF);
+                e.vertex(p10, u1, v0, n, 0xFFFFFF);
+                e.vertex(p11, u1, v1, n, 0xFFFFFF);
+                e.vertex(p01, u0, v1, n, 0xFFFFFF);
             }
         }
         // Торец: у целого рога — острие, у обломанного — рваный скол (тёмная сердцевина кости).
@@ -409,21 +467,21 @@ public final class HollowMaskRenderer {
         float tu = keep < 1.0F ? 136.0F / 256.0F : 0.99F, tv = keep < 1.0F ? 232.0F / 256.0F : vOff + 0.5F * vSpan;
         for (int a = 0; a < around; a++) {
             Vector3f p0 = rings[segments * around + a], p1 = rings[segments * around + (a + 1) % around];
-            e.vertex(p0, tu, tv, axis);
-            e.vertex(p1, tu, tv, axis);
-            e.vertex(tipCenter, tu, tv, axis);
-            e.vertex(tipCenter, tu, tv, axis);
+            e.vertex(p0, tu, tv, axis, 0xFFFFFF);
+            e.vertex(p1, tu, tv, axis, 0xFFFFFF);
+            e.vertex(tipCenter, tu, tv, axis, 0xFFFFFF);
+            e.vertex(tipCenter, tu, tv, axis, 0xFFFFFF);
         }
     }
 
     // ---------------------------------------------------------------- вывод вершин
 
-    private record Vertex(Vector3f p, float u, float v, Vector3f n) {
+    private record Vertex(Vector3f p, float u, float v, Vector3f n, int rgb) {
     }
 
-    private record Emitter(MatrixStack.Entry entry, VertexConsumer vertices, int light, int color) {
-        void vertex(Vector3f p, float u, float v, Vector3f n) {
-            this.vertices.vertex(this.entry.getPositionMatrix(), p.x, p.y, p.z).color(this.color).texture(u, v)
+    private record Emitter(MatrixStack.Entry entry, VertexConsumer vertices, int light, int alpha) {
+        void vertex(Vector3f p, float u, float v, Vector3f n, int rgb) {
+            this.vertices.vertex(this.entry.getPositionMatrix(), p.x, p.y, p.z).color(this.alpha | rgb).texture(u, v)
                     .overlay(OverlayTexture.DEFAULT_UV).light(this.light).normal(this.entry, n.x, n.y, n.z);
         }
     }

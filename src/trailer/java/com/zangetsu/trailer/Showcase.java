@@ -8,6 +8,8 @@ import static com.zangetsu.trailer.Shots.shot;
 
 import com.zangetsu.logic.Eye;
 import com.zangetsu.logic.HollowForm;
+import com.zangetsu.logic.Sync;
+import com.zangetsu.network.AnimationPayload;
 import com.zangetsu.registry.ModAttachments;
 import com.zangetsu.trailer.Shots.P;
 import com.zangetsu.trailer.TrailerCamera.Shot;
@@ -48,6 +50,7 @@ final class Showcase {
         firstPerson();
         mask("final", 36.0, 5);
         finalGetsuga();
+        execute();
     }
 
     // ---------------------------------------------------------------- меч крупно
@@ -67,6 +70,8 @@ final class Showcase {
         cut(t0 + 2.0, "blade34", shot(grip.plus(1.15, -0.55, 0.85), grip.plus(0.7, 0, 0), 46));
         cut(t0 + 3.0, "pommel", shot(grip.plus(-0.3, -0.1, 0.55), grip.plus(-0.26, -0.22, 0), 46));
         cut(t0 + 4.0, "eye", shot(eye(0.06, 0.04, 0.42), eye(0, 0, 0), 34));
+        // Обратная сторона: глаза там нет.
+        cut(t0 + 4.5, "reverse", shot(grip.plus(0.62, 0.05, -2.0), grip.plus(0.55, 0, 0), 42));
     }
 
     // ---------------------------------------------------------------- меч в руке
@@ -76,6 +81,8 @@ final class Showcase {
         s.setup = srv -> Script.base(srv, 4, false);
         cut(10.0, "held_side", shot(arc(2.6, 265, 1.1, 2.6, 285, 1.1), hero().plus(0, 1.0, 0), 44));
         cut(11.0, "held_back", shot(arc(2.4, 25, 1.4, 2.4, 345, 1.4), hero().plus(0, 1.0, 0), 44));
+        // Кулак на рукояти крупно.
+        cut(11.5, "held_hand", shot(arc(1.3, 262, 0.75), p(-0.38, 0.78, -0.1), 40));
     }
 
     // ---------------------------------------------------------------- маска
@@ -93,6 +100,17 @@ final class Showcase {
         server(t0 + 4.0, srv -> ModAttachments.data(Stage.player(srv)).hollowUsed = HollowForm.BUDGET - 601);
         server(t0 + 4.33, srv -> ModAttachments.data(Stage.player(srv)).hollowUsed = HollowForm.BUDGET - 301);
         server(t0 + 4.66, srv -> ModAttachments.data(Stage.player(srv)).hollowUsed = HollowForm.BUDGET - 101);
+    }
+
+    /** Казнь: обе руки на рукояти, замах и удар. */
+    private void execute() {
+        scene("exec", 43.0, 47.0);
+        s.setup = srv -> Script.base(srv, 4, false);
+        speed(43.0, 0.35F);
+        server(43.2, srv -> Sync.animation(Stage.player(srv), AnimationPayload.EXECUTE, 50));
+        cut(43.0, "exec_side", shot(arc(3.4, 275, 1.1), p(0, 1.2, -0.2), 46));
+        cut(45.0, "exec_front", shot(arc(3.2, 205, 1.3), p(0, 1.3, 0), 46));
+        server(45.2, srv -> Sync.animation(Stage.player(srv), AnimationPayload.EXECUTE, 50));
     }
 
     /** Гецуга финальной формы: та же анимация, волна крупнее. */

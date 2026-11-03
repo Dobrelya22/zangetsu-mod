@@ -25,9 +25,10 @@ import org.joml.Vector3f;
  * толстый обух, плоская тёмная сердцевина со шлифовкой, долом и гравировкой «斬月», туманный хамон и
  * серебряная фаска к острой кромке. Рукоять — кожа ската, поверх неё крест-накрест выпуклые ленты
  * шёлкового шнура; латунная муфта с фланцем, воронёное навершие с кольцом и обломком цепи, которая
- * висит по силе тяжести. У горящего клинка трещины светятся в темноте. На обеих сторонах клинка — живой
+ * висит по силе тяжести. У горящего клинка трещины светятся в темноте. На одной стороне клинка — живой
  * 3D-глаз: выпуклый обод, тёмный белок, жёлтая радужка с вертикальным зрачком, веки и влажная роговица.
  * Глаз смотрит на ближайшего злого моба или на тебя, моргает, сердито щурится и горит в форме Пустого.
+ * Всё, что на глазу, строится сеткой по его миндалине, поэтому зрачок и радужка не выходят за обод.
  *
  * <p>Меч строится в своих координатах (в пикселях модели): u — вдоль, от навершия к острию; v — поперёк,
  * от обуха (−) к лезвию (+); w — толщина. Середина рукояти стоит в центре предмета, клинок уходит
@@ -45,6 +46,8 @@ public class ZangetsuItemRenderer implements BuiltinItemRendererRegistry.Dynamic
 
     // ---- размеры (пиксели модели); те же числа — в tools/textures.cs (атлас)
     private static final float GRIP_U = 3.1F;
+    /** Где кулак сжимает рукоять: ближе к гарде, как у настоящего меча. Эта точка — центр всех поворотов меча в руке. */
+    private static final float HOLD_U = 3.7F;
     private static final float POMMEL_END = 0.8F;
     private static final float HILT_END = 5.4F;
     private static final float BLADE_START = 6.2F;
@@ -75,9 +78,21 @@ public class ZangetsuItemRenderer implements BuiltinItemRendererRegistry.Dynamic
     private static final float EYE_W = 2.1F;
     private static final float EYE_H = 1.1F;
     private static final float IRIS = 0.95F;
-    private static final int ROWS = 10;
+    /** Зрачок короче радужки, а взгляд ходит так, чтобы он всегда оставался внутри глаза. */
+    private static final float PUPIL_H = 0.68F;
+    private static final float GAZE_A = 0.8F;
+    private static final float GAZE_B = 0.2F;
     private static final float RIM = 0.34F;
     private static final float RIM_HEIGHT = 0.26F;
+    /** Столбцы сетки глаза: гуще у острых уголков миндалины. */
+    private static final int LENS_N = 24;
+    private static final float[] LENS_A = new float[LENS_N + 1];
+
+    static {
+        for (int i = 0; i <= LENS_N; i++) {
+            LENS_A[i] = -EYE_W * MathHelper.cos(MathHelper.PI * i / LENS_N);
+        }
+    }
 
     // ---- оси меча в пространстве предмета
     private static final float S = 0.70710678F;
@@ -90,6 +105,10 @@ public class ZangetsuItemRenderer implements BuiltinItemRendererRegistry.Dynamic
         matrices.push();
         if (mode == ModelTransformationMode.FIRST_PERSON_RIGHT_HAND || mode == ModelTransformationMode.FIRST_PERSON_LEFT_HAND) {
             firstPerson(matrices, mode == ModelTransformationMode.FIRST_PERSON_RIGHT_HAND);
+        } else if (mode == ModelTransformationMode.THIRD_PERSON_RIGHT_HAND || mode == ModelTransformationMode.THIRD_PERSON_LEFT_HAND) {
+            // Точка хвата — в середине кулака: куда бы рука и меч ни поворачивались, рукоять остаётся в руке.
+            Vector3f hold = toModel(HOLD_U, HILT_V, 0.0F);
+            matrices.translate(0.5F - hold.x, 0.5F - hold.y, 0.5F - hold.z);
         }
         boolean burning = eye == Eye.BURNING;
         Mesh mesh = new Mesh(matrices.peek(), consumers.getBuffer(RenderLayer.getEntityCutoutNoCull(TEXTURE)), light, overlay);
@@ -116,6 +135,15 @@ public class ZangetsuItemRenderer implements BuiltinItemRendererRegistry.Dynamic
      */
     private static void firstPerson(MatrixStack matrices, boolean right) {
         float side = right ? 1.0F : -1.0F;
+        matrices.translate(0.5F, 0.5F, 0.5F);
+        matrices.translate(FP_GRIP.x * side, FP_GRIP.y, FP_GRIP.z);
+        matrices.multiply(firstPersonRotation(right));
+        matrices.scale(FP_SCALE, FP_SCALE, FP_SCALE);
+        matrices.translate(-0.5F, -0.5F, -0.5F);
+    }
+
+    private static Quaternionf firstPersonRotation(boolean right) {
+        float side = right ? 1.0F : -1.0F;
         Vector3f blade = new Vector3f(FP_BLADE.x * side, FP_BLADE.y, FP_BLADE.z).normalize();
         Vector3f face = new Vector3f(FP_FACE.x * side, FP_FACE.y, FP_FACE.z);
         face.sub(new Vector3f(blade).mul(face.dot(blade))).normalize();
@@ -123,12 +151,14 @@ public class ZangetsuItemRenderer implements BuiltinItemRendererRegistry.Dynamic
         // Оси меча (вдоль, к лезвию, толщина) → оси руки.
         Matrix3f hand = new Matrix3f(blade, edge, face);
         Matrix3f item = new Matrix3f(AXIS_U, AXIS_V, new Vector3f(0.0F, 0.0F, 1.0F));
-        Quaternionf rotation = new Quaternionf().setFromNormalized(hand.mul(item.transpose()));
-        matrices.translate(0.5F, 0.5F, 0.5F);
-        matrices.translate(FP_GRIP.x * side, FP_GRIP.y, FP_GRIP.z);
-        matrices.multiply(rotation);
-        matrices.scale(FP_SCALE, FP_SCALE, FP_SCALE);
-        matrices.translate(-0.5F, -0.5F, -0.5F);
+        return new Quaternionf().setFromNormalized(hand.mul(item.transpose()));
+    }
+
+    /** Точка хвата от первого лица (в пространстве руки): сюда ставится кулак. */
+    public static Vector3f firstPersonHold(boolean right) {
+        float side = right ? 1.0F : -1.0F;
+        Vector3f hold = toModel(HOLD_U, HILT_V, 0.0F).sub(0.5F, 0.5F, 0.5F).mul(FP_SCALE);
+        return firstPersonRotation(right).transform(hold).add(FP_GRIP.x * side, FP_GRIP.y, FP_GRIP.z);
     }
 
     /** «Вниз» по силе тяжести в координатах меча (u, v, w) — для цепи на навершии. */
@@ -352,138 +382,188 @@ public class ZangetsuItemRenderer implements BuiltinItemRendererRegistry.Dynamic
 
     // ---------------------------------------------------------------- глаз
 
+    /**
+     * Глаз — только на одной стороне клинка: в руке от третьего лица он смотрит наружу, от кулака (у правой руки это
+     * сторона −w, у левой +w), от первого лица и во всех остальных случаях — на зрителя (+w).
+     */
+    private static int eyeSide(ModelTransformationMode mode) {
+        return mode == ModelTransformationMode.THIRD_PERSON_RIGHT_HAND ? -1 : 1;
+    }
+
     private void renderEye(int state, ModelTransformationMode mode, MatrixStack matrices, VertexConsumerProvider consumers, int light, int overlay) {
+        int side = eyeSide(mode);
         Matrix4f model = matrices.peek().getPositionMatrix();
-        float[] gaze = EyeTracker.gaze(mode, model, toModel(EYE_U, EYE_V, EYE_SURFACE), AXIS_U, AXIS_V,
-                EYE_W - IRIS - 0.15F, EYE_H - IRIS * 0.75F);
+        float[] gaze = EyeTracker.gaze(mode, model, toModel(EYE_U, EYE_V, side * EYE_SURFACE), AXIS_U, AXIS_V, GAZE_A, GAZE_B);
         float openness = switch (state) {
             case Eye.OPEN, Eye.BURNING -> 1.0F;
             case Eye.ANGRY -> 0.55F;
             default -> 0.0F;
         };
         openness = EyeTracker.blink(mode, openness);
-        float pupil = state == Eye.BURNING ? 0.17F : (state == Eye.ANGRY ? 0.15F : 0.3F);
+        float pupil = state == Eye.BURNING ? 0.085F : (state == Eye.ANGRY ? 0.075F : 0.15F);
         float irisU = state == Eye.BURNING ? 8.0F : (state == Eye.ANGRY ? 16.0F : 0.0F);
         // Буфер берём заново перед каждым слоем: смена слоя закрывает предыдущий.
-        VertexConsumer vertices = consumers.getBuffer(RenderLayer.getEntityCutoutNoCull(EYE_TEXTURE));
-        for (int side = -1; side <= 1; side += 2) {
-            eyeSide(new Face(matrices.peek(), vertices, side, light, overlay), gaze, openness, state == Eye.ANGRY, pupil, irisU);
-        }
+        Face f = new Face(matrices.peek(), consumers.getBuffer(RenderLayer.getEntityCutoutNoCull(EYE_TEXTURE)), side, light, overlay);
+        socket(f);
+        sclera(f);
+        iris(f, gaze, 0.02F, irisU, 0xFFFFFFFF);
+        pupil(f, gaze, pupil);
+        rim(f);
+        lids(f, openness, state == Eye.ANGRY ? 0.3F : 0.0F);
         if (state == Eye.OPEN || state == Eye.BURNING) {
             // Радужка светится в темноте.
-            VertexConsumer glowing = consumers.getBuffer(RenderLayer.getEyes(EYE_TEXTURE));
-            for (int side = -1; side <= 1; side += 2) {
-                Face glow = new Face(matrices.peek(), glowing, side, LightmapTextureManager.MAX_LIGHT_COORDINATE, overlay);
-                clipped(glow, gaze[0] - IRIS, gaze[1] - IRIS, gaze[0] + IRIS, gaze[1] + IRIS, 0.06F,
-                        irisU / 32.0F, 8.0F / 32.0F, (irisU + 8.0F) / 32.0F, 16.0F / 32.0F, state == Eye.BURNING ? 0xFFFFFFFF : 0xFF9A7A3A);
-            }
+            Face glow = new Face(matrices.peek(), consumers.getBuffer(RenderLayer.getEyes(EYE_TEXTURE)), side, LightmapTextureManager.MAX_LIGHT_COORDINATE, overlay);
+            iris(glow, gaze, 0.03F, irisU, state == Eye.BURNING ? 0xFFFFFFFF : 0xFF9A7A3A);
         }
         if (openness > 0.85F) {
             // Влажная роговица: прозрачный купол с бликом поверх открытого глаза.
-            VertexConsumer gloss = consumers.getBuffer(RenderLayer.getEntityTranslucent(EYE_TEXTURE));
-            for (int side = -1; side <= 1; side += 2) {
-                cornea(new Face(matrices.peek(), gloss, side, light, overlay), openness);
+            cornea(new Face(matrices.peek(), consumers.getBuffer(RenderLayer.getEntityTranslucent(EYE_TEXTURE)), side, light, overlay), openness);
+        }
+    }
+
+    /** Полувысота глаза-миндалины на расстоянии {@code a} от его середины вдоль клинка. */
+    private static float lensH(float a) {
+        float t = Math.min(1.0F, Math.abs(a) / EYE_W);
+        return EYE_H * MathHelper.sqrt(Math.max(0.0F, 1.0F - (float) Math.pow(t, 1.25F)));
+    }
+
+    /** Глазное яблоко выпуклое: высота над клинком в точке глаза. */
+    private static float domeLift(float a, float b) {
+        float x = a / EYE_W, y = b / EYE_H;
+        return 0.05F + 0.14F * Math.max(0.0F, 1.0F - x * x - y * y);
+    }
+
+    /** Гнездо глаза на стали — накладка, потому что глаз только с одной стороны клинка (см. EyePartsHD). */
+    private static void socket(Face f) {
+        // В Face.quad низ прямоугольника (b0) берёт v1 — поэтому передаём v наоборот.
+        f.quad(-6.0F, -2.25F, 6.0F, 2.25F, 0.03F, 0.0F, 1.0F, 1.0F, 20.0F / 32.0F, 0xFFFFFFFF);
+    }
+
+    /** Белок: сетка точно по миндалине (b = s·H(a)), поэтому за край не выходит. */
+    private static void sclera(Face f) {
+        int rows = 8;
+        for (int i = 0; i < LENS_N; i++) {
+            float a0 = LENS_A[i], a1 = LENS_A[i + 1], h0 = lensH(a0), h1 = lensH(a1);
+            for (int j = 0; j < rows; j++) {
+                float s0 = -1.0F + 2.0F * j / rows, s1 = -1.0F + 2.0F * (j + 1) / rows;
+                f.scleraVertex(a0, s0 * h0);
+                f.scleraVertex(a1, s0 * h1);
+                f.scleraVertex(a1, s1 * h1);
+                f.scleraVertex(a0, s1 * h0);
             }
         }
     }
 
-    private static float halfLength(float b) {
-        float t = MathHelper.clamp(b / EYE_H, -1.0F, 1.0F);
-        return EYE_W * (float) Math.pow(1.0F - t * t, 0.8F);
+    /** Прижать точку к миндалине: всё, что рисуется на глазу, остаётся внутри обода, куда бы он ни смотрел. */
+    private static float[] inLens(float a, float b) {
+        float ca = MathHelper.clamp(a, -EYE_W + 0.06F, EYE_W - 0.06F);
+        float h = Math.max(0.0F, lensH(ca) - 0.04F);
+        return new float[]{ca, MathHelper.clamp(b, -h, h)};
     }
 
-    /** Одна сторона глаза (a — вдоль клинка, b — поперёк): белок, радужка, зрачок, блик, обод и веки. */
-    private static void eyeSide(Face f, float[] gaze, float openness, boolean angry, float pupil, float irisU) {
-        float rowH = 2.0F * EYE_H / ROWS;
-        float ia = gaze[0], ib = gaze[1];
-        for (int r = 0; r < ROWS; r++) {
-            float b0 = -EYE_H + r * rowH, b1 = b0 + rowH, bc = (b0 + b1) / 2.0F;
-            float hl = halfLength(bc) + 0.05F;
-            f.quad(-hl, b0, hl, b1, 0.02F, (EYE_W - hl) / (2 * EYE_W) * 0.5F, (EYE_H - b1) / (2 * EYE_H) * 0.25F,
-                    (EYE_W + hl) / (2 * EYE_W) * 0.5F, (EYE_H - b0) / (2 * EYE_H) * 0.25F, 0xFFFFFFFF);
+    /** Радужка: сетка вокруг взгляда, вершины прижаты к миндалине, текстура считается уже от прижатой точки. */
+    private static void iris(Face f, float[] gaze, float lift, float irisU, int color) {
+        int n = 12;
+        float a0 = gaze[0] - IRIS, b0 = gaze[1] - IRIS, step = 2.0F * IRIS / n;
+        for (int i = 0; i < n; i++) {
+            for (int j = 0; j < n; j++) {
+                f.irisVertex(a0 + i * step, b0 + j * step, gaze, lift, irisU, color);
+                f.irisVertex(a0 + (i + 1) * step, b0 + j * step, gaze, lift, irisU, color);
+                f.irisVertex(a0 + (i + 1) * step, b0 + (j + 1) * step, gaze, lift, irisU, color);
+                f.irisVertex(a0 + i * step, b0 + (j + 1) * step, gaze, lift, irisU, color);
+            }
         }
-        clipped(f, ia - IRIS, ib - IRIS, ia + IRIS, ib + IRIS, 0.05F, irisU / 32.0F, 8.0F / 32.0F, (irisU + 8.0F) / 32.0F, 16.0F / 32.0F, 0xFFFFFFFF);
-        // Вертикальный зрачок — поперёк клинка. Блик даёт роговица.
-        clipped(f, ia - pupil / 2.0F, ib - IRIS * 0.78F, ia + pupil / 2.0F, ib + IRIS * 0.78F, 0.07F,
-                24.5F / 32.0F, 16.5F / 32.0F, 27.5F / 32.0F, 19.5F / 32.0F, 0xFFFFFFFF);
+    }
 
-        // Веки: верхнее (к обуху, −b) и нижнее (к лезвию, +b) сходятся; у сердитого верхнее скошено.
+    /** Вертикальный зрачок-щель с острыми концами (поперёк клинка), короче радужки и всегда внутри неё и глаза. */
+    private static void pupil(Face f, float[] gaze, float halfWidth) {
+        int rows = 10;
+        for (int j = 0; j < rows; j++) {
+            float t0 = -1.0F + 2.0F * j / rows, t1 = -1.0F + 2.0F * (j + 1) / rows;
+            float w0 = halfWidth * MathHelper.sqrt(1.0F - t0 * t0) + 0.012F, w1 = halfWidth * MathHelper.sqrt(1.0F - t1 * t1) + 0.012F;
+            float b0 = gaze[1] + t0 * PUPIL_H, b1 = gaze[1] + t1 * PUPIL_H;
+            f.pupilVertex(gaze[0] - w0, b0);
+            f.pupilVertex(gaze[0] + w0, b0);
+            f.pupilVertex(gaze[0] + w1, b1);
+            f.pupilVertex(gaze[0] - w1, b1);
+        }
+    }
+
+    /** Обод вокруг глаза — гладкое кольцо по контуру миндалины: внутренняя стенка, гребень, внешний скат к стали. */
+    private static void rim(Face f) {
+        int n = LENS_N * 2;
+        float[] pa = new float[n], pb = new float[n];
+        for (int i = 0; i < LENS_N; i++) {
+            pa[i] = LENS_A[i];
+            pb[i] = -lensH(LENS_A[i]);
+            pa[LENS_N + i] = LENS_A[LENS_N - i];
+            pb[LENS_N + i] = lensH(LENS_A[LENS_N - i]);
+        }
+        float[] na = new float[n], nb = new float[n];
+        for (int i = 0; i < n; i++) {
+            float ta = pa[(i + 1) % n] - pa[(i + n - 1) % n], tb = pb[(i + 1) % n] - pb[(i + n - 1) % n];
+            float len = Math.max(1.0E-4F, MathHelper.sqrt(ta * ta + tb * tb));
+            na[i] = tb / len;
+            nb[i] = -ta / len;
+        }
+        // Профиль: {отступ наружу, высота, v текстуры}.
+        float[][] profile = {{0.0F, 0.05F, 18.0F}, {0.06F, RIM_HEIGHT, 16.0F}, {RIM - 0.08F, RIM_HEIGHT * 0.92F, 17.0F}, {RIM, 0.0F, 20.0F}};
+        for (int i = 0; i < n; i++) {
+            int k = (i + 1) % n;
+            float u0 = (16.0F + 8.0F * i / n) / 32.0F, u1 = (16.0F + 8.0F * (i + 1) / n) / 32.0F;
+            for (int s = 0; s + 1 < profile.length; s++) {
+                float[] p = profile[s], q = profile[s + 1];
+                f.wall(pa[i] + na[i] * p[0], pb[i] + nb[i] * p[0], p[1], u0, p[2] / 32.0F,
+                        pa[k] + na[k] * p[0], pb[k] + nb[k] * p[0], p[1], u1, p[2] / 32.0F,
+                        pa[k] + na[k] * q[0], pb[k] + nb[k] * q[0], q[1], u1, q[2] / 32.0F,
+                        pa[i] + na[i] * q[0], pb[i] + nb[i] * q[0], q[1], u0, q[2] / 32.0F);
+            }
+        }
+    }
+
+    /** Веки по форме глаза: верхнее (к обуху, −b) и нижнее (к лезвию, +b) сходятся; у сердитого верхнее скошено. */
+    private static void lids(Face f, float openness, float slope) {
         float meet = 0.1F;
-        float upper = MathHelper.lerp(openness, meet, -EYE_H);
-        float lower = MathHelper.lerp(openness, meet, EYE_H);
-        float slope = angry ? 0.3F : 0.0F;
-        for (int r = 0; r < ROWS; r++) {
-            float b0 = -EYE_H + r * rowH, b1 = b0 + rowH, bc = (b0 + b1) / 2.0F;
-            float hl = halfLength(bc);
-            f.box(-hl - RIM, b0, -hl, b1, RIM_HEIGHT, 16.0F, 16.0F, 24.0F, 20.0F);
-            f.box(hl, b0, hl + RIM, b1, RIM_HEIGHT, 16.0F, 16.0F, 24.0F, 20.0F);
-            float visibleFrom = -hl, visibleTo = hl;
-            if (bc > lower) {
-                visibleFrom = visibleTo;
-            } else if (slope == 0.0F) {
-                if (bc < upper) {
-                    visibleFrom = visibleTo;
-                }
-            } else {
-                // Скошенное верхнее веко: линия upper − slope·a/W; видно там, где строка ниже линии.
-                float cut = (upper - bc) / slope * EYE_W;
-                visibleFrom = Math.max(visibleFrom, cut);
-            }
-            if (visibleFrom >= visibleTo) {
-                lid(f, -hl, b0, hl, b1, Math.abs(bc - upper) < rowH || Math.abs(bc - lower) < rowH);
-            } else if (visibleFrom > -hl) {
-                lid(f, -hl, b0, visibleFrom, b1, true);
-            }
-        }
-        float tip = halfLength(EYE_H - rowH / 2.0F) + RIM;
-        f.box(-tip, EYE_H, tip, EYE_H + RIM * 0.7F, RIM_HEIGHT, 16.0F, 16.0F, 24.0F, 20.0F);
-        f.box(-tip, -EYE_H - RIM * 0.7F, tip, -EYE_H, RIM_HEIGHT, 16.0F, 16.0F, 24.0F, 20.0F);
-    }
-
-    /**
-     * Прямоугольник на глазу, обрезанный по миндалевидному краю (сеткой 8×8): радужка и зрачок при взгляде вбок не вылезают
-     * за обод.
-     */
-    private static void clipped(Face f, float a0, float b0, float a1, float b1, float lift, float u0, float v0, float u1, float v1, int color) {
-        int n = 8;
-        for (int i = 0; i < n; i++) {
-            for (int j = 0; j < n; j++) {
-                float ca0 = MathHelper.lerp((float) i / n, a0, a1), ca1 = MathHelper.lerp((float) (i + 1) / n, a0, a1);
-                float cb0 = MathHelper.lerp((float) j / n, b0, b1), cb1 = MathHelper.lerp((float) (j + 1) / n, b0, b1);
-                float ca = (ca0 + ca1) / 2.0F, cb = (cb0 + cb1) / 2.0F;
-                if (Math.abs(cb) > EYE_H || Math.abs(ca) > halfLength(cb) - 0.06F) {
-                    continue;
-                }
-                // В Face.quad низ прямоугольника (b0) берёт v1 — поэтому v считаем от v1.
-                f.quad(ca0, cb0, ca1, cb1, lift, MathHelper.lerp((float) i / n, u0, u1), MathHelper.lerp((float) (j + 1) / n, v1, v0),
-                        MathHelper.lerp((float) (i + 1) / n, u0, u1), MathHelper.lerp((float) j / n, v1, v0), color);
-            }
+        float upper = MathHelper.lerp(openness, meet, -EYE_H), lower = MathHelper.lerp(openness, meet, EYE_H);
+        for (int i = 0; i < LENS_N; i++) {
+            float a0 = LENS_A[i], a1 = LENS_A[i + 1], h0 = lensH(a0), h1 = lensH(a1);
+            lidStrip(f, a0, -h0, MathHelper.clamp(upper - slope * a0 / EYE_W, -h0, h0), a1, -h1, MathHelper.clamp(upper - slope * a1 / EYE_W, -h1, h1));
+            lidStrip(f, a0, h0, MathHelper.clamp(lower, -h0, h0), a1, h1, MathHelper.clamp(lower, -h1, h1));
         }
     }
 
-    /** Купол роговицы над всем глазом (сетка 6×6, ячейки за краем эллипса пропускаем). */
+    /** Полоса века от края глаза ({@code from}) до его кромки ({@code to}) и тёмные ресницы по кромке. */
+    private static void lidStrip(Face f, float a0, float from0, float to0, float a1, float from1, float to1) {
+        if (Math.abs(to0 - from0) < 0.002F && Math.abs(to1 - from1) < 0.002F) {
+            return;
+        }
+        int rows = 3;
+        for (int j = 0; j < rows; j++) {
+            float s0 = (float) j / rows, s1 = (float) (j + 1) / rows;
+            f.lidVertex(a0, MathHelper.lerp(s0, from0, to0), s0);
+            f.lidVertex(a1, MathHelper.lerp(s0, from1, to1), s0);
+            f.lidVertex(a1, MathHelper.lerp(s1, from1, to1), s1);
+            f.lidVertex(a0, MathHelper.lerp(s1, from0, to0), s1);
+        }
+        float lash = 0.07F, dir0 = Math.signum(from0 - to0), dir1 = Math.signum(from1 - to1);
+        f.lashVertex(a0, to0);
+        f.lashVertex(a1, to1);
+        f.lashVertex(a1, to1 + dir1 * Math.min(lash, Math.abs(from1 - to1)));
+        f.lashVertex(a0, to0 + dir0 * Math.min(lash, Math.abs(from0 - to0)));
+    }
+
+    /** Купол роговицы над всем глазом — та же сетка по миндалине. */
     private static void cornea(Face f, float openness) {
-        int n = 6;
-        float ra = EYE_W * 0.86F, rb = EYE_H * 0.9F * openness;
-        for (int i = 0; i < n; i++) {
-            for (int j = 0; j < n; j++) {
-                float x0 = -1 + 2.0F * i / n, x1 = -1 + 2.0F * (i + 1) / n, y0 = -1 + 2.0F * j / n, y1 = -1 + 2.0F * (j + 1) / n;
-                float cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
-                if (cx * cx + cy * cy > 1.0F) {
-                    continue;
-                }
-                f.domeVertex(x0, y0, ra, rb);
-                f.domeVertex(x1, y0, ra, rb);
-                f.domeVertex(x1, y1, ra, rb);
-                f.domeVertex(x0, y1, ra, rb);
+        int rows = 6;
+        for (int i = 0; i < LENS_N; i++) {
+            float a0 = LENS_A[i], a1 = LENS_A[i + 1], h0 = lensH(a0) * openness, h1 = lensH(a1) * openness;
+            for (int j = 0; j < rows; j++) {
+                float s0 = -1.0F + 2.0F * j / rows, s1 = -1.0F + 2.0F * (j + 1) / rows;
+                f.corneaVertex(a0, s0 * h0);
+                f.corneaVertex(a1, s0 * h1);
+                f.corneaVertex(a1, s1 * h1);
+                f.corneaVertex(a0, s1 * h0);
             }
-        }
-    }
-
-    private static void lid(Face f, float a0, float b0, float a1, float b1, boolean lashes) {
-        f.box(a0, b0, a1, b1, 0.2F, 0.0F, 16.0F, 16.0F, lashes ? 17.0F : 20.0F);
-        if (lashes) {
-            f.quad(a0, b0 + (b1 - b0) * 0.35F, a1, b0 + (b1 - b0) * 0.65F, 0.205F, 24.5F / 32.0F, 16.5F / 32.0F, 27.5F / 32.0F, 19.5F / 32.0F, 0xFFFFFFFF);
         }
     }
 
@@ -522,37 +602,62 @@ public class ZangetsuItemRenderer implements BuiltinItemRendererRegistry.Dynamic
             return toModel(EYE_U + a, EYE_V + b, this.side * (EYE_SURFACE + lift));
         }
 
+        private Vector3f up() {
+            return new Vector3f(0.0F, 0.0F, this.side);
+        }
+
         void quad(float a0, float b0, float a1, float b1, float lift, float u0, float v0, float u1, float v1, int color) {
-            Vector3f n = new Vector3f(0.0F, 0.0F, this.side);
+            Vector3f n = this.up();
             this.vertex(this.at(a0, b0, lift), u0, v1, color, n);
             this.vertex(this.at(a1, b0, lift), u1, v1, color, n);
             this.vertex(this.at(a1, b1, lift), u1, v0, color, n);
             this.vertex(this.at(a0, b1, lift), u0, v0, color, n);
         }
 
-        /** Выпуклый брусок высотой {@code lift} над поверхностью: верх и четыре бока. UV — в пикселях текстуры 32×32. */
-        void box(float a0, float b0, float a1, float b1, float lift, float tu0, float tv0, float tu1, float tv1) {
-            float u0 = tu0 / 32.0F, v0 = tv0 / 32.0F, u1 = tu1 / 32.0F, v1 = tv1 / 32.0F;
-            this.quad(a0, b0, a1, b1, lift, u0, v0, u1, v1, 0xFFFFFFFF);
-            int shade = 0xFFB0B0B0;
-            this.side(a0, b0, a1, b0, lift, u0, v0, u1, v1, shade, new Vector3f(AXIS_V).negate());
-            this.side(a1, b1, a0, b1, lift, u0, v0, u1, v1, shade, new Vector3f(AXIS_V));
-            this.side(a0, b1, a0, b0, lift, u0, v0, u1, v1, shade, new Vector3f(AXIS_U).negate());
-            this.side(a1, b0, a1, b1, lift, u0, v0, u1, v1, shade, new Vector3f(AXIS_U));
+        void scleraVertex(float a, float b) {
+            this.vertex(this.at(a, b, domeLift(a, b)), (a + EYE_W) / (2.0F * EYE_W) * 0.5F, (b + EYE_H) / (2.0F * EYE_H) * 0.25F, 0xFFFFFFFF, this.up());
         }
 
-        private void side(float aa, float ba, float ab, float bb, float lift, float u0, float v0, float u1, float v1, int color, Vector3f n) {
-            this.vertex(this.at(aa, ba, 0.0F), u0, v1, color, n);
-            this.vertex(this.at(ab, bb, 0.0F), u1, v1, color, n);
-            this.vertex(this.at(ab, bb, lift), u1, v0, color, n);
-            this.vertex(this.at(aa, ba, lift), u0, v0, color, n);
+        void irisVertex(float a, float b, float[] gaze, float lift, float irisU, int color) {
+            float[] p = inLens(a, b);
+            float tu = (p[0] - gaze[0] + IRIS) / (2.0F * IRIS), tv = (p[1] - gaze[1] + IRIS) / (2.0F * IRIS);
+            this.vertex(this.at(p[0], p[1], domeLift(p[0], p[1]) + lift), (irisU + tu * 8.0F) / 32.0F, (8.0F + tv * 8.0F) / 32.0F, color, this.up());
         }
 
-        /** Вершина купола роговицы: (x, y) — в долях полуосей глаза, высота купола — до 0,22 над белком. */
-        void domeVertex(float x, float y, float ra, float rb) {
-            float h = 0.1F + 0.2F * Math.max(0.0F, 1.0F - x * x - y * y);
-            float tu = (24.0F + 4.0F + x * 4.0F) / 32.0F, tv = (8.0F + 4.0F - y * 4.0F) / 32.0F;
-            this.vertex(this.at(x * ra, y * rb, h), tu, tv, 0xFFFFFFFF, new Vector3f(0.0F, 0.0F, this.side));
+        void pupilVertex(float a, float b) {
+            float[] p = inLens(a, b);
+            this.vertex(this.at(p[0], p[1], domeLift(p[0], p[1]) + 0.04F), 26.0F / 32.0F, 18.0F / 32.0F, 0xFFFFFFFF, this.up());
+        }
+
+        void lidVertex(float a, float b, float s) {
+            this.vertex(this.at(a, b, domeLift(a, b) + 0.07F), (a + EYE_W) / (2.0F * EYE_W) * 0.5F, (16.0F + 4.0F * s) / 32.0F, 0xFFFFFFFF, this.up());
+        }
+
+        void lashVertex(float a, float b) {
+            this.vertex(this.at(a, b, domeLift(a, b) + 0.08F), 26.0F / 32.0F, 18.0F / 32.0F, 0xFFFFFFFF, this.up());
+        }
+
+        void corneaVertex(float a, float b) {
+            float x = a / EYE_W, y = b / EYE_H;
+            this.vertex(this.at(a, b, domeLift(a, b) + 0.055F), (28.0F + x * 4.0F) / 32.0F, (12.0F - y * 4.0F) / 32.0F, 0xFFFFFFFF, this.up());
+        }
+
+        /** Четырёхугольник обода: четыре точки (a, b, высота) с текстурой; нормаль — по самой грани, в сторону зрителя. */
+        void wall(float a0, float b0, float l0, float u0, float v0, float a1, float b1, float l1, float u1, float v1,
+                float a2, float b2, float l2, float u2, float v2, float a3, float b3, float l3, float u3, float v3) {
+            Vector3f p0 = this.at(a0, b0, l0), p1 = this.at(a1, b1, l1), p2 = this.at(a2, b2, l2), p3 = this.at(a3, b3, l3);
+            Vector3f n = new Vector3f(p2).sub(p0).cross(new Vector3f(p3).sub(p1));
+            if (n.lengthSquared() < 1.0E-12F) {
+                n.set(this.up());
+            }
+            if (n.z * this.side < 0.0F) {
+                n.negate();
+            }
+            n.normalize();
+            this.vertex(p0, u0, v0, 0xFFFFFFFF, n);
+            this.vertex(p1, u1, v1, 0xFFFFFFFF, n);
+            this.vertex(p2, u2, v2, 0xFFFFFFFF, n);
+            this.vertex(p3, u3, v3, 0xFFFFFFFF, n);
         }
 
         private void vertex(Vector3f p, float u, float v, int color, Vector3f n) {

@@ -2,11 +2,14 @@ package com.zangetsu.client.render;
 
 import com.zangetsu.client.ClientState;
 import com.zangetsu.network.AnimationPayload;
+import net.minecraft.client.model.ModelPart;
 import net.minecraft.client.render.entity.model.BipedEntityModel;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.util.math.MathHelper;
+import org.joml.Quaternionf;
+import org.joml.Vector3f;
 
 /**
  * Позы игрока в сценах: тянется к рукояти и поднимает меч; замах двумя руками и удар сверху (казнь);
@@ -15,6 +18,14 @@ import net.minecraft.util.math.MathHelper;
  * рывок, когда меч рубит сам, и Гецуга: замах высоко за правое плечо, левая рука указывает цель — и взмах по горизонтали.
  */
 public final class PlayerPoses {
+    /** На сколько градусов запястье подаёт клинок вперёд в ударе. */
+    public static final float BLADE_FLIP = 45.0F;
+    /** Угол между рукоятью и осью руки в покое (см. поворот в модели предмета). */
+    private static final float GRIP_TO_ARM = 80.0F;
+    /** Кулак от плеча вдоль руки и расстояние между кулаками на рукояти (пиксели модели). */
+    private static final float FIST_Y = 8.6F;
+    private static final float SECOND_HAND = 3.6F;
+
     private PlayerPoses() {
     }
 
@@ -64,21 +75,42 @@ public final class PlayerPoses {
         model.head.pitch = MathHelper.lerp(raise, MathHelper.lerp(reach, model.head.pitch, 0.55F), -0.35F);
     }
 
-    /** Казнь: замах двумя руками над головой — резкий удар сверху вниз — пауза. */
+    /**
+     * Казнь: обе руки на рукояти. Замах — кулаки перед лбом, клинок поднят над головой; резкий удар вперёд и вниз; пауза.
+     * Правая рука идёт по двум точкам, левая каждый кадр ложится на рукоять за ней.
+     */
     private static void execute(BipedEntityModel<?> model, float t) {
         float wind = phase(t, 0.0F, 0.4F);
         float strike = phase(t, 0.42F, 0.52F);
         float recover = phase(t, 0.8F, 1.0F);
-        float pitch = MathHelper.lerp(strike, MathHelper.lerp(wind, model.rightArm.pitch, -2.95F), -0.35F);
-        pitch = MathHelper.lerp(recover, pitch, 0.0F);
-        model.rightArm.pitch = pitch;
-        model.leftArm.pitch = pitch;
-        model.rightArm.yaw = -0.3F * wind * (1.0F - recover);
-        model.leftArm.yaw = 0.45F * wind * (1.0F - recover);
+        float[] up = aim(model.rightArm, 0.0F, -3.0F, -4.6F), down = aim(model.rightArm, -0.6F, 6.5F, -4.8F);
+        float pitch = MathHelper.lerp(strike, MathHelper.lerp(wind, model.rightArm.pitch, up[0]), down[0]);
+        float yaw = MathHelper.lerp(strike, MathHelper.lerp(wind, model.rightArm.yaw, up[1]), down[1]);
+        model.rightArm.pitch = MathHelper.lerp(recover, pitch, 0.0F);
+        model.rightArm.yaw = MathHelper.lerp(recover, yaw, 0.0F);
         model.rightArm.roll = 0.0F;
-        model.leftArm.roll = 0.0F;
+        leftHandOnHilt(model, flip(AnimationPayload.EXECUTE, t), wind * (1.0F - recover));
         model.body.pitch = (-0.18F * wind * (1.0F - strike) + 0.35F * strike) * (1.0F - recover);
         model.head.pitch = 0.25F * strike * (1.0F - recover);
+    }
+
+    /** Питч и рыск руки, чтобы кулак смотрел из плеча в точку (x, y, z) модели. */
+    private static float[] aim(ModelPart arm, float x, float y, float z) {
+        float dx = x - arm.pivotX, dy = y - arm.pivotY, dz = z - arm.pivotZ;
+        return new float[]{(float) Math.atan2(-MathHelper.sqrt(dx * dx + dz * dz), dy), (float) Math.atan2(-dx, -dz)};
+    }
+
+    /** Левая рука ложится на рукоять за правым кулаком, ближе к навершию ({@code k} — насколько). */
+    private static void leftHandOnHilt(BipedEntityModel<?> model, float flip, float k) {
+        Quaternionf right = new Quaternionf().rotationZYX(model.rightArm.roll, model.rightArm.yaw, model.rightArm.pitch);
+        float tilt = (GRIP_TO_ARM - BLADE_FLIP * flip) * MathHelper.RADIANS_PER_DEGREE;
+        Vector3f hilt = right.transform(new Vector3f(0.0F, MathHelper.cos(tilt), -MathHelper.sin(tilt)));
+        Vector3f fist = right.transform(new Vector3f(-1.0F, FIST_Y, 0.0F)).add(model.rightArm.pivotX, model.rightArm.pivotY, model.rightArm.pivotZ);
+        Vector3f target = fist.sub(hilt.mul(SECOND_HAND));
+        float[] pose = aim(model.leftArm, target.x, target.y, target.z);
+        model.leftArm.pitch = MathHelper.lerp(k, model.leftArm.pitch, pose[0]);
+        model.leftArm.yaw = MathHelper.lerp(k, model.leftArm.yaw, pose[1]);
+        model.leftArm.roll = MathHelper.lerp(k, model.leftArm.roll, 0.0F);
     }
 
     /** Горизонтальный взмах: рука уходит влево за корпус и проносится вправо. */
@@ -96,24 +128,29 @@ public final class PlayerPoses {
     }
 
     /**
-     * Насколько клинок развёрнут вперёд в кулаке (0 — висит лезвием вниз, 1 — по ходу удара): во время удара мечом,
-     * рывка и Гецуги.
+     * Насколько запястье подало клинок вперёд (0 — лежит лезвием вниз, 1 — по ходу удара): в ударе мечом, рывке,
+     * Гецуге и сценах с мечом. Рукоять при этом остаётся в кулаке, поэтому поворот невелик: дальше рукоять легла бы
+     * вдоль руки.
      */
     public static float bladeForward(PlayerEntity player) {
         float tickDelta = MinecraftClient.getInstance().getRenderTickCounter().getTickDelta(false);
         ClientState.Animation animation = ClientState.animation(player);
-        float t;
         if (animation == null) {
-            t = player.getHandSwingProgress(tickDelta);
-        } else if (animation.type() == AnimationPayload.AUTO_SLASH || animation.type() == AnimationPayload.GETSUGA) {
-            t = animation.progress(player, tickDelta);
-        } else {
-            return 0.0F;
+            float swing = player.getHandSwingProgress(tickDelta);
+            return swing <= 0.0F || swing >= 1.0F ? 0.0F : phase(swing, 0.12F, 0.3F) * (1.0F - phase(swing, 0.62F, 1.0F));
         }
+        return flip(animation.type(), animation.progress(player, tickDelta));
+    }
+
+    private static float flip(int animation, float t) {
         if (t <= 0.0F || t >= 1.0F) {
             return 0.0F;
         }
-        return phase(t, 0.0F, 0.18F) * (1.0F - phase(t, 0.62F, 1.0F));
+        return switch (animation) {
+            case AnimationPayload.AUTO_SLASH, AnimationPayload.GETSUGA -> phase(t, 0.2F, 0.38F) * (1.0F - phase(t, 0.62F, 1.0F));
+            case AnimationPayload.EXECUTE, AnimationPayload.SLASH -> phase(t, 0.42F, 0.52F) * (1.0F - phase(t, 0.8F, 1.0F));
+            default -> 0.0F;
+        };
     }
 
     // ---------------------------------------------------------------- бой

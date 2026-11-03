@@ -256,7 +256,7 @@ public static class ZangetsuTextures
     static Color IconFace(double px, double py, bool final)
     {
         double x = IconHeadX(px), y = IconHeadY(py), ax = Math.Abs(x);
-        Color paint = final ? C(18, 14, 16) : C(122, 16, 24);
+        Color paint = final ? C(18, 14, 16) : C(100, 14, 20);
         Color col = Mix(C(248, 246, 240), C(200, 196, 214), Sat(ax / 5.0) * 0.6);
         if (Math.Abs(ax - MaskStripeX(y)) < MaskStripeHalf(y) * (final ? 1.4 : 1.0) + 0.08) col = paint;
         if (final && MaskEyeLens(x, y, 2.2) < 1) col = paint;
@@ -945,27 +945,10 @@ public static class ZangetsuTextures
                     col = Mix(col, burning ? C(150, 30, 10) : C(8, 9, 12), eng * 0.9);
                     if (lip < 0.2 && eng > 0.4) col = Mix(col, C(150, 156, 170), 0.5);
                 }
-                // Гнездо глаза: тёмное углубление, багровый обод и жилки, расходящиеся по стали.
-                double ex = (u - M_EYE_U) / 2.5, ey = (v - M_EYE_V) / 1.42;
-                double e = ex * ex + ey * ey;
-                if (e < 1.0)
-                {
-                    col = Mix(C(40, 8, 10), C(10, 2, 3), 1.0 - e);
-                }
-                else if (e < 1.4)
-                {
-                    col = Mix(col, C(96, 8, 14), (1.4 - e) / 0.4 * 0.85);
-                }
-                else if (e < 3.2)
-                {
-                    double ang = Math.Atan2(ey, ex);
-                    double vein = Math.Abs(Math.Sin(ang * 9 + Fbm(e * 2, ang * 3, 62, 2) * 4));
-                    double reach = 1 - (e - 1.4) / 1.8;
-                    if (vein < 0.07 * reach && v < hamon - 0.1) col = Mix(col, C(110, 10, 16), reach * 0.8);
-                }
+                // Гнезда глаза здесь нет: глаз только на одной стороне, его гнездо — отдельная накладка (EyePartsHD).
                 if (burning)
                 {
-                    if (v < hamon - 0.1 && e >= 1.0) col = Mix(col, C(70, 12, 8), 0.28);
+                    if (v < hamon - 0.1) col = Mix(col, C(70, 12, 8), 0.28);
                     double crack = BladeCrack(u, v) + (Fbm(tx / 6.0, ty / 6.0, 63, 2) - 0.5) * 0.04;
                     if (crack < 0.3)
                     {
@@ -1091,10 +1074,10 @@ public static class ZangetsuTextures
                 double r = Math.Sqrt(dx * dx + dy * dy);
                 if (r > 1) continue;
                 double a = 22 * (1 - r * r);
-                double hx = dx + 0.38, hy = dy + 0.42, hr = Math.Sqrt(hx * hx + hy * hy);
-                if (hr < 0.22) a = Math.Max(a, 235 * (1 - hr / 0.22));
-                double sx = dx - 0.35, sy = dy - 0.3, sr = Math.Sqrt(sx * sx + sy * sy);
-                if (sr < 0.1) a = Math.Max(a, 160 * (1 - sr / 0.1));
+                double hx = dx + 0.14, hy = dy + 0.34, hr = Math.Sqrt(hx * hx + hy * hy);
+                if (hr < 0.075) a = Math.Max(a, 240 * Sat(1.4 - hr / 0.075));
+                double sx = dx - 0.2, sy = dy - 0.3, sr = Math.Sqrt(sx * sx + sy * sy);
+                if (sr < 0.04) a = Math.Max(a, 170 * Sat(1.4 - sr / 0.04));
                 c.Set(24 * K + x, 8 * K + y, CA(Cl(a), 255, 255, 255));
             }
         // Веки: кожистые складки, темнее к ресницам.
@@ -1114,6 +1097,26 @@ public static class ZangetsuTextures
             }
         Paint(c, 24 * K, 16 * K, 28 * K, 20 * K, C(6, 3, 3), 0, 0);
         Paint(c, 28 * K, 16 * K, 32 * K, 20 * K, C(255, 255, 255), 0, 0);
+        // Гнездо глаза (0,20)-(32,32): тёмное углубление, багровый обод и жилки по стали. Накладка на сторону клинка с глазом:
+        // ±6 вдоль клинка и ±2,25 поперёк от середины глаза, вне гнезда и жилок прозрачно.
+        Color steel = C(30, 31, 38);
+        for (int y = 0; y < 12 * K; y++)
+            for (int x = 0; x < 32 * K; x++)
+            {
+                double u = M_EYE_U - 6 + (x + 0.5) / (32 * K) * 12, v = M_EYE_V - 2.25 + (y + 0.5) / (12 * K) * 4.5;
+                if (v < M_SPINE + 0.13) continue;
+                double hamon = M_BEVEL + 0.22 * Math.Sin(u * 1.7) + 0.1 * Math.Sin(u * 4.3 + 1.0) + (Fbm(u * 2.5, 3.0, 57, 3) - 0.5) * 0.16;
+                double ex = (u - M_EYE_U) / 2.5, ey = (v - M_EYE_V) / 1.42, e = ex * ex + ey * ey;
+                if (e < 1.0) c.Set(x, 20 * K + y, Mix(C(40, 8, 10), C(10, 2, 3), 1.0 - e));
+                else if (e < 1.4) c.Set(x, 20 * K + y, Mix(steel, C(96, 8, 14), (1.4 - e) / 0.4 * 0.85));
+                else if (e < 3.2 && v < hamon - 0.1)
+                {
+                    double ang = Math.Atan2(ey, ex);
+                    double vein = Math.Abs(Math.Sin(ang * 9 + Fbm(e * 2, ang * 3, 62, 2) * 4));
+                    double reach = 1 - (e - 1.4) / 1.8;
+                    if (vein < 0.07 * reach) c.Set(x, 20 * K + y, Mix(steel, C(110, 10, 16), reach * 0.8));
+                }
+            }
         return c;
     }
 
@@ -1209,18 +1212,25 @@ public static class ZangetsuTextures
         return MaskMouthTop(x) + MASK_MOUTH_H * Math.Sqrt(Math.Max(0, 1 - s * s * s));
     }
 
-    /** Середина полосы по |x| на высоте y: со лба через наружную половину глаза, ниже — внутрь, к подбородку. */
-    static double MaskStripeX(double y)
+    /** Полоса по высоте: y, середина по |x| и полуширина. Широкая на лбу, у глаза сужается, ниже идёт к подбородку и кончается остриём. */
+    static readonly double[][] MASK_STRIPE = {
+        new[] { -8.8, 2.75, 0.98 }, new[] { -6.0, 2.72, 0.72 }, new[] { -4.55, 2.8, 0.4 }, new[] { -3.4, 2.66, 0.48 },
+        new[] { -2.2, 2.35, 0.56 }, new[] { 0.7, 1.72, 0.46 }, new[] { 2.0, 1.35, 0.25 }, new[] { 2.72, 1.2, 0.0 },
+    };
+
+    static double MaskStripeAt(double y, int column)
     {
-        return y < MASK_EYE_Y ? 2.56 + 0.0245 * (MASK_EYE_Y - y) : 2.56 - 0.19 * (y - MASK_EYE_Y);
+        var t = MASK_STRIPE;
+        if (y <= t[0][0]) return t[0][column];
+        for (int i = 0; i + 1 < t.Length; i++)
+        {
+            if (y <= t[i + 1][0]) return t[i][column] + (t[i + 1][column] - t[i][column]) * Smooth(t[i][0], t[i + 1][0], y);
+        }
+        return t[t.Length - 1][column];
     }
 
-    /** Полуширина полосы: шире на лбу, тоньше к подбородку, у самого края сходит на нет. */
-    static double MaskStripeHalf(double y)
-    {
-        double half = y < MASK_EYE_Y ? 0.62 + 0.02 * (MASK_EYE_Y - y) : 0.62 - 0.035 * (y - MASK_EYE_Y);
-        return half * Smooth(2.75, 2.0, y);
-    }
+    static double MaskStripeX(double y) { return MaskStripeAt(y, 1); }
+    static double MaskStripeHalf(double y) { return MaskStripeAt(y, 2); }
 
     /** Трещины стадии (ломаные x, y): от левого глаза по лбу, к виску, к челюсти, затем на другую сторону. */
     static System.Collections.Generic.List<double[]> MaskCracks(int stage)
@@ -1269,7 +1279,7 @@ public static class ZangetsuTextures
     {
         int S = MASK_S;
         var c = new Canvas(256 * S, 256 * S);
-        Color bone = C(252, 251, 247), paint = final ? C(18, 14, 16) : C(120, 16, 24), paintEdge = final ? C(4, 3, 4) : C(76, 8, 14);
+        Color bone = C(252, 251, 247), paint = final ? C(18, 14, 16) : C(92, 12, 18), paintEdge = final ? C(4, 3, 4) : C(56, 6, 10);
         var cracks = MaskCracks(crack);
         var chunks = MaskChunks(crack);
         for (int y = 0; y < 160 * S; y++)
@@ -1292,10 +1302,6 @@ public static class ZangetsuTextures
                 {
                     col = Mix(Mul(paint, 0.94 + Fbm(nx / 4.0, ny / 12.0, 96, 2) * 0.12), paintEdge, Smooth(0.65, 1.0, sd / half));
                 }
-                // Шов по лбу, ниже глаз расходится двумя линиями носа к верхней губе.
-                bool seam = ax < 0.03 && hy < -4.6;
-                seam |= PolyDistance(ax, hy, new[] { 0.0, -4.6, 0.48, -2.35 }) < 0.028;
-                if (seam) col = Mix(col, C(120, 116, 128), 0.75);
                 if (final)
                 {
                     // Чёрная обводка глаз и потёк вниз от наружной половины.
@@ -1304,20 +1310,17 @@ public static class ZangetsuTextures
                     double drip = (hy - MASK_EYE_Y) / 2.2;
                     if (drip > 0 && drip < 1 && Math.Abs(ax - 2.9) < 0.42 * (1 - drip) + wild * 0.2) col = paint;
                 }
-                // Прорези глаз: светлый ободок с тонким контуром и тёмная глубина.
-                double lens = MaskEyeLens(fx, hy, 0), rim = MaskEyeLens(fx, hy, 1);
-                if (lens < 1)
-                {
-                    col = final ? C(6, 4, 6) : Mix(C(16, 14, 18), C(36, 32, 40), lens);
-                }
-                else if (rim < 1)
-                {
-                    col = final ? C(26, 20, 22) : (rim > 0.86 || lens < 1.1 ? C(62, 56, 64) : C(214, 210, 218));
-                }
-                // Рот: тёмный провал и контур губ; зубы — настоящие, поверх.
+                // Прорезь глаза: тёмная глубина и узкая мягкая тень по краю — лепку делает сама глазница.
+                double lens = MaskEyeLens(fx, hy, 0), rim = MaskEyeLens(fx, hy, 0.5);
+                if (lens < 1) col = final ? C(6, 4, 6) : Mix(C(12, 10, 14), C(30, 26, 34), lens);
+                else if (rim < 1) col = Mix(col, C(40, 34, 44), 0.55 * (1 - rim));
+                // Рот — тёмный провал: края даёт вылепленная губа, зубы настоящие, поверх.
                 double top = MaskMouthTop(fx), bottom = MaskMouthBottom(fx);
-                if (ax < MASK_MOUTH_HALF && hy > top && hy < bottom) col = C(20, 9, 11);
-                else if (ax < MASK_MOUTH_HALF + 0.05 && hy > top - 0.05 && hy < bottom + 0.05) col = C(58, 50, 56);
+                if (ax < MASK_MOUTH_HALF)
+                {
+                    double inside = Math.Min(hy - top, bottom - hy);
+                    if (inside > -0.06) col = Mix(col, C(16, 7, 9), Smooth(-0.06, 0.1, inside));
+                }
                 // Трещины: тёмная сердцевина, светлые сколы по краю.
                 foreach (var p in cracks)
                 {
@@ -1339,13 +1342,13 @@ public static class ZangetsuTextures
                 Color col = Mul(Mix(C(252, 250, 244), C(180, 176, 184), Smooth(0.55, 1.0, s)), ring * (0.97 + Fbm(nx / 6.0, ny / 6.0, 103, 2) * 0.05));
                 c.Set(x, 160 * S + y, col);
             }
-        // Зуб: белый треугольник с тонким контуром; снаружи контура — цвет боковых граней.
+        // Зуб: слоновая кость без контуров — объём дают геометрия и свет; у корня теплее, к кончику белее.
         for (int y = 0; y < 32 * S; y++)
             for (int x = 0; x < 64 * S; x++)
             {
-                double u = (x + 0.5) / S, v = (y + 0.5) / S;
-                double d = 32 * (1 - v / 32) - Math.Abs(u - 32);
-                Color col = d < 1.6 ? C(52, 44, 50) : Mix(C(232, 230, 226), C(255, 255, 252), v / 16.0);
+                double v = (y + 0.5) / (32 * S);
+                Color col = Mix(C(226, 216, 196), C(255, 253, 246), Smooth(0.0, 0.7, v));
+                col = Mul(col, 0.97 + Fbm((double)x / S / 6.0, (double)y / S / 14.0, 108, 2) * 0.05);
                 c.Set(x, 224 * S + y, col);
             }
         Paint(c, 64 * S, 224 * S, 128 * S, 256 * S, C(232, 230, 226), 0.04, 106);

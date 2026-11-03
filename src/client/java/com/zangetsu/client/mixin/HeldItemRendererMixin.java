@@ -2,6 +2,7 @@ package com.zangetsu.client.mixin;
 
 import com.zangetsu.client.render.EyeTracker;
 import com.zangetsu.client.render.FirstPersonMotion;
+import com.zangetsu.client.render.ZangetsuItemRenderer;
 import com.zangetsu.registry.ModItems;
 import net.minecraft.client.network.AbstractClientPlayerEntity;
 import net.minecraft.client.render.VertexConsumerProvider;
@@ -13,6 +14,8 @@ import net.minecraft.entity.LivingEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.Arm;
 import net.minecraft.util.Hand;
+import org.joml.Matrix4f;
+import org.joml.Vector3f;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
@@ -50,14 +53,17 @@ public abstract class HeldItemRendererMixin {
         }
         boolean right = (hand == Hand.MAIN_HAND) == (player.getMainArm() == Arm.RIGHT);
         int side = right ? 1 : -1;
+        Matrix4f base = new Matrix4f(matrices.peek().getPositionMatrix());
         matrices.push();
         // Где рука держит предмет (как у ванильной руки с предметом), дальше — свои взмахи.
         matrices.translate(side * 0.56F, -0.52F + equipProgress * -0.6F, -0.72F);
         FirstPersonMotion.apply(matrices, player, side, hand == Hand.MAIN_HAND ? swingProgress : 0.0F, tickDelta);
+        Vector3f fist = base.invert().mul(matrices.peek().getPositionMatrix()).transformPosition(ZangetsuItemRenderer.firstPersonHold(right));
         ((HeldItemRenderer) (Object) this).renderItem(player, item,
                 right ? ModelTransformationMode.FIRST_PERSON_RIGHT_HAND : ModelTransformationMode.FIRST_PERSON_LEFT_HAND, !right, matrices,
                 consumers, light);
         matrices.pop();
+        FirstPersonMotion.renderArm(matrices, consumers, light, player, right, fist);
         ci.cancel();
     }
 }

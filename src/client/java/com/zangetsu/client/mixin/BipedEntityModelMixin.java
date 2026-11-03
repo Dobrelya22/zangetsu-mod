@@ -1,6 +1,7 @@
 package com.zangetsu.client.mixin;
 
 import com.zangetsu.client.ClientState;
+import com.zangetsu.client.render.FirstPersonMotion;
 import com.zangetsu.client.render.PlayerPoses;
 import com.zangetsu.logic.Limbs;
 import com.zangetsu.registry.ModItems;
@@ -30,6 +31,9 @@ public abstract class BipedEntityModelMixin {
             float headPitch, CallbackInfo ci) {
         BipedEntityModel<?> model = (BipedEntityModel<?>) (Object) this;
         if (entity instanceof PlayerEntity) {
+            if (FirstPersonMotion.drawingArm) {
+                return;
+            }
             PlayerPoses.apply(model, entity, animationProgress);
             // Обычный удар Зангецу — тяжёлый взмах всем корпусом вместо ванильного тычка.
             if (ClientState.animation(entity) == null && model.handSwingProgress > 0.0F && entity.getMainHandStack().isOf(ModItems.ZANGETSU)) {

@@ -1,9 +1,6 @@
 package com.zangetsu.client;
 
-import com.mojang.blaze3d.systems.RenderSystem;
-import com.zangetsu.ZangetsuMod;
 import com.zangetsu.logic.Bond;
-import com.zangetsu.logic.HollowForm;
 import com.zangetsu.logic.SwordStacks;
 import com.zangetsu.network.ClientFxPayload;
 import com.zangetsu.network.PlayerStatePayload;
@@ -15,19 +12,12 @@ import net.minecraft.client.render.RenderTickCounter;
 import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.item.ItemStack;
 import net.minecraft.text.Text;
-import net.minecraft.util.Identifier;
 import net.minecraft.util.math.MathHelper;
 
-/** Надписи на экране: уровень и дружба меча, время формы Пустого, подсказка казни и вспышки сцен. */
+/** Надписи на экране: уровень и дружба меча, сила Пустого ({@link ReiatsuHud}), подсказка казни и вспышки сцен. */
 public final class ZangetsuHud {
     private static final String[] ROMAN = {"I", "II", "III", "IV", "V"};
     private static final ItemStack ICON = new ItemStack(ModItems.ZANGETSU);
-    private static final Identifier MASK_FULL = ZangetsuMod.id("textures/gui/mask_full.png");
-    private static final Identifier MASK_EMPTY = ZangetsuMod.id("textures/gui/mask_empty.png");
-    private static final Identifier FINAL_FULL = ZangetsuMod.id("textures/gui/mask_final_full.png");
-    private static final Identifier FINAL_EMPTY = ZangetsuMod.id("textures/gui/mask_final_empty.png");
-    private static final Identifier MASK_CRACKS = ZangetsuMod.id("textures/gui/mask_cracks.png");
-    private static final int MASK_SIZE = 30;
 
     private ZangetsuHud() {
     }
@@ -77,7 +67,7 @@ public final class ZangetsuHud {
             line += 11;
         }
         if (level >= Bond.HOLLOW_LEVEL) {
-            renderMask(context, font, state, level >= Bond.FINAL_LEVEL, x, line, tickDelta);
+            ReiatsuHud.render(context, font, state, level >= Bond.FINAL_LEVEL, ClientState.ticks + tickDelta);
         }
 
         // Подсказка казни под прицелом.
@@ -93,64 +83,6 @@ public final class ZangetsuHud {
         }
     }
 
-    /**
-     * Маска Пустого вместо таймера: светлая часть маски — оставшееся время (тает сверху вниз), под ней —
-     * тёмный силуэт. Маска трескается вместе с настоящей: на 30, 15 и 5 секундах. В форме Пустого вокруг
-     * неё пульсирует алое свечение, а когда сила на сегодня кончилась — маска разбита и темна.
-     */
-    private static void renderMask(DrawContext context, TextRenderer font, PlayerStatePayload state, boolean finalForm, int x, int y, float tickDelta) {
-        Identifier full = finalForm ? FINAL_FULL : MASK_FULL, empty = finalForm ? FINAL_EMPTY : MASK_EMPTY;
-        int size = MASK_SIZE;
-        float fraction = MathHelper.clamp(state.hollowLeft() / (float) HollowForm.BUDGET, 0.0F, 1.0F);
-        int crack = state.hollowLeft() <= 0 ? 3 : HollowForm.crackFor(state.hollowLeft());
-        float time = ClientState.ticks + tickDelta;
-        RenderSystem.enableBlend();
-        context.getMatrices().push();
-        context.getMatrices().translate(x, y, 0);
-        context.getMatrices().scale(size / 32.0F, size / 32.0F, 1.0F);
-        if (state.hollowActive()) {
-            // Алое свечение — та же маска, крупнее и красная, пульсирует.
-            float pulse = 0.35F + 0.25F * MathHelper.sin(time * 0.25F) + (crack == 3 ? 0.25F * Math.abs(MathHelper.sin(time * 1.3F)) : 0.0F);
-            context.setShaderColor(1.0F, 0.1F, 0.08F, pulse);
-            context.getMatrices().push();
-            context.getMatrices().translate(16.0F, 16.0F, 0.0F);
-            context.getMatrices().scale(1.22F, 1.22F, 1.0F);
-            context.getMatrices().translate(-16.0F, -16.0F, 0.0F);
-            context.drawTexture(full, 0, 0, 0.0F, 0.0F, 32, 32, 32, 32);
-            context.getMatrices().pop();
-            context.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
-        }
-        context.drawTexture(empty, 0, 0, 0.0F, 0.0F, 32, 32, 32, 32);
-        // Светлая часть — оставшееся время: тает сверху вниз.
-        int lit = Math.round(32.0F * fraction);
-        if (lit > 0) {
-            if (!state.hollowActive()) {
-                context.setShaderColor(0.62F, 0.6F, 0.6F, 1.0F);
-            }
-            context.drawTexture(full, 0, 32 - lit, 32, lit, 0.0F, 32 - lit, 32, lit, 32, 32);
-            context.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
-        }
-        if (crack > 0) {
-            context.drawTexture(MASK_CRACKS, 0, 0, (crack - 1) * 32.0F, 0.0F, 32, 32, 96, 32);
-        }
-        context.getMatrices().pop();
-
-        // Рядом — коротко: сколько осталось и какой клавишей.
-        int tx = x + size + 4, ty = y + size / 2 - 8;
-        if (state.hollowActive()) {
-            int color = crack >= 2 && ((int) (time / 4) % 2 == 0) ? 0xFFFFFF : 0xFF3030;
-            context.drawTextWithShadow(font, Text.translatable("zangetsu.hud.hollow_active", formatTime(state.hollowLeft())), tx, ty, color);
-            context.drawTextWithShadow(font, Text.translatable("zangetsu.hud.hollow_off", KeyBindings.hollow.getBoundKeyLocalizedText()),
-                    tx, ty + 10, 0x998888);
-        } else if (state.hollowLeft() > 0) {
-            context.drawTextWithShadow(font, Text.translatable("zangetsu.hud.hollow_ready", KeyBindings.hollow.getBoundKeyLocalizedText()),
-                    tx, ty, 0xE04040);
-            context.drawTextWithShadow(font, Text.literal(formatTime(state.hollowLeft())), tx, ty + 10, 0x998888);
-        } else {
-            context.drawTextWithShadow(font, Text.translatable("zangetsu.hud.hollow_empty"), tx, ty + 4, 0x888888);
-        }
-    }
-
     private static ItemStack swordIcon(MinecraftClient client) {
         PlayerInventory inventory = client.player.getInventory();
         for (int i = 0; i < inventory.size(); i++) {
@@ -159,11 +91,6 @@ public final class ZangetsuHud {
             }
         }
         return ICON;
-    }
-
-    private static String formatTime(int ticks) {
-        int seconds = (ticks + 19) / 20;
-        return String.format("%d:%02d", seconds / 60, seconds % 60);
     }
 
     /** Белая вспышка (сон кончается) или красные края (превращение в Пустого). */

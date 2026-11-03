@@ -379,6 +379,7 @@ public class ZangetsuShots implements ClientModInitializer {
             ModAttachments.data(player).hollowUsed = 0;
         });
         pause(40);
+        shot("hud_ready");
         onServer(s -> HollowForm.toggle(player(s)));
         pause(8);
         shot("hollow_transform");
@@ -417,6 +418,11 @@ public class ZangetsuShots implements ClientModInitializer {
         pause(HollowForm.GETSUGA_WINDUP + 5);
         shot("getsuga_side");
         pause(60);
+
+        // Половина силы: фронт горения посередине клинка.
+        onServer(s -> ModAttachments.data(player(s)).hollowUsed = HollowForm.BUDGET / 2);
+        pause(30);
+        shot("hud_half");
 
         // Маска трескается: 30 с — трещина, 15 с — скол, 5 с — почти рассыпалась, потом ломается.
         view(Perspective.THIRD_PERSON_FRONT);
