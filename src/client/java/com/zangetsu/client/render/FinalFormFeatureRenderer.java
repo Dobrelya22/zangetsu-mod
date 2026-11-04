@@ -14,7 +14,6 @@ import net.minecraft.client.util.SkinTextures;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.util.math.MathHelper;
 import org.joml.Matrix4f;
-import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
 /**
@@ -43,7 +42,6 @@ public class FinalFormFeatureRenderer extends FeatureRenderer<AbstractClientPlay
     private static final float ARM_FLAME_HEIGHT = 9.5F, LEG_FLAME_HEIGHT = 8.0F, FLAME_WIDTH = 6.5F;
     /** От первого лица рука у самой камеры: такой же огонь закрыл бы весь обзор. */
     private static final float FIRST_PERSON_FLAME = 0.5F;
-    private static final Vector3f WORLD_UP = new Vector3f(0.0F, 1.0F, 0.0F);
 
     /** Конечность с кандалами. {@code side} — её внешняя сторона, {@code bend} — насколько согнута в этот кадр. */
     private record Limb(ModelPart part, float centerX, float halfX, float side, boolean arm, float bend, float seed, String key) {
@@ -103,16 +101,15 @@ public class FinalFormFeatureRenderer extends FeatureRenderer<AbstractClientPlay
         Matrix4f simFromBody = physics.simFromLocal(matrices.peek().getPositionMatrix());
         Matrix4f bodyFromSim = physics.bodyFromSim(stepped, simFromBody);
         Vector3f bodyWind = physics.spaceDirection(physics.flameWind("body", simFromBody.transformPosition(0.0F, 0.5F, 0.0F, new Vector3f()), animationProgress));
-        Flames.Frame frame = stepped ? new Flames.Frame(matrices.peek(), WORLD_UP, bodyWind, flameTime, heat)
-                : new Flames.Frame(matrices.peek(), Flames.SCREEN_UP, bodyWind, flameTime, heat, Flames.SCREEN_VIEW);
+        Flames.Frame frame = stepped ? Flames.Frame.world(matrices.peek(), bodyWind, flameTime, heat) : Flames.Frame.screen(matrices.peek(), bodyWind, flameTime, heat);
         TatteredCloak.render(matrices, consumers, light, physics, animationProgress, grow, speed, heat, stepped, simFromBody, bodyFromSim, capsules, ground, frame);
         bodyChains(matrices, consumers, light, physics, player, simFromBody, bodyFromSim, frame, capsules, ground, animationProgress, grow, stepped);
         matrices.pop();
 
-        limb(matrices, consumers, light, physics, player, new Limb(model.rightArm, -armX, armHalf, -1.0F, true, bend(bends, 0), 1.0F, "wrist_r"), WORLD_UP, animationProgress, flameTime, heat, grow, capsules, ground, stepped, bodyFromSim);
-        limb(matrices, consumers, light, physics, player, new Limb(model.leftArm, armX, armHalf, 1.0F, true, bend(bends, 1), 2.0F, "wrist_l"), WORLD_UP, animationProgress, flameTime, heat, grow, capsules, ground, stepped, bodyFromSim);
-        limb(matrices, consumers, light, physics, player, new Limb(model.rightLeg, 0.0F, HALF, -1.0F, false, bend(bends, 2), 3.0F, "ankle_r"), WORLD_UP, animationProgress, flameTime, heat, grow, capsules, ground, stepped, bodyFromSim);
-        limb(matrices, consumers, light, physics, player, new Limb(model.leftLeg, 0.0F, HALF, 1.0F, false, bend(bends, 3), 4.0F, "ankle_l"), WORLD_UP, animationProgress, flameTime, heat, grow, capsules, ground, stepped, bodyFromSim);
+        limb(matrices, consumers, light, physics, player, new Limb(model.rightArm, -armX, armHalf, -1.0F, true, bend(bends, 0), 1.0F, "wrist_r"), animationProgress, flameTime, heat, grow, capsules, ground, stepped, bodyFromSim);
+        limb(matrices, consumers, light, physics, player, new Limb(model.leftArm, armX, armHalf, 1.0F, true, bend(bends, 1), 2.0F, "wrist_l"), animationProgress, flameTime, heat, grow, capsules, ground, stepped, bodyFromSim);
+        limb(matrices, consumers, light, physics, player, new Limb(model.rightLeg, 0.0F, HALF, -1.0F, false, bend(bends, 2), 3.0F, "ankle_r"), animationProgress, flameTime, heat, grow, capsules, ground, stepped, bodyFromSim);
+        limb(matrices, consumers, light, physics, player, new Limb(model.leftLeg, 0.0F, HALF, 1.0F, false, bend(bends, 3), 4.0F, "ankle_l"), animationProgress, flameTime, heat, grow, capsules, ground, stepped, bodyFromSim);
     }
 
     private static float bend(float[] bends, int limb) {
@@ -147,20 +144,18 @@ public class FinalFormFeatureRenderer extends FeatureRenderer<AbstractClientPlay
         return out;
     }
 
-    /** Рука от первого лица: те же кандалы, цепь и огонь, только физика считается из вида камеры. */
+    /** Рука от первого лица: те же кандалы, цепь и огонь. */
     public static void firstPersonArm(MatrixStack matrices, VertexConsumerProvider consumers, int light, AbstractClientPlayerEntity player, ModelPart arm, boolean right) {
         if (!ClientState.isFinal(player)) {
             return;
         }
         float time = player.age + MinecraftClient.getInstance().getRenderTickCounter().getTickDelta(false);
-        Quaternionf toView = new Quaternionf(MinecraftClient.getInstance().gameRenderer.getCamera().getRotation()).conjugate();
-        Vector3f up = toView.transform(new Vector3f(0.0F, 1.0F, 0.0F));
         FormPhysics physics = FormPhysics.of(player);
         physics.enterFirstPerson(player);
         float heat = physics.heat(time, speed(player));
         float side = right ? -1.0F : 1.0F;
         Limb limb = new Limb(arm, side * armCenter(player), armHalf(player), side, true, 0.0F, right ? 1.0F : 2.0F, right ? "fp_wrist_r" : "fp_wrist_l");
-        limb(matrices, consumers, light, physics, player, limb, up, time, physics.flameTime(time), heat, 1.0F, new float[0][], Float.NEGATIVE_INFINITY, true, null);
+        limb(matrices, consumers, light, physics, player, limb, time, physics.flameTime(time), heat, 1.0F, new float[0][], Float.NEGATIVE_INFINITY, true, null);
     }
 
     /**
@@ -168,7 +163,7 @@ public class FinalFormFeatureRenderer extends FeatureRenderer<AbstractClientPlay
      * Сначала железо, потом тело пламени, потом свет: каждый слой можно запрашивать, только закончив предыдущий.
      */
     private static void limb(MatrixStack matrices, VertexConsumerProvider consumers, int light, FormPhysics physics, AbstractClientPlayerEntity player, Limb limb,
-            Vector3f spaceUp, float now, float flameTime, float heat, float grow, float[][] capsules, float ground, boolean stepped, Matrix4f bodyFromSim) {
+            float now, float flameTime, float heat, float grow, float[][] capsules, float ground, boolean stepped, Matrix4f bodyFromSim) {
         boolean arm = limb.arm();
         float centerX = limb.centerX(), halfX = limb.halfX(), y = limb.y(), seed = limb.seed();
         float midY = y - (arm ? 5.0F : 5.5F);
@@ -182,11 +177,9 @@ public class FinalFormFeatureRenderer extends FeatureRenderer<AbstractClientPlay
         MatrixStack.Entry entry = matrices.peek();
         Matrix4f simFromLimb = physics.simFromLocal(entry.getPositionMatrix());
         Vector3f wrist = simFromLimb.transformPosition(centerX / 16.0F, y / 16.0F, 0.0F, new Vector3f());
-        // В инвентаре модель нарисована на экране, а не в мире: и верх, и взгляд там свои.
-        Vector3f up = stepped ? spaceUp : Flames.SCREEN_UP, view = stepped ? null : Flames.SCREEN_VIEW;
         // Огонь отстаёт от самой руки: махнул — языки вытянулись назад.
         Vector3f wind = physics.spaceDirection(physics.flameWind(limb.key(), wrist, now));
-        Flames.Frame frame = new Flames.Frame(entry, up, wind, flameTime, heat, view);
+        Flames.Frame frame = frameOf(entry, wind, flameTime, heat, stepped);
         // Рука или нога ушла назад под плащ: огонь там приседает, иначе его языки торчали бы сквозь ткань. Вышла вперёд — разгорается снова.
         float covered = stepped && bodyFromSim != null ? coverage(bodyFromSim.transformPosition(wrist, new Vector3f()).z * 16.0F) : 0.0F;
         float near = stepped && capsules.length == 0 ? FIRST_PERSON_FLAME : 1.0F;
@@ -219,7 +212,7 @@ public class FinalFormFeatureRenderer extends FeatureRenderer<AbstractClientPlay
         // Огонь поменьше стоит у самого сгиба: у него своё положение.
         matrices.push();
         BentLimbs.toSection(matrices, limb.joint(), limb.bend(), midY);
-        Flames.Frame middle = new Flames.Frame(matrices.peek(), up, wind, flameTime, heat, view);
+        Flames.Frame middle = frameOf(matrices.peek(), wind, flameTime, heat, stepped);
         for (int i = 0; i < SMALL_FLAMES; i++) {
             float[] base = ringPoint(centerX, halfX, midY, i, SMALL_FLAMES, seed + 5.0F);
             Flames.flame(blend, middle, base[0], base[1], base[2], length * 0.58F, width * 0.7F, seed * 13.0F + i * 2.3F, 0.95F);
@@ -233,7 +226,7 @@ public class FinalFormFeatureRenderer extends FeatureRenderer<AbstractClientPlay
 
         matrices.push();
         BentLimbs.toSection(matrices, limb.joint(), limb.bend(), y);
-        Flames.Frame lit = new Flames.Frame(matrices.peek(), up, wind, flameTime, heat, view);
+        Flames.Frame lit = frameOf(matrices.peek(), wind, flameTime, heat, stepped);
         for (int i = 0; i < BIG_FLAMES; i++) {
             float[] base = ringPoint(centerX, halfX, y + 0.5F, i, BIG_FLAMES, seed);
             Flames.glow(core, lit, base[0], base[1], base[2], length * bigHeight(seed, i), width, seed * 10.0F + i * 1.7F, 0.9F);
@@ -244,6 +237,11 @@ public class FinalFormFeatureRenderer extends FeatureRenderer<AbstractClientPlay
         matrices.pop();
 
         matrices.pop();
+    }
+
+    /** Где рисуем огонь конечности: в мире и от первого лица или на экране инвентаря. */
+    private static Flames.Frame frameOf(MatrixStack.Entry entry, Vector3f wind, float time, float heat, boolean stepped) {
+        return stepped ? Flames.Frame.world(entry, wind, time, heat) : Flames.Frame.screen(entry, wind, time, heat);
     }
 
     /** Высота большого пламени: у каждого своя, чтобы верхушки не стояли ровным рядом. */

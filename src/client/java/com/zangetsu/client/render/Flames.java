@@ -41,20 +41,19 @@ final class Flames {
         final Matrix4f matrix;
         final Vector3f up, wind, a, b;
         final Vector3f spaceUp, spaceWind;
-        /** Куда смотреть на огонь, если камера не в начале координат (null — камера в начале, как и в мире, и от первого лица). */
+        /** Куда смотреть на огонь, если камера не в начале координат (null — камера в начале). */
         final Vector3f view;
+        /** Верх кадра: туда растёт пламя. */
+        final Vector3f screenUp;
         /** Сколько единиц пространства в единице матрицы. */
         final float unit;
         final float time;
         /** От жара пламя выше и бьётся сильнее. */
         final float scale, sway;
+        /** На сколько (в единицах матрицы) поднести полотно к камере: иначе плоскость огня проходит сквозь толщу клинка, и половину пламени закрывает сам клинок. */
+        float towardCamera;
 
-        /** {@code spaceUp} и {@code spaceWind} — вверх по миру и ветер в пространстве, где стоит матрица (мир без поворота камеры либо вид камеры). */
-        Frame(MatrixStack.Entry entry, Vector3f spaceUp, Vector3f spaceWind, float time, float heat) {
-            this(entry, spaceUp, spaceWind, time, heat, null);
-        }
-
-        Frame(MatrixStack.Entry entry, Vector3f spaceUp, Vector3f spaceWind, float time, float heat, Vector3f view) {
+        private Frame(MatrixStack.Entry entry, Vector3f spaceUp, Vector3f spaceWind, float time, float heat, Vector3f view, Vector3f screenUp) {
             this.matrix = entry.getPositionMatrix();
             Matrix4f inverse = new Matrix4f(this.matrix).invert();
             this.up = inverse.transformDirection(new Vector3f(spaceUp)).normalize();
@@ -64,10 +63,37 @@ final class Flames {
             this.spaceUp = new Vector3f(spaceUp).normalize();
             this.spaceWind = new Vector3f(spaceWind);
             this.view = view;
+            this.screenUp = screenUp;
             this.unit = this.matrix.transformDirection(0.0F, 1.0F, 0.0F, new Vector3f()).length();
             this.time = time;
             this.scale = 1.0F + 0.4F * heat;
             this.sway = 1.0F + 0.8F * heat;
+        }
+
+        /** Огонь в мире и от первого лица: матрица стоит в осях мира, камера в начале координат (игра рисует руку так же, сняв поворот камеры с матрицы). */
+        static Frame world(MatrixStack.Entry entry, Vector3f wind, float time, float heat) {
+            return new Frame(entry, new Vector3f(0.0F, 1.0F, 0.0F), wind, time, heat, null, new Vector3f(MinecraftClient.getInstance().gameRenderer.getCamera().getVerticalPlane()));
+        }
+
+        /** В инвентаре: модель нарисована на экране. */
+        static Frame screen(MatrixStack.Entry entry, Vector3f wind, float time, float heat) {
+            return new Frame(entry, SCREEN_UP, wind, time, heat, SCREEN_VIEW, SCREEN_UP);
+        }
+
+        /**
+         * Куда растёт пламя в точке {@code base} (координаты пространства): к верху кадра. Камера не наклоняется набок, поэтому посреди экрана это и есть верх мира,
+         * зато так он не расходится лучами и не сжимается в точку, когда смотришь вниз или вверх: полотно видно целиком под любым углом, и огонь не свисает.
+         */
+        Vector3f axisAt(Vector3f base) {
+            Vector3f look = this.lookFrom(base);
+            float along = this.screenUp.dot(look);
+            Vector3f axis = new Vector3f(this.screenUp).sub(look.x * along, look.y * along, look.z * along);
+            return axis.lengthSquared() < 1.0E-5F ? new Vector3f(this.screenUp) : axis.normalize();
+        }
+
+        /** Направление от точки к камере. */
+        Vector3f lookFrom(Vector3f base) {
+            return this.view != null ? this.view : new Vector3f(base).negate().normalize();
         }
     }
 
@@ -122,12 +148,10 @@ final class Flames {
 
     private static void sprite(VertexConsumer out, Frame f, float x, float y, float z, float height, float width, float seed, int color, boolean bothSides) {
         Vector3f base = f.matrix.transformPosition(x, y, z, new Vector3f());
-        Vector3f view = f.view != null ? f.view : new Vector3f(base).negate().normalize();
-        Vector3f side = new Vector3f(f.spaceUp).cross(view);
-        if (side.lengthSquared() < 1.0E-3F) {
-            side.set(1.0F, 0.0F, 0.0F);
-        }
-        side.normalize();
+        Vector3f look = f.lookFrom(base);
+        base.add(look.x * f.towardCamera * f.unit, look.y * f.towardCamera * f.unit, look.z * f.towardCamera * f.unit);
+        Vector3f axis = f.axisAt(base);
+        Vector3f side = new Vector3f(axis).cross(look).normalize();
         float t = f.time;
         int own = (int) (seed * 97.0F);
         // Пламя дышит: то выше, то ниже, у каждого по-своему.
@@ -147,8 +171,8 @@ final class Flames {
         for (int i = 0; i <= STRIPS; i++) {
             float s = (float) i / STRIPS;
             float along = tall * s, curve = tall * s * s;
-            Vector3f center = new Vector3f(base).add(f.spaceUp.x * along + f.spaceWind.x * curve + side.x * swing * s * s,
-                    f.spaceUp.y * along + f.spaceWind.y * curve + side.y * swing * s * s, f.spaceUp.z * along + f.spaceWind.z * curve + side.z * swing * s * s);
+            Vector3f center = new Vector3f(base).add(axis.x * along + f.spaceWind.x * curve + side.x * swing * s * s,
+                    axis.y * along + f.spaceWind.y * curve + side.y * swing * s * s, axis.z * along + f.spaceWind.z * curve + side.z * swing * s * s);
             Vector3f l = new Vector3f(center).sub(side.x * half, side.y * half, side.z * half), r = new Vector3f(center).add(side.x * half, side.y * half, side.z * half);
             if (left != null) {
                 float v0 = top + cell * (1.0F - (float) (i - 1) / STRIPS), v1 = top + cell * (1.0F - s);

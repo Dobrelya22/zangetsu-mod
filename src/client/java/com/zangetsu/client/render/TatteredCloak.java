@@ -136,7 +136,8 @@ final class TatteredCloak {
         // Маленькое пламя на кончиках длинных полос и тлеющая ткань.
         VertexConsumer blend = consumers.getBuffer(Flames.bodyLayer());
         for (int c = 2; c < COLS; c += 4) {
-            float[] tip = point(cloak, CLOAK, c, CLOAK.shreds()[c], 0.5F);
+            // Не на самом кончике: он сходит на нет и лежит на земле, и огонь висел бы рядом с тканью. Чуть выше полоса ещё широкая.
+            float[] tip = point(cloak, CLOAK, c, CLOAK.shreds()[c] * 0.84F, 0.5F);
             float size = grow * (0.8F + 0.5F * Flames.hash(c, 5));
             Flames.flame(blend, frame, tip[0] / 16.0F, tip[1] / 16.0F, tip[2] / 16.0F, size * 4.6F / 16.0F, size * 3.2F / 16.0F, c * 0.37F, 0.9F);
         }

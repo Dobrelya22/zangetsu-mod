@@ -59,6 +59,7 @@ final class Showcase {
         claim();
         chains();
         cloakRun();
+        firstPersonLook();
         moves("moves_side", 50.0, 270.0F, false);
         moves("moves_front", 75.0, 205.0F, false);
         moves("moves_fp", 100.0, 0.0F, true);
@@ -279,6 +280,23 @@ final class Showcase {
         s.setup = srv -> Script.base(srv, 5, true);
         client(322.1, () -> Director.walkTo = Stage.at(0, 0, -60));
         cut(322.0, "chains_side", shot(heroAt(2.6, 1.0, 0.8), heroAt(0, 0.8, 0), 44));
+    }
+
+    /** От первого лица, взгляд почти отвесно вниз и вверх и взмах: огонь на клинке и на руке должен быть виден. */
+    private void firstPersonLook() {
+        float[][] looks = {{348.0F, 82.0F}, {352.0F, -82.0F}, {356.0F, 45.0F}};
+        String[] names = {"ff_fp_down", "ff_fp_up", "ff_fp_low"};
+        for (int i = 0; i < looks.length; i++) {
+            float t0 = looks[i][0], pitch = looks[i][1];
+            scene(names[i], t0, t0 + 3.0);
+            s.firstPerson = true;
+            s.settle = 70;
+            s.setup = srv -> Script.base(srv, 5, true);
+            speed(t0, 0.5F);
+            client(t0 + 0.05, () -> MinecraftClient.getInstance().player.setPitch(pitch));
+            client(t0 + 1.5, () -> MinecraftClient.getInstance().player.swingHand(Hand.MAIN_HAND));
+            cut(t0, "fp", shot(p(0, 5, 5), p(0, 0, 0), 70));
+        }
     }
 
     /** Плащ на бегу сзади и сбоку: руки и ноги толкают ткань, а не проходят сквозь неё. */

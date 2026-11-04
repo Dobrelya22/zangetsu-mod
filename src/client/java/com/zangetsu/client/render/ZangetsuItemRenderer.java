@@ -660,8 +660,9 @@ public class ZangetsuItemRenderer implements BuiltinItemRendererRegistry.Dynamic
      * Огонь финальной формы вдоль обуха: то же пламя, что на руках, только мельче. Снос считается от самого клинка:
      * в ударе меч несётся быстро, и пламя вытягивается за ним, как хвост.
      */
-    /** Сколько полотен огня вдоль обуха. */
+    /** Сколько полотен огня вдоль клинка и на сколько крайние отступают от его концов. */
     private static final int BLADE_FLAMES = 13;
+    private static final float FLAME_INSET = 0.9F;
 
     private static void bladeFire(VertexConsumerProvider consumers, MatrixStack matrices, Entity holder, FormPhysics physics, ModelTransformationMode mode, float now, float blaze, float waves) {
         // В обряде огонь приходит только с молнией.
@@ -669,36 +670,58 @@ public class ZangetsuItemRenderer implements BuiltinItemRendererRegistry.Dynamic
         if (grow <= 0.0F) {
             return;
         }
-        Vector3f up = new Vector3f(0.0F, 1.0F, 0.0F);
         Matrix4f matrix = matrices.peek().getPositionMatrix();
         boolean firstPerson = mode == ModelTransformationMode.FIRST_PERSON_RIGHT_HAND || mode == ModelTransformationMode.FIRST_PERSON_LEFT_HAND;
         Vector3f middle = toModel(BLADE_START + (BLADE_END - BLADE_START) * 0.6F, 0.0F, 0.0F);
         Vector3f wind = new Vector3f();
         boolean inWorld = firstPerson;
         if (firstPerson) {
-            new Quaternionf(MinecraftClient.getInstance().gameRenderer.getCamera().getRotation()).conjugate().transform(up);
             physics.enterFirstPerson(holder);
             wind = physics.spaceDirection(physics.flameWind("fp_blade", physics.simFromLocal(matrix).transformPosition(middle, new Vector3f()), now));
         } else if (physics.enterWorld(matrix, holder, MinecraftClient.getInstance().getRenderTickCounter().getTickDelta(false))) {
             inWorld = true;
             wind = physics.spaceDirection(physics.flameWind("blade", physics.simFromLocal(matrix).transformPosition(middle, new Vector3f()), now));
         }
-        Flames.Frame frame = inWorld ? new Flames.Frame(matrices.peek(), up, wind, waves, blaze)
-                : new Flames.Frame(matrices.peek(), Flames.SCREEN_UP, wind, waves, blaze, Flames.SCREEN_VIEW);
+        Flames.Frame frame = inWorld ? Flames.Frame.world(matrices.peek(), wind, waves, blaze) : Flames.Frame.screen(matrices.peek(), wind, waves, blaze);
+        // Полотно перед толщей клинка, иначе он закрывает пламя собой.
+        frame.towardCamera = (FLAT_T + 0.3F) / 16.0F;
         float px = grow / 16.0F;
-        // Стена огня вдоль обуха, а поверх свет: сперва тело, потом серединка.
+        float[][] flames = new float[BLADE_FLAMES][];
+        for (int i = 0; i < BLADE_FLAMES; i++) {
+            flames[i] = bladeFlame(i, frame, matrix, px);
+        }
+        // Стена огня вдоль клинка, а поверх свет: сперва тело, потом серединка.
         VertexConsumer blend = consumers.getBuffer(Flames.bodyLayer());
         for (int i = 0; i < BLADE_FLAMES; i++) {
-            float u = BLADE_START + 0.6F + i * 1.2F;
-            Vector3f spine = toModel(u, section(u)[0] + 0.05F, 0.0F);
-            Flames.flame(blend, frame, spine.x, spine.y, spine.z, (5.0F + 2.6F * burnRand(i, 7)) * px, 4.6F * px, i * 1.3F, 0.95F);
+            float[] flame = flames[i];
+            Flames.flame(blend, frame, flame[0], flame[1], flame[2], flame[3], flame[4], i * 1.3F, 0.95F);
         }
         VertexConsumer light = consumers.getBuffer(Flames.coreLayer());
         for (int i = 0; i < BLADE_FLAMES; i++) {
-            float u = BLADE_START + 0.6F + i * 1.2F;
-            Vector3f spine = toModel(u, section(u)[0] + 0.05F, 0.0F);
-            Flames.glow(light, frame, spine.x, spine.y, spine.z, (5.0F + 2.6F * burnRand(i, 7)) * px, 4.6F * px, i * 1.3F, 0.85F);
+            float[] flame = flames[i];
+            Flames.glow(light, frame, flame[0], flame[1], flame[2], flame[3], flame[4], i * 1.3F, 0.85F);
         }
+    }
+
+    /**
+     * Пламя номер {@code i} вдоль клинка: {x, y, z, высота, ширина}. Стоит только там, где есть сталь: у гарды и у острия оно ниже и уже, а полотно не выходит за конец клинка.
+     * Огонь растёт от того края клинка, который сейчас сверху на экране: обычно от обуха, а если клинок перевёрнут — от кромки, поэтому не ложится на глаз и жилы.
+     */
+    private static float[] bladeFlame(int i, Flames.Frame frame, Matrix4f matrix, float px) {
+        float u = MathHelper.lerp((float) i / (BLADE_FLAMES - 1), BLADE_START + FLAME_INSET, BLADE_END - FLAME_INSET);
+        float[] s = section(u);
+        Vector3f spine = toModel(u, s[0] + 0.05F, 0.0F), edge = toModel(u, s[2] - 0.05F, 0.0F);
+        Vector3f base = matrix.transformPosition(new Vector3f(spine).lerp(edge, 0.5F), new Vector3f());
+        Vector3f toSpine = matrix.transformDirection(new Vector3f(spine).sub(edge), new Vector3f());
+        float height = toSpine.lengthSquared() < 1.0E-8F ? 1.0F : toSpine.normalize().dot(frame.axisAt(base));
+        float k = MathHelper.clamp((height + 0.25F) / 0.5F, 0.0F, 1.0F);
+        k = k * k * (3.0F - 2.0F * k);
+        Vector3f at = new Vector3f(edge).lerp(spine, k);
+        // Сколько стали осталось до ближайшего конца: по этому месту и сужается пламя. Шаг вдоль клинка в единицах модели — S * корень из двух / 16.
+        float room = Math.min(u - BLADE_START, BLADE_END - u) * S * MathHelper.SQUARE_ROOT_OF_TWO / 16.0F;
+        float taper = MathHelper.clamp((Math.min(u - BLADE_START, BLADE_END - u) - FLAME_INSET) / 3.0F, 0.0F, 1.0F);
+        float width = Math.min(4.6F * px, room * 2.4F);
+        return new float[]{at.x, at.y, at.z, (5.0F + 2.6F * burnRand(i, 7)) * px * (0.5F + 0.5F * taper), width};
     }
 
     private static void blade(Mesh m, boolean burning) {

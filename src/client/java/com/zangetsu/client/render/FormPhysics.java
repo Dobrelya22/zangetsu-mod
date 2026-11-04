@@ -13,7 +13,6 @@ import net.minecraft.sound.SoundEvents;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
 import org.joml.Matrix4f;
-import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
 /**
@@ -104,13 +103,11 @@ public final class FormPhysics {
         return dx * dx + dy * dy + dz * dz < 9.0;
     }
 
-    /** То же для руки от первого лица: там матрицы стоят в координатах камеры. */
+    /** То же для руки от первого лица: матрицы там тоже в осях мира с камерой в начале координат, поэтому цепь висит по настоящей вертикали, куда бы ни смотрел игрок. */
     public void enterFirstPerson(Entity player) {
-        var camera = MinecraftClient.getInstance().gameRenderer.getCamera();
+        Vec3d at = MinecraftClient.getInstance().gameRenderer.getCamera().getPos();
         origin(player);
-        Vec3d at = camera.getPos();
-        this.simFromSpace.translation((float) (at.x - this.originX), (float) (at.y - this.originY), (float) (at.z - this.originZ))
-                .rotate(new Quaternionf(camera.getRotation()));
+        this.simFromSpace.translation((float) (at.x - this.originX), (float) (at.y - this.originY), (float) (at.z - this.originZ));
         this.spaceFromSim.set(this.simFromSpace).invert();
     }
 
