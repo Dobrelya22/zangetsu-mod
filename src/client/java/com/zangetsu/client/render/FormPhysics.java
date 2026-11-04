@@ -142,6 +142,11 @@ public final class FormPhysics {
         return this.bodyFromSim;
     }
 
+    /** Последнее настоящее положение туловища в координатах физики (для замеров). */
+    public Matrix4f lastBodyFromSim() {
+        return this.bodyFromSim;
+    }
+
     public Matrix4f simFromLocal(Matrix4f local) {
         return new Matrix4f(this.simFromSpace).mul(local);
     }
@@ -298,6 +303,10 @@ public final class FormPhysics {
         private static final float PUSH_SPEED = 0.6F;
         /** Какая доля толчка превращается в скорость ткани. */
         private static final float PUSH_TOSS = 0.08F;
+        /** На какую долю толчка прибавляет каждая строка ткани от кокетки вниз. */
+        private static final float SEAM_EASE = 0.25F;
+        /** Какую долю скорости теряет ткань, прижатая к телу. */
+        private static final float CONTACT_FRICTION = 0.5F;
         private final int cols, rows, pinnedRows;
         private final float[] outX, outZ;
         /** Куда сейчас «наружу» у каждой полосы в координатах физики: поворачивается вместе с туловищем. */
@@ -442,45 +451,54 @@ public final class FormPhysics {
                 float ux = this.nx[c], uy = this.ny[c], uz = this.nz[c];
                 for (int j = this.pinnedRows; j < this.rows; j++) {
                     int i = this.index(c, j);
+                    // Сразу под кокеткой ткань пришита: толчок там слабый, а через конечность она не перепрыгивает. Иначе столкновение и пришитый край перетягивали бы точку каждый кадр, и плечо дрожало бы.
+                    float hold = Math.min(1.0F, (j - this.pinnedRows + 1) * SEAM_EASE);
                     float px = this.px[i], py = this.py[i], pz = this.pz[i];
                     float startX = px, startY = py, startZ = pz;
                     // Полоса, запахнувшаяся вокруг тела на другую сторону, наружу не выталкивается: иначе прыгнула бы сквозь него.
                     boolean outside = (px - axis.x) * ux + (py - axis.y) * uy + (pz - axis.z) * uz > -0.06F;
+                    // Рука в локте, кулак у плеча: капсулы лежат вплотную и толкали бы точку друг другу навстречу, она металась бы между ними. Поэтому один выход наружу, за все капсулы разом.
+                    float under = 0.0F;
+                    if (outside && hold >= 1.0F) {
+                        for (float[] capsule : capsules) {
+                            if (capsule[8] > 0.0F) {
+                                float exit = exitAlong(capsule, px, py, pz, ux, uy, uz);
+                                if (exit < MAX_UNDER) {
+                                    under = Math.max(under, exit);
+                                }
+                            }
+                        }
+                    }
+                    if (under > 0.0F) {
+                        float move = Math.min(under, limit);
+                        px += ux * move;
+                        py += uy * move;
+                        pz += uz * move;
+                    }
+                    // Обычное касание: от самой глубокой капсулы в сторону, остальные — в следующем проходе.
+                    float deepest = 0.0F, awayX = 0.0F, awayY = 0.0F, awayZ = 0.0F;
                     for (float[] capsule : capsules) {
                         float ax = capsule[0], ay = capsule[1], az = capsule[2], r = capsule[6];
                         float vx = capsule[3] - ax, vy = capsule[4] - ay, vz = capsule[5] - az;
                         float wx = px - ax, wy = py - ay, wz = pz - az;
-                        float length = vx * vx + vy * vy + vz * vz, along = vx * wx + vy * wy + vz * wz;
-                        if (outside && capsule[8] > 0.0F) {
-                            // Ближайшие точки луча «наружу» из точки ткани и оси конечности.
-                            float b = ux * vx + uy * vy + uz * vz, d = ux * wx + uy * wy + uz * wz, denominator = length - b * b;
-                            float t = denominator > 1.0E-6F ? (along - b * d) / denominator : (length > 1.0E-6F ? along / length : 0.0F);
-                            t = MathHelper.clamp(t, 0.0F, 1.0F);
-                            float s = t * b - d;
-                            if (s > 0.0F) {
-                                float ox = ux * s - vx * t + wx, oy = uy * s - vy * t + wy, oz = uz * s - vz * t + wz;
-                                float side = ox * ox + oy * oy + oz * oz;
-                                if (side < r * r) {
-                                    float exit = s + MathHelper.sqrt(r * r - side);
-                                    if (exit < MAX_UNDER) {
-                                        float move = Math.min(exit, limit);
-                                        px += ux * move;
-                                        py += uy * move;
-                                        pz += uz * move;
-                                        continue;
-                                    }
-                                }
-                            }
-                        }
-                        float t = length < 1.0E-6F ? 0.0F : MathHelper.clamp(along / length, 0.0F, 1.0F);
+                        float length = vx * vx + vy * vy + vz * vz;
+                        float t = length < 1.0E-6F ? 0.0F : MathHelper.clamp((vx * wx + vy * wy + vz * wz) / length, 0.0F, 1.0F);
                         float ox = wx - vx * t, oy = wy - vy * t, oz = wz - vz * t;
                         float distance = ox * ox + oy * oy + oz * oz;
                         if (distance < r * r && distance > 1.0E-8F) {
-                            float root = MathHelper.sqrt(distance), push = (r - root) / root;
-                            px += ox * push;
-                            py += oy * push;
-                            pz += oz * push;
+                            float root = MathHelper.sqrt(distance), depth = r - root;
+                            if (depth > deepest) {
+                                deepest = depth;
+                                awayX = ox / root;
+                                awayY = oy / root;
+                                awayZ = oz / root;
+                            }
                         }
+                    }
+                    if (deepest > 0.0F) {
+                        px += awayX * deepest * hold;
+                        py += awayY * deepest * hold;
+                        pz += awayZ * deepest * hold;
                     }
                     if (py < ground) {
                         py = ground;
@@ -493,8 +511,33 @@ public final class FormPhysics {
                     this.x[i] += (px - startX) * rest;
                     this.y[i] += (py - startY) * rest;
                     this.z[i] += (pz - startZ) * rest;
+                    // Ткань, прижатая к телу, не скользит свободно: трение гасит её скорость, и она лежит спокойно, а не дрожит.
+                    if (px != startX || py != startY || pz != startZ) {
+                        this.x[i] += (px - this.x[i]) * CONTACT_FRICTION;
+                        this.y[i] += (py - this.y[i]) * CONTACT_FRICTION;
+                        this.z[i] += (pz - this.z[i]) * CONTACT_FRICTION;
+                    }
                 }
             }
+        }
+
+        /** На сколько точке идти по лучу наружу, чтобы оказаться за капсулой (0 — конечность не на пути). */
+        private static float exitAlong(float[] capsule, float px, float py, float pz, float ux, float uy, float uz) {
+            float ax = capsule[0], ay = capsule[1], az = capsule[2], r = capsule[6];
+            float vx = capsule[3] - ax, vy = capsule[4] - ay, vz = capsule[5] - az;
+            float wx = px - ax, wy = py - ay, wz = pz - az;
+            float length = vx * vx + vy * vy + vz * vz, along = vx * wx + vy * wy + vz * wz;
+            // Ближайшие точки луча и оси конечности.
+            float b = ux * vx + uy * vy + uz * vz, d = ux * wx + uy * wy + uz * wz, denominator = length - b * b;
+            float t = denominator > 1.0E-6F ? (along - b * d) / denominator : (length > 1.0E-6F ? along / length : 0.0F);
+            t = MathHelper.clamp(t, 0.0F, 1.0F);
+            float s = t * b - d;
+            if (s <= 0.0F) {
+                return 0.0F;
+            }
+            float ox = ux * s - vx * t + wx, oy = uy * s - vy * t + wy, oz = uz * s - vz * t + wz;
+            float side = ox * ox + oy * oy + oz * oz;
+            return side < r * r ? s + MathHelper.sqrt(r * r - side) : 0.0F;
         }
 
         private void substep(float[] tx, float[] ty, float[] tz, float k, float h, float now, float flutter, float[][] capsules, float ground, float grow, Vector3f axis) {

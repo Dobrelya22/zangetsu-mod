@@ -44,7 +44,8 @@ public abstract class CameraMixin {
         if (frame == null) {
             return;
         }
-        float yaw = focused.getYaw(tickDelta);
+        // У своего игрока getYaw(tickDelta) не сглаживается (вид ведёт мышь), а в сцене поворот задан по тикам: без этого камера прыгала бы двадцать раз в секунду.
+        float yaw = MathHelper.lerpAngleDegrees(tickDelta, focused.prevYaw, focused.getYaw());
         // Центр кадра — между игроком и тем, к чему он обращён (меч, моб).
         double yawRad = Math.toRadians(yaw);
         double ahead = frame[3];

@@ -58,7 +58,7 @@ public final class Awakening {
     public static final float WALK_SPEED = 0.13F;
     /** Сколько тиков после подхода он ещё мягко доходит последние сантиметры: останавливается, а не упирается. */
     public static final int WALK_SETTLE = 10;
-    private static final int MAX_WALK = 34;
+    private static final int MAX_WALK = 38;
     /** На каком расстоянии от меча встать и насколько сбоку от него: так рукоять оказывается прямо перед рукой (блоки). */
     private static final float GRIP_DISTANCE = 0.6F, GRIP_SIDE = 0.2F;
     /** Высота рукояти воткнутого меча над землёй (блоки). */
@@ -200,7 +200,8 @@ public final class Awakening {
 
     /** Сколько тиков идти до меча. */
     public static int walkTicks(PlayerEntity player, Vec3d sword) {
-        return Math.min(MAX_WALK, (int) Math.ceil(gripSpot(player, sword).distanceTo(player.getPos()) / WALK_SPEED));
+        // Несколько тиков сверху: он трогается и останавливается мягко.
+        return Math.min(MAX_WALK, (int) Math.ceil(gripSpot(player, sword).distanceTo(player.getPos()) / WALK_SPEED) + 4);
     }
 
     /**

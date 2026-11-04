@@ -657,9 +657,12 @@ public class ZangetsuItemRenderer implements BuiltinItemRendererRegistry.Dynamic
     }
 
     /**
-     * Огонь финальной формы вдоль обуха и у острия: те же языки, что на руках, только мельче. Снос считается от самого клинка:
+     * Огонь финальной формы вдоль обуха: то же пламя, что на руках, только мельче. Снос считается от самого клинка:
      * в ударе меч несётся быстро, и пламя вытягивается за ним, как хвост.
      */
+    /** Сколько полотен огня вдоль обуха. */
+    private static final int BLADE_FLAMES = 13;
+
     private static void bladeFire(VertexConsumerProvider consumers, MatrixStack matrices, Entity holder, FormPhysics physics, ModelTransformationMode mode, float now, float blaze, float waves) {
         // В обряде огонь приходит только с молнией.
         float grow = HollowRite.bodyGrow(holder, MinecraftClient.getInstance().getRenderTickCounter().getTickDelta(false));
@@ -671,31 +674,30 @@ public class ZangetsuItemRenderer implements BuiltinItemRendererRegistry.Dynamic
         boolean firstPerson = mode == ModelTransformationMode.FIRST_PERSON_RIGHT_HAND || mode == ModelTransformationMode.FIRST_PERSON_LEFT_HAND;
         Vector3f middle = toModel(BLADE_START + (BLADE_END - BLADE_START) * 0.6F, 0.0F, 0.0F);
         Vector3f wind = new Vector3f();
+        boolean inWorld = firstPerson;
         if (firstPerson) {
             new Quaternionf(MinecraftClient.getInstance().gameRenderer.getCamera().getRotation()).conjugate().transform(up);
             physics.enterFirstPerson(holder);
             wind = physics.spaceDirection(physics.flameWind("fp_blade", physics.simFromLocal(matrix).transformPosition(middle, new Vector3f()), now));
         } else if (physics.enterWorld(matrix, holder, MinecraftClient.getInstance().getRenderTickCounter().getTickDelta(false))) {
+            inWorld = true;
             wind = physics.spaceDirection(physics.flameWind("blade", physics.simFromLocal(matrix).transformPosition(middle, new Vector3f()), now));
         }
-        Flames.Frame frame = new Flames.Frame(matrices.peek(), up, wind, waves, blaze);
+        Flames.Frame frame = inWorld ? new Flames.Frame(matrices.peek(), up, wind, waves, blaze)
+                : new Flames.Frame(matrices.peek(), Flames.SCREEN_UP, wind, waves, blaze, Flames.SCREEN_VIEW);
         float px = grow / 16.0F;
-        VertexConsumer blend = consumers.getBuffer(RenderLayer.getEntityTranslucentEmissive(GLOW_TEXTURE));
-        for (int i = 0; i < 13; i++) {
-            float u = BLADE_START + 0.6F + i * 1.2F;
-            float[] s = section(u);
-            Vector3f spine = toModel(u, s[0] + 0.05F, 0.0F);
-            Flames.flame(blend, frame, spine.x, spine.y, spine.z, (2.4F + 1.6F * burnRand(i, 7)) * px, 0.42F * px, i * 1.3F, 0.95F);
-            if (i % 2 == 0) {
-                Vector3f edge = toModel(u, s[2] - 0.08F, 0.0F);
-                Flames.flame(blend, frame, edge.x, edge.y, edge.z, 1.7F * px, 0.3F * px, i * 2.1F, 0.8F);
-            }
-        }
-        VertexConsumer light = consumers.getBuffer(RenderLayer.getEyes(GLOW_TEXTURE));
-        for (int i = 0; i < 13; i++) {
+        // Стена огня вдоль обуха, а поверх свет: сперва тело, потом серединка.
+        VertexConsumer blend = consumers.getBuffer(Flames.bodyLayer());
+        for (int i = 0; i < BLADE_FLAMES; i++) {
             float u = BLADE_START + 0.6F + i * 1.2F;
             Vector3f spine = toModel(u, section(u)[0] + 0.05F, 0.0F);
-            Flames.tongue(light, frame, spine.x, spine.y, spine.z, 1.5F * px, 0.2F * px, i * 1.3F + 0.4F, Flames.INNER, 0.8F);
+            Flames.flame(blend, frame, spine.x, spine.y, spine.z, (5.0F + 2.6F * burnRand(i, 7)) * px, 4.6F * px, i * 1.3F, 0.95F);
+        }
+        VertexConsumer light = consumers.getBuffer(Flames.coreLayer());
+        for (int i = 0; i < BLADE_FLAMES; i++) {
+            float u = BLADE_START + 0.6F + i * 1.2F;
+            Vector3f spine = toModel(u, section(u)[0] + 0.05F, 0.0F);
+            Flames.glow(light, frame, spine.x, spine.y, spine.z, (5.0F + 2.6F * burnRand(i, 7)) * px, 4.6F * px, i * 1.3F, 0.85F);
         }
     }
 

@@ -10,6 +10,7 @@
     "ClientPlayerEntityMixin",
     "ClientWorldMixin",
     "EndermanEntityModelMixin",
+    "EntityLookMixin",
     "GameRendererMixin",
     "HeldItemFeatureRendererMixin",
     "HeldItemRendererMixin",

@@ -18,7 +18,7 @@ import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
 /**
- * Финальная форма на игроке: чёрно-алый огонь на руках и ногах, кандалы с обрывками цепей, цепи на груди и поясе и рваный плащ.
+ * Финальная форма на игроке: настоящий алый огонь на руках и ногах, кандалы с обрывками цепей, цепи на груди и поясе и рваный плащ.
  * Ткань и цепи считает {@link FormPhysics}, огонь отстаёт от движущихся рук и разгорается от бега и ударов. Всё появляется при превращении.
  * Кандалы и огонь сидят на самой конечности: сгибаются локоть или колено — они уходят вместе с предплечьем или голенью.
  */
@@ -38,6 +38,11 @@ public class FinalFormFeatureRenderer extends FeatureRenderer<AbstractClientPlay
     private static final float CLOTH_CUFF_RADIUS = 0.27F;
     /** С какого расстояния за спиной конечность начинает уходить под плащ и где скрыта целиком (пиксели). */
     private static final float COVER_FROM = 2.5F, COVER_TO = 6.5F;
+    /** Сколько полотен огня на конечности и их размер (пиксели). */
+    private static final int BIG_FLAMES = 5, SMALL_FLAMES = 2;
+    private static final float ARM_FLAME_HEIGHT = 9.5F, LEG_FLAME_HEIGHT = 8.0F, FLAME_WIDTH = 6.5F;
+    /** От первого лица рука у самой камеры: такой же огонь закрыл бы весь обзор. */
+    private static final float FIRST_PERSON_FLAME = 0.5F;
     private static final Vector3f WORLD_UP = new Vector3f(0.0F, 1.0F, 0.0F);
 
     /** Конечность с кандалами. {@code side} — её внешняя сторона, {@code bend} — насколько согнута в этот кадр. */
@@ -98,7 +103,8 @@ public class FinalFormFeatureRenderer extends FeatureRenderer<AbstractClientPlay
         Matrix4f simFromBody = physics.simFromLocal(matrices.peek().getPositionMatrix());
         Matrix4f bodyFromSim = physics.bodyFromSim(stepped, simFromBody);
         Vector3f bodyWind = physics.spaceDirection(physics.flameWind("body", simFromBody.transformPosition(0.0F, 0.5F, 0.0F, new Vector3f()), animationProgress));
-        Flames.Frame frame = new Flames.Frame(matrices.peek(), WORLD_UP, bodyWind, flameTime, heat);
+        Flames.Frame frame = stepped ? new Flames.Frame(matrices.peek(), WORLD_UP, bodyWind, flameTime, heat)
+                : new Flames.Frame(matrices.peek(), Flames.SCREEN_UP, bodyWind, flameTime, heat, Flames.SCREEN_VIEW);
         TatteredCloak.render(matrices, consumers, light, physics, animationProgress, grow, speed, heat, stepped, simFromBody, bodyFromSim, capsules, ground, frame);
         bodyChains(matrices, consumers, light, physics, player, simFromBody, bodyFromSim, frame, capsules, ground, animationProgress, grow, stepped);
         matrices.pop();
@@ -158,15 +164,14 @@ public class FinalFormFeatureRenderer extends FeatureRenderer<AbstractClientPlay
     }
 
     /**
-     * Конечность: обруч на запястье или щиколотке, с него свисает обрывок цепи, а вокруг горит огонь: большое кольцо языков у обруча и кольцо
-     * поменьше посередине. Сначала железо, потом чёрные сердца языков, потом алый слой, потом свет: каждый слой можно запрашивать, только закончив предыдущий.
+     * Конечность: обруч на запястье или щиколотке, с него свисает обрывок цепи, а вокруг горит огонь: большие полотна у обруча и поменьше у сгиба.
+     * Сначала железо, потом тело пламени, потом свет: каждый слой можно запрашивать, только закончив предыдущий.
      */
     private static void limb(MatrixStack matrices, VertexConsumerProvider consumers, int light, FormPhysics physics, AbstractClientPlayerEntity player, Limb limb,
             Vector3f spaceUp, float now, float flameTime, float heat, float grow, float[][] capsules, float ground, boolean stepped, Matrix4f bodyFromSim) {
         boolean arm = limb.arm();
         float centerX = limb.centerX(), halfX = limb.halfX(), y = limb.y(), seed = limb.seed();
         float midY = y - (arm ? 5.0F : 5.5F);
-        int big = 8, small = 4;
 
         matrices.push();
         limb.part().rotate(matrices);
@@ -177,12 +182,15 @@ public class FinalFormFeatureRenderer extends FeatureRenderer<AbstractClientPlay
         MatrixStack.Entry entry = matrices.peek();
         Matrix4f simFromLimb = physics.simFromLocal(entry.getPositionMatrix());
         Vector3f wrist = simFromLimb.transformPosition(centerX / 16.0F, y / 16.0F, 0.0F, new Vector3f());
+        // В инвентаре модель нарисована на экране, а не в мире: и верх, и взгляд там свои.
+        Vector3f up = stepped ? spaceUp : Flames.SCREEN_UP, view = stepped ? null : Flames.SCREEN_VIEW;
         // Огонь отстаёт от самой руки: махнул — языки вытянулись назад.
         Vector3f wind = physics.spaceDirection(physics.flameWind(limb.key(), wrist, now));
-        Flames.Frame frame = new Flames.Frame(entry, spaceUp, wind, flameTime, heat);
+        Flames.Frame frame = new Flames.Frame(entry, up, wind, flameTime, heat, view);
         // Рука или нога ушла назад под плащ: огонь там приседает, иначе его языки торчали бы сквозь ткань. Вышла вперёд — разгорается снова.
         float covered = stepped && bodyFromSim != null ? coverage(bodyFromSim.transformPosition(wrist, new Vector3f()).z * 16.0F) : 0.0F;
-        float length = (arm ? 6.6F : 5.2F) * grow * (1.0F - 0.8F * covered) / 16.0F, width = (arm ? 1.15F : 1.0F) * grow * (1.0F - 0.4F * covered) / 16.0F;
+        float near = stepped && capsules.length == 0 ? FIRST_PERSON_FLAME : 1.0F;
+        float length = (arm ? ARM_FLAME_HEIGHT : LEG_FLAME_HEIGHT) * near * grow * (1.0F - 0.8F * covered) / 16.0F, width = FLAME_WIDTH * near * grow * (1.0F - 0.4F * covered) / 16.0F;
 
         VertexConsumer iron = consumers.getBuffer(RenderLayer.getEntityCutoutNoCull(Flames.WHITE));
         Chains.cuff(iron, entry, centerX, y, halfX, HALF, 0.95F, limb.side(), light);
@@ -200,43 +208,47 @@ public class FinalFormFeatureRenderer extends FeatureRenderer<AbstractClientPlay
             }
         }
 
-        VertexConsumer dark = consumers.getBuffer(RenderLayer.getEntityTranslucent(Flames.WHITE));
-        for (int i = 0; i < big; i += 2) {
-            float[] base = ringPoint(centerX, halfX, y - 1.0F, i, big, seed);
-            Flames.heart(dark, frame, base[0], base[1], base[2], length * 0.55F, width * 0.62F, seed * 10.0F + i * 1.7F);
-        }
-        VertexConsumer blend = consumers.getBuffer(RenderLayer.getEntityTranslucentEmissive(Flames.WHITE));
-        for (int i = 0; i < big; i++) {
-            float[] base = ringPoint(centerX, halfX, y - 1.0F, i, big, seed);
-            float own = 0.75F + 0.5F * Flames.hash((int) seed, i);
-            Flames.flame(blend, frame, base[0], base[1], base[2], length * own, width, seed * 10.0F + i * 1.7F, 1.0F);
+        // Огонь обнимает конечность: большие полотна от обруча и пара поменьше у сгиба. Сначала тело пламени, потом свет: слои нельзя смешивать.
+        VertexConsumer blend = consumers.getBuffer(Flames.bodyLayer());
+        for (int i = 0; i < BIG_FLAMES; i++) {
+            float[] base = ringPoint(centerX, halfX, y + 0.5F, i, BIG_FLAMES, seed);
+            Flames.flame(blend, frame, base[0], base[1], base[2], length * bigHeight(seed, i), width, seed * 10.0F + i * 1.7F, 1.0F);
         }
         matrices.pop();
 
-        // Кольцо поменьше стоит у самого сгиба: у него своё положение.
+        // Огонь поменьше стоит у самого сгиба: у него своё положение.
         matrices.push();
         BentLimbs.toSection(matrices, limb.joint(), limb.bend(), midY);
-        Flames.Frame middle = new Flames.Frame(matrices.peek(), spaceUp, wind, flameTime, heat);
-        for (int i = 0; i < small; i++) {
-            float[] base = ringPoint(centerX, halfX, midY, i, small, seed + 5.0F);
-            Flames.flame(blend, middle, base[0], base[1], base[2], length * 0.5F, width * 0.6F, seed * 13.0F + i * 2.3F, 0.85F);
+        Flames.Frame middle = new Flames.Frame(matrices.peek(), up, wind, flameTime, heat, view);
+        for (int i = 0; i < SMALL_FLAMES; i++) {
+            float[] base = ringPoint(centerX, halfX, midY, i, SMALL_FLAMES, seed + 5.0F);
+            Flames.flame(blend, middle, base[0], base[1], base[2], length * 0.58F, width * 0.7F, seed * 13.0F + i * 2.3F, 0.95F);
+        }
+        VertexConsumer core = consumers.getBuffer(Flames.coreLayer());
+        for (int i = 0; i < SMALL_FLAMES; i++) {
+            float[] base = ringPoint(centerX, halfX, midY, i, SMALL_FLAMES, seed + 5.0F);
+            Flames.glow(core, middle, base[0], base[1], base[2], length * 0.58F, width * 0.7F, seed * 13.0F + i * 2.3F, 0.8F);
         }
         matrices.pop();
 
         matrices.push();
         BentLimbs.toSection(matrices, limb.joint(), limb.bend(), y);
-        Flames.Frame light2 = new Flames.Frame(matrices.peek(), spaceUp, wind, flameTime, heat);
-        VertexConsumer glow = consumers.getBuffer(RenderLayer.getEyes(Flames.WHITE));
-        for (int i = 0; i < big; i++) {
-            float[] base = ringPoint(centerX, halfX, y - 1.0F, i, big, seed);
-            float own = 0.75F + 0.5F * Flames.hash((int) seed, i);
-            Flames.tongue(glow, light2, base[0], base[1], base[2], length * own * 0.62F, width * 0.5F, seed * 10.0F + i * 1.7F + 0.4F, Flames.INNER, 0.9F);
+        Flames.Frame lit = new Flames.Frame(matrices.peek(), up, wind, flameTime, heat, view);
+        for (int i = 0; i < BIG_FLAMES; i++) {
+            float[] base = ringPoint(centerX, halfX, y + 0.5F, i, BIG_FLAMES, seed);
+            Flames.glow(core, lit, base[0], base[1], base[2], length * bigHeight(seed, i), width, seed * 10.0F + i * 1.7F, 0.9F);
         }
         // От жара искр больше, они летят выше.
-        Flames.embers(glow, light2, centerX / 16.0F, (y - 2.0F) / 16.0F, 0.0F, 2.6F / 16.0F, (16.0F + heat * 12.0F) / 16.0F, (int) ((9.0F + heat * 18.0F) * (1.0F - 0.7F * covered)), seed);
+        VertexConsumer sparks = consumers.getBuffer(RenderLayer.getEyes(Flames.WHITE));
+        Flames.embers(sparks, lit, centerX / 16.0F, (y - 2.0F) / 16.0F, 0.0F, 2.6F / 16.0F, (16.0F + heat * 12.0F) / 16.0F, (int) ((9.0F + heat * 18.0F) * (1.0F - 0.7F * covered)), seed);
         matrices.pop();
 
         matrices.pop();
+    }
+
+    /** Высота большого пламени: у каждого своя, чтобы верхушки не стояли ровным рядом. */
+    private static float bigHeight(float seed, int i) {
+        return 0.78F + 0.42F * Flames.hash((int) seed, i);
     }
 
     /** Насколько конечность закрыта плащом: от того, как далеко за спиной её конец (пиксели от оси туловища). */

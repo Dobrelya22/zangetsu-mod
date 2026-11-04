@@ -30,7 +30,10 @@ import net.minecraft.client.MinecraftClient;
 import com.zangetsu.client.CameraDirector;
 import com.zangetsu.client.ClientState;
 import com.zangetsu.client.ZangetsuCombat;
+import com.zangetsu.client.render.FormPhysics;
 import com.zangetsu.client.render.PlayerPoses;
+import com.zangetsu.network.AnimationPayload;
+import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
 import net.minecraft.client.gui.screen.TitleScreen;
 import net.minecraft.client.model.ModelPart;
 import net.minecraft.client.network.AbstractClientPlayerEntity;
@@ -115,6 +118,7 @@ public class ZangetsuShots implements ClientModInitializer {
         this.write();
         ServerTickEvents.END_SERVER_TICK.register(server -> SERVER_TICKS.incrementAndGet());
         ClientTickEvents.END_CLIENT_TICK.register(this::onTick);
+        WorldRenderEvents.LAST.register(context -> this.onFrame(MinecraftClient.getInstance()));
     }
 
     // ---------------------------------------------------------------- построение сценария
@@ -780,6 +784,158 @@ public class ZangetsuShots implements ClientModInitializer {
                 worstTurn, worstPart, worstTurnAt, worstBend, worstDip, worstFist, worstBlade, worstBladeAt));
         check("подбор меча: суставы без скачков", worstTurn < 0.09F && worstBend < 0.12F && worstDip < 0.2F);
         check("подбор меча: кулак и клинок идут плавно", worstFist < 0.9F && worstBlade < 0.09F);
+    }
+
+    // ---------------------------------------------------------------- покадровые замеры
+
+    private final List<float[]> walkFrames = new ArrayList<>();
+    private boolean walkDone;
+    private final java.util.Map<String, float[][][]> clothLast = new java.util.HashMap<>();
+    private final java.util.Map<String, int[][]> clothFlips = new java.util.HashMap<>();
+    private final java.util.Map<String, int[][]> clothLastFlip = new java.util.HashMap<>();
+    private final java.util.Map<Integer, Integer> flipsByTick = new java.util.TreeMap<>();
+    private int clothFrames;
+    private float clothWorstStep;
+    private boolean clothDone;
+
+    /** Каждый отрисованный кадр: где игрок и камера в сцене подбора, как ходит ткань в обряде. */
+    private void onFrame(MinecraftClient c) {
+        if (c.player == null) {
+            return;
+        }
+        ClientState.Animation scene = ClientState.animation(c.player);
+        int type = scene == null ? 0 : scene.type();
+        float td = c.getRenderTickCounter().getTickDelta(false);
+        if (type == AnimationPayload.TOUCH_HANDLE) {
+            var camera = c.gameRenderer.getCamera();
+            Vec3d p = c.player.getLerpedPos(td), at = camera.getPos();
+            this.walkFrames.add(new float[]{c.player.age + td - scene.startAge(), (float) p.x, (float) p.y, (float) p.z, c.player.getYaw(td), c.player.getBodyYaw(),
+                    (float) at.x, (float) at.y, (float) at.z, camera.getYaw(), camera.getPitch(), c.player.limbAnimator.getSpeed(td), scene.duration(),
+                    (float) (c.player.getX() - c.player.prevX), (float) (c.player.getZ() - c.player.prevZ), td});
+        } else if (!this.walkFrames.isEmpty() && !this.walkDone) {
+            this.walkDone = true;
+            this.finishWalk();
+        }
+        if (type == AnimationPayload.HOLLOW_FINAL) {
+            FormPhysics physics = FormPhysics.of(c.player);
+            float tick = c.player.age + td - scene.startAge();
+            this.clothFrames++;
+            this.measureCloth("cloak", physics, tick);
+            this.measureCloth("mantle", physics, tick);
+        } else if (this.clothFrames > 0 && !this.clothDone) {
+            this.clothDone = true;
+            this.finishCloth();
+        }
+    }
+
+    private void measureCloth(String key, FormPhysics physics, float tick) {
+        FormPhysics.Cloth cloth = physics.existingCloth(key);
+        if (cloth == null) {
+            return;
+        }
+        Vector3f[][] grid = cloth.local(physics.lastBodyFromSim());
+        float[][][] last = this.clothLast.get(key);
+        int[][] flips = this.clothFlips.computeIfAbsent(key, k -> new int[grid.length][grid[0].length]);
+        int[][] lastFlip = this.clothLastFlip.computeIfAbsent(key, k -> new int[grid.length][grid[0].length]);
+        float[][][] now = new float[grid.length][grid[0].length][6];
+        for (int c = 0; c < grid.length; c++) {
+            for (int j = 0; j < grid[0].length; j++) {
+                Vector3f p = grid[c][j];
+                float dx = 0.0F, dy = 0.0F, dz = 0.0F;
+                if (last != null) {
+                    dx = p.x - last[c][j][0];
+                    dy = p.y - last[c][j][1];
+                    dz = p.z - last[c][j][2];
+                    float[] before = last[c][j];
+                    float size = dx * dx + dy * dy + dz * dz, sizeBefore = before[3] * before[3] + before[4] * before[4] + before[5] * before[5];
+                    if (size < 100.0F) {
+                        this.clothWorstStep = Math.max(this.clothWorstStep, MathHelper.sqrt(size));
+                    }
+                    // Дрожь: точка рывком пошла обратно, и это повторилось через пару кадров. Плавная раскачка так не делает.
+                    if (size > 0.04F && sizeBefore > 0.04F && dx * before[3] + dy * before[4] + dz * before[5] < -0.5F * MathHelper.sqrt(size * sizeBefore)) {
+                        if (this.clothFrames - lastFlip[c][j] <= 4) {
+                            flips[c][j]++;
+                            this.flipsByTick.merge(((int) tick) / 10 * 10, 1, Integer::sum);
+                        }
+                        lastFlip[c][j] = this.clothFrames;
+                    }
+                }
+                now[c][j][0] = p.x;
+                now[c][j][1] = p.y;
+                now[c][j][2] = p.z;
+                now[c][j][3] = dx;
+                now[c][j][4] = dy;
+                now[c][j][5] = dz;
+            }
+        }
+        this.clothLast.put(key, now);
+    }
+
+    private void finishCloth() {
+        int total = 0;
+        StringBuilder worst = new StringBuilder();
+        for (var entry : this.clothFlips.entrySet()) {
+            int best = 0, bc = 0, bj = 0;
+            int[][] flips = entry.getValue();
+            for (int c = 0; c < flips.length; c++) {
+                for (int j = 0; j < flips[0].length; j++) {
+                    total += flips[c][j];
+                    if (flips[c][j] > best) {
+                        best = flips[c][j];
+                        bc = c;
+                        bj = j;
+                    }
+                }
+            }
+            worst.append(entry.getKey()).append(": до ").append(best).append(" (столбец ").append(bc).append(", строка ").append(bj).append(") ");
+            // Где дрожит: сумма по строкам и столбцам.
+            int[] byRow = new int[flips[0].length], byColumn = new int[flips.length];
+            for (int c = 0; c < flips.length; c++) {
+                for (int j = 0; j < flips[0].length; j++) {
+                    byRow[j] += flips[c][j];
+                    byColumn[c] += flips[c][j];
+                }
+            }
+            worst.append("строки ").append(java.util.Arrays.toString(byRow)).append(" столбцы ").append(java.util.Arrays.toString(byColumn)).append("; ");
+        }
+        ZangetsuMod.LOGGER.info("Дрожь ткани в обряде: кадров {}, повторных рывков {}, самый большой шаг {} пикс; {}по времени {}", this.clothFrames, total,
+                String.format(Locale.ROOT, "%.2f", this.clothWorstStep), worst, this.flipsByTick);
+        this.lastClothJitter = total;
+        check("плащ в обряде не дрожит", total < 250);
+    }
+
+    private int lastClothJitter = -1;
+
+    private void finishWalk() {
+        float worstMove = 0.0F, worstTurn = 0.0F, worstStep = 0.0F, moveAt = 0.0F, turnAt = 0.0F;
+        float lastMove = -1.0F, lastTurn = 0.0F, lastStep = -1.0F;
+        float[] before = null;
+        for (float[] f : this.walkFrames) {
+            if (before != null && f[0] - before[0] > 0.01F && f[0] - before[0] < 1.5F) {
+                float dt = f[0] - before[0];
+                float move = (float) Math.sqrt((f[6] - before[6]) * (f[6] - before[6]) + (f[7] - before[7]) * (f[7] - before[7]) + (f[8] - before[8]) * (f[8] - before[8])) / dt;
+                float turn = MathHelper.wrapDegrees(f[9] - before[9]) / dt;
+                float step = (float) Math.sqrt((f[1] - before[1]) * (f[1] - before[1]) + (f[3] - before[3]) * (f[3] - before[3])) / dt;
+                if (lastMove >= 0.0F) {
+                    if (Math.abs(move - lastMove) > worstMove) {
+                        worstMove = Math.abs(move - lastMove);
+                        moveAt = f[0];
+                    }
+                    if (Math.abs(turn - lastTurn) > worstTurn) {
+                        worstTurn = Math.abs(turn - lastTurn);
+                        turnAt = f[0];
+                    }
+                    worstStep = Math.max(worstStep, Math.abs(step - lastStep));
+                }
+                lastMove = move;
+                lastTurn = turn;
+                lastStep = step;
+            }
+            before = f;
+        }
+        ZangetsuMod.LOGGER.info(String.format(Locale.ROOT, "Шаг к мечу, скачок скорости за кадр: камера %.3f блока/тик (тик %.1f), поворот камеры %.2f°/тик (тик %.1f), игрок %.3f блока/тик",
+                worstMove, moveAt, worstTurn, turnAt, worstStep));
+        check("шаг к мечу: камера и игрок идут без рывков", worstMove < 0.12F && worstTurn < 2.5F && worstStep < 0.05F);
     }
 
     /** Проверка поведения (выполняется на сервере); итог — в журнале строкой «ПРОВЕРКИ: …». */

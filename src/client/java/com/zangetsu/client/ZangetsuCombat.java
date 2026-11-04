@@ -20,6 +20,7 @@ import net.minecraft.sound.SoundEvents;
 import net.minecraft.util.Hand;
 import net.minecraft.util.hit.EntityHitResult;
 import net.minecraft.util.hit.HitResult;
+import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
 
 /**
@@ -160,6 +161,10 @@ public final class ZangetsuCombat {
      * Сцена подбора меча: своего игрока ведём к мечу шагом (настоящим движением, поэтому и ноги идут сами), а пока рука не сжала рукоять, он смотрит на неё,
      * что бы ни делала мышь.
      */
+    private static int walkScene = Integer.MIN_VALUE;
+    private static Vec3d walkSpot;
+    private static float walkYaw;
+
     private static void walkToSword(MinecraftClient client, ClientPlayerEntity player) {
         ClientState.Animation animation = ClientState.animation(player);
         if (animation == null || (animation.type() != AnimationPayload.TOUCH_HANDLE && animation.type() != AnimationPayload.DREAM_PULL)
@@ -169,20 +174,37 @@ public final class ZangetsuCombat {
         int scene = animation.type() == AnimationPayload.TOUCH_HANDLE ? Awakening.CLAIM_TICKS : Dream.PULL_DURATION;
         int walk = animation.duration() - scene;
         int tick = player.age - animation.startAge();
-        Vec3d to = sword.getPos().subtract(player.getPos());
-        float yaw = (float) Math.toDegrees(Math.atan2(to.z, to.x)) - 90.0F;
+        // Куда идти и куда смотреть решается один раз, в начале сцены: если считать заново на каждом шаге, точка уползает вместе с игроком, и он кружит вокруг меча.
+        if (walkScene != animation.startAge()) {
+            walkScene = animation.startAge();
+            walkSpot = Awakening.gripSpot(player, sword.getPos());
+            Vec3d to = sword.getPos().subtract(walkSpot);
+            walkYaw = (float) Math.toDegrees(Math.atan2(to.z, to.x)) - 90.0F;
+        }
+        // Поворачивается плавно: корпус догоняет голову, а не встаёт сразу.
+        float yaw = player.getYaw() + MathHelper.wrapDegrees(walkYaw - player.getYaw()) * 0.16F * Math.min(1.0F, (tick + 1) / 12.0F);
         player.setYaw(yaw);
         player.setHeadYaw(yaw);
-        player.setBodyYaw(yaw);
+        player.setBodyYaw(player.getBodyYaw() + MathHelper.wrapDegrees(yaw - player.getBodyYaw()) * 0.3F);
         if (tick < walk + Awakening.WALK_SETTLE) {
-            Vec3d way = Awakening.gripSpot(player, sword.getPos()).subtract(player.getPos()).multiply(1.0, 0.0, 1.0);
+            Vec3d way = walkSpot.subtract(player.getPos()).multiply(1.0, 0.0, 1.0);
             double left = way.length();
             if (left > 0.01) {
-                // Последние шаги всё короче: он замедляется и встаёт, а не упирается в точку.
-                Vec3d step = way.multiply(Math.min(left * 0.3, Awakening.WALK_SPEED) / left);
+                // Трогается мягко, а последние шаги всё короче: он замедляется и встаёт, а не упирается в точку.
+                double pace = Math.min(left * 0.3, Awakening.WALK_SPEED * Math.min(1.0, (tick + 1) / 6.0));
+                Vec3d step = way.multiply(pace / left);
                 player.setVelocity(step.x, player.getVelocity().y, step.z);
             }
         }
+    }
+
+    /** В сцене подбора взгляд ведёт сама сцена: мышь иначе дёргала бы камеру каждый тик. */
+    public static boolean holdsLook(Entity entity) {
+        if (!(entity instanceof ClientPlayerEntity)) {
+            return false;
+        }
+        ClientState.Animation animation = ClientState.animation((ClientPlayerEntity) entity);
+        return animation != null && (animation.type() == AnimationPayload.TOUCH_HANDLE || animation.type() == AnimationPayload.DREAM_PULL);
     }
 
     /** Рука махнула сама (чужой удар, рубка блоков, сцены) — показываем приём. */

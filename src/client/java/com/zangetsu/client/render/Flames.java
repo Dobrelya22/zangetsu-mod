@@ -1,8 +1,12 @@
 package com.zangetsu.client.render;
 
 import com.zangetsu.ZangetsuMod;
+import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.OverlayTexture;
+import net.minecraft.client.render.RenderLayer;
 import net.minecraft.client.render.VertexConsumer;
+import net.minecraft.client.render.VertexFormat;
+import net.minecraft.client.render.VertexFormats;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.MathHelper;
@@ -10,38 +14,57 @@ import org.joml.Matrix4f;
 import org.joml.Vector3f;
 
 /**
- * Объёмный огонь. Каждый язык — настоящая труба из колец: к вершине сужается, изгибается и дрожит, всегда тянется вверх по миру (куда бы
- * ни была повёрнута рука) и сносится встречным ветром. Яркость вершины зависит от того, как поверхность смотрит на камеру: край языка гаснет,
- * и поэтому он выглядит мягким сгустком света, а не многогранником. Снаружи алый слой, поверх него раскалённая сердцевина светом.
+ * Настоящий огонь: зацикленная покадровая анимация пламени (см. {@code tools/textures.cs}), которую показывают полотна, всегда развёрнутые к камере. Пламя растёт вверх по миру,
+ * как бы ни была повёрнута рука, и изгибается встречным ветром. Сначала рисуется полупрозрачное тело с тёмно-алым краем, оно не выцветает на светлом снегу, поверх него светом —
+ * раскалённая серединка. Несколько полотен с разных точек сливаются в один сгусток огня.
  */
 final class Flames {
     static final Identifier WHITE = ZangetsuMod.id("textures/misc/white.png");
-    private static final int RINGS = 6, SIDES = 6;
+    /** Тело пламени (с прозрачностью) и его раскалённая серединка на чёрном фоне. Кадры в обеих лежат одинаково. */
+    static final Identifier BODY = ZangetsuMod.id("textures/misc/fire_body.png");
+    static final Identifier CORE = ZangetsuMod.id("textures/misc/fire_core.png");
     private static final int FULL_LIGHT = 0xF000F0;
+    private static final int COLUMNS = 8, ROWS = 8, FRAMES = COLUMNS * ROWS;
+    /** Скорость анимации: кадров на тик времени огня. От жара время бежит быстрее. */
+    private static final float FRAMES_PER_TICK = 1.5F;
+    /** На сколько частей делится полотно по высоте, чтобы ветер его изгибал. */
+    private static final int STRIPS = 3;
 
-    /** Внешний слой пламени: от основания к вершине. Чёрно-алый огонь финальной формы. */
-    static final float[][] OUTER = {{1.0F, 0.22F, 0.05F}, {0.92F, 0.05F, 0.03F}, {0.5F, 0.0F, 0.02F}};
-    /** Внутренний, раскалённый слой. */
-    static final float[][] INNER = {{1.0F, 0.72F, 0.34F}, {1.0F, 0.26F, 0.05F}, {0.62F, 0.03F, 0.02F}};
+    private static final RenderLayer BODY_LAYER = new SmoothLayer("zangetsu_fire_body", RenderLayer.getEntityTranslucentEmissive(BODY), BODY, true);
+    private static final RenderLayer CORE_LAYER = new SmoothLayer("zangetsu_fire_core", RenderLayer.getEyes(CORE), CORE, false);
+
+    /** В инвентаре модель нарисована на экране: там «вверх» направлен против оси y, а смотрят на неё вдоль оси z. */
+    static final Vector3f SCREEN_UP = new Vector3f(0.0F, -1.0F, 0.0F), SCREEN_VIEW = new Vector3f(0.0F, 0.0F, 1.0F);
 
     /** Где сейчас рисуем: матрица, куда в этих координатах «вверх» и куда сносит ветром, и время. */
     static final class Frame {
-        final MatrixStack.Entry entry;
         final Matrix4f matrix;
         final Vector3f up, wind, a, b;
+        final Vector3f spaceUp, spaceWind;
+        /** Куда смотреть на огонь, если камера не в начале координат (null — камера в начале, как и в мире, и от первого лица). */
+        final Vector3f view;
+        /** Сколько единиц пространства в единице матрицы. */
+        final float unit;
         final float time;
-        /** От жара языки длиннее, бьются сильнее и чуть толще. */
+        /** От жара пламя выше и бьётся сильнее. */
         final float scale, sway;
 
-        /** {@code spaceUp} и {@code spaceWind} — вверх по миру и ветер в пространстве, где стоит матрица (мир без поворота камеры либо вид от первого лица). */
+        /** {@code spaceUp} и {@code spaceWind} — вверх по миру и ветер в пространстве, где стоит матрица (мир без поворота камеры либо вид камеры). */
         Frame(MatrixStack.Entry entry, Vector3f spaceUp, Vector3f spaceWind, float time, float heat) {
-            this.entry = entry;
+            this(entry, spaceUp, spaceWind, time, heat, null);
+        }
+
+        Frame(MatrixStack.Entry entry, Vector3f spaceUp, Vector3f spaceWind, float time, float heat, Vector3f view) {
             this.matrix = entry.getPositionMatrix();
             Matrix4f inverse = new Matrix4f(this.matrix).invert();
             this.up = inverse.transformDirection(new Vector3f(spaceUp)).normalize();
             this.wind = inverse.transformDirection(new Vector3f(spaceWind));
             this.a = new Vector3f(this.up).cross(Math.abs(this.up.x) < 0.8F ? new Vector3f(1.0F, 0.0F, 0.0F) : new Vector3f(0.0F, 0.0F, 1.0F)).normalize();
             this.b = new Vector3f(this.up).cross(this.a).normalize();
+            this.spaceUp = new Vector3f(spaceUp).normalize();
+            this.spaceWind = new Vector3f(spaceWind);
+            this.view = view;
+            this.unit = this.matrix.transformDirection(0.0F, 1.0F, 0.0F, new Vector3f()).length();
             this.time = time;
             this.scale = 1.0F + 0.4F * heat;
             this.sway = 1.0F + 0.8F * heat;
@@ -49,6 +72,27 @@ final class Flames {
     }
 
     private Flames() {
+    }
+
+    static RenderLayer bodyLayer() {
+        return BODY_LAYER;
+    }
+
+    static RenderLayer coreLayer() {
+        return CORE_LAYER;
+    }
+
+    /** Обычный слой игры, только текстура сглажена: стандартные слои при каждой отрисовке сбрасывают её на резкие пиксели, а огонь вблизи от этого становится мозаикой. */
+    private static final class SmoothLayer extends RenderLayer {
+        SmoothLayer(String name, RenderLayer base, Identifier texture, boolean crumbling) {
+            super(name, VertexFormats.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL, VertexFormat.DrawMode.QUADS, 1536, crumbling, true, () -> {
+                base.startDrawing();
+                MinecraftClient.getInstance().getTextureManager().getTexture(texture).setFilter(true, false);
+            }, () -> {
+                MinecraftClient.getInstance().getTextureManager().getTexture(texture).setFilter(false, false);
+                base.endDrawing();
+            });
+        }
     }
 
     /** Псевдошум от 0 до 1: плавный, без текстур. */
@@ -63,124 +107,71 @@ final class Flames {
     }
 
     /**
-     * Внешний слой языка: непрозрачный алый огонь, он не выцветает на светлом снегу. Рисуется в слой «светящийся полупрозрачный»,
-     * где ничего не отбрасывается и не пишется глубина.
+     * Тело пламени от точки (x, y, z) (в единицах матрицы): {@code height} и {@code width} — размер полотна, {@code seed} делает каждое пламя своим, {@code power} — его непрозрачность.
+     * Слой — светящийся полупрозрачный ({@link #BODY}).
      */
-    static void flame(VertexConsumer out, Frame f, float x, float y, float z, float length, float radius, float seed, float power) {
-        float[][][] rings = rings(f, x, y, z, length, radius, seed, OUTER, power);
-        for (int i = 0; i < RINGS; i++) {
-            for (int j = 0; j < SIDES; j++) {
-                int k = (j + 1) % SIDES;
-                blended(out, rings[i][j]);
-                blended(out, rings[i][k]);
-                blended(out, rings[i + 1][k]);
-                blended(out, rings[i + 1][j]);
-            }
+    static void flame(VertexConsumer out, Frame f, float x, float y, float z, float height, float width, float seed, float power) {
+        sprite(out, f, x, y, z, height, width, seed, (Math.min(255, (int) (power * 255.0F)) << 24) | 0xFFFFFF, false);
+    }
+
+    /** Раскалённая серединка того же пламени: те же числа, что и у {@link #flame}, слой — свет ({@link #CORE}). {@code power} — яркость. */
+    static void glow(VertexConsumer out, Frame f, float x, float y, float z, float height, float width, float seed, float power) {
+        int bright = Math.min(255, (int) (power * 255.0F));
+        sprite(out, f, x, y, z, height, width, seed, 0xFF000000 | (bright << 16) | (bright << 8) | bright, true);
+    }
+
+    private static void sprite(VertexConsumer out, Frame f, float x, float y, float z, float height, float width, float seed, int color, boolean bothSides) {
+        Vector3f base = f.matrix.transformPosition(x, y, z, new Vector3f());
+        Vector3f view = f.view != null ? f.view : new Vector3f(base).negate().normalize();
+        Vector3f side = new Vector3f(f.spaceUp).cross(view);
+        if (side.lengthSquared() < 1.0E-3F) {
+            side.set(1.0F, 0.0F, 0.0F);
         }
-    }
-
-    private static void blended(VertexConsumer out, float[] p) {
-        int alpha = Math.min(255, (int) (p[9] * 300.0F));
-        int color = (alpha << 24) | (Math.min(255, (int) (p[3] * 255.0F)) << 16) | (Math.min(255, (int) (p[4] * 255.0F)) << 8) | Math.min(255, (int) (p[5] * 255.0F));
-        // Нормаль вверх: этот слой всё равно затеняется по ней, а огню тень не нужна.
-        out.vertex(p[0], p[1], p[2], color, 0.5F, 0.5F, OverlayTexture.DEFAULT_UV, FULL_LIGHT, 0.0F, 1.0F, 0.0F);
-    }
-
-    /**
-     * Раскалённый язык светом от точки (x, y, z) (в блоках матрицы). {@code seed} делает каждый язык своим, {@code power} гасит весь язык.
-     * В слое света отбрасываются обратные грани, а для глубины нужны обе стороны — выводим обе.
-     */
-    static void tongue(VertexConsumer out, Frame f, float x, float y, float z, float length, float radius, float seed, float[][] palette, float power) {
-        float[][][] rings = rings(f, x, y, z, length, radius, seed, palette, power);
-        for (int i = 0; i < RINGS; i++) {
-            for (int j = 0; j < SIDES; j++) {
-                int k = (j + 1) % SIDES;
-                float[] p0 = rings[i][j], p1 = rings[i][k], p2 = rings[i + 1][k], p3 = rings[i + 1][j];
-                emit(out, p0);
-                emit(out, p1);
-                emit(out, p2);
-                emit(out, p3);
-                emit(out, p3);
-                emit(out, p2);
-                emit(out, p1);
-                emit(out, p0);
-            }
-        }
-    }
-
-    /** Кольца языка в координатах вида: {x, y, z, цвет×яркость (3), нормаль (3), яркость}. */
-    private static float[][][] rings(Frame f, float x, float y, float z, float length, float radius, float seed, float[][] palette, float power) {
+        side.normalize();
         float t = f.time;
-        float height = length * f.scale * (0.58F + 0.42F * noise(t * 0.21F + seed * 11.0F));
-        float[][][] rings = new float[RINGS + 1][SIDES][];
-        for (int i = 0; i <= RINGS; i++) {
-            float s = (float) i / RINGS;
-            float swayA = f.sway * (0.24F * MathHelper.sin(t * 0.37F + seed * 7.0F + s * 3.4F) + 0.1F * MathHelper.sin(t * 0.71F + seed * 3.0F - s * 6.1F));
-            float swayB = f.sway * (0.24F * MathHelper.cos(t * 0.31F + seed * 5.0F + s * 2.8F) + 0.1F * MathHelper.cos(t * 0.63F + seed * 9.0F - s * 5.3F));
-            float along = height * s;
-            float cx = x + f.up.x * along + (f.a.x * swayA + f.b.x * swayB + f.wind.x * s) * along;
-            float cy = y + f.up.y * along + (f.a.y * swayA + f.b.y * swayB + f.wind.y * s) * along;
-            float cz = z + f.up.z * along + (f.a.z * swayA + f.b.z * swayB + f.wind.z * s) * along;
-            // Широкое основание, язык сужается к острию; по нему бежит перетяжка.
-            float r = radius * (float) Math.pow(1.0F - s, 0.8F) * Math.min(1.0F, 0.6F + s * 3.5F) * (1.0F + 0.16F * MathHelper.sin(s * 9.0F - t * 0.8F + seed * 9.0F));
-            float k = s * 2.0F;
-            int stop = Math.min(1, (int) k);
-            float m = k - stop;
-            float[] from = palette[stop], to = palette[stop + 1];
-            float red = MathHelper.lerp(m, from[0], to[0]), green = MathHelper.lerp(m, from[1], to[1]), blue = MathHelper.lerp(m, from[2], to[2]);
-            float fade = power * Math.min(1.0F, 0.3F + s * 4.0F) * (1.0F - s * s * s);
-            for (int j = 0; j < SIDES; j++) {
-                float angle = MathHelper.TAU * j / SIDES + seed;
-                float ca = MathHelper.cos(angle), sa = MathHelper.sin(angle);
-                float nx = f.a.x * ca + f.b.x * sa, ny = f.a.y * ca + f.b.y * sa, nz = f.a.z * ca + f.b.z * sa;
-                Vector3f view = f.matrix.transformPosition(cx + nx * r, cy + ny * r, cz + nz * r, new Vector3f());
-                Vector3f normal = f.matrix.transformDirection(nx, ny, nz, new Vector3f()).normalize();
-                float facing = Math.abs(new Vector3f(view).normalize().dot(normal));
-                float glow = fade * (0.12F + 0.88F * facing * facing);
-                rings[i][j] = new float[]{view.x, view.y, view.z, red, green, blue, normal.x, normal.y, normal.z, glow};
-            }
+        int own = (int) (seed * 97.0F);
+        // Пламя дышит: то выше, то ниже, у каждого по-своему.
+        float tall = height * f.unit * f.scale * (0.82F + 0.18F * noise(t * 0.33F + seed * 11.0F));
+        float half = width * f.unit * 0.5F * (0.92F + 0.08F * f.scale);
+        float swing = f.sway * 0.08F * tall * MathHelper.sin(t * 0.29F + seed * 7.0F);
+        int frame = MathHelper.floor(t * FRAMES_PER_TICK + hash(own, 5) * FRAMES);
+        frame = Math.floorMod(frame, FRAMES);
+        float u0 = (float) (frame % COLUMNS) / COLUMNS, u1 = u0 + 1.0F / COLUMNS, top = (float) (frame / COLUMNS) / ROWS, cell = 1.0F / ROWS;
+        // Половина пламени отражена: одинаковые кадры рядом не заметны.
+        if (hash(own, 9) > 0.5F) {
+            float swap = u0;
+            u0 = u1;
+            u1 = swap;
         }
-        return rings;
-    }
-
-    private static void emit(VertexConsumer out, float[] p) {
-        int color = 0xFF000000 | (Math.min(255, (int) (p[3] * p[9] * 255.0F)) << 16) | (Math.min(255, (int) (p[4] * p[9] * 255.0F)) << 8)
-                | Math.min(255, (int) (p[5] * p[9] * 255.0F));
-        out.vertex(p[0], p[1], p[2], color, 0.5F, 0.5F, OverlayTexture.DEFAULT_UV, FULL_LIGHT, p[6], p[7], p[8]);
-    }
-
-    /** Тёмное сердце пламени: непрозрачная чернота внутри языка. Рисуется в полупрозрачный слой до света. */
-    static void heart(VertexConsumer out, Frame f, float x, float y, float z, float length, float radius, float seed) {
-        float t = f.time;
-        float height = length * f.scale * (0.58F + 0.42F * noise(t * 0.21F + seed * 11.0F));
-        Vector3f previous = null;
-        float previousRadius = 0.0F;
-        for (int i = 0; i <= 3; i++) {
-            float s = i / 3.0F;
-            float along = height * s;
-            float swayA = f.sway * 0.24F * MathHelper.sin(t * 0.37F + seed * 7.0F + s * 3.4F), swayB = f.sway * 0.24F * MathHelper.cos(t * 0.31F + seed * 5.0F + s * 2.8F);
-            Vector3f c = new Vector3f(x, y, z).add(new Vector3f(f.up).mul(along)).add(new Vector3f(f.a).mul(swayA * along))
-                    .add(new Vector3f(f.b).mul(swayB * along)).add(new Vector3f(f.wind).mul(s * along));
-            float r = radius * (1.0F - s) * Math.min(1.0F, 0.6F + s * 3.5F);
-            if (previous != null) {
-                for (int j = 0; j < 4; j++) {
-                    float a0 = MathHelper.HALF_PI * j + seed, a1 = a0 + MathHelper.HALF_PI;
-                    heartVertex(out, f, previous, a0, previousRadius);
-                    heartVertex(out, f, previous, a1, previousRadius);
-                    heartVertex(out, f, c, a1, r);
-                    heartVertex(out, f, c, a0, r);
+        Vector3f left = null, right = null;
+        for (int i = 0; i <= STRIPS; i++) {
+            float s = (float) i / STRIPS;
+            float along = tall * s, curve = tall * s * s;
+            Vector3f center = new Vector3f(base).add(f.spaceUp.x * along + f.spaceWind.x * curve + side.x * swing * s * s,
+                    f.spaceUp.y * along + f.spaceWind.y * curve + side.y * swing * s * s, f.spaceUp.z * along + f.spaceWind.z * curve + side.z * swing * s * s);
+            Vector3f l = new Vector3f(center).sub(side.x * half, side.y * half, side.z * half), r = new Vector3f(center).add(side.x * half, side.y * half, side.z * half);
+            if (left != null) {
+                float v0 = top + cell * (1.0F - (float) (i - 1) / STRIPS), v1 = top + cell * (1.0F - s);
+                vertex(out, left, color, u0, v0);
+                vertex(out, right, color, u1, v0);
+                vertex(out, r, color, u1, v1);
+                vertex(out, l, color, u0, v1);
+                // В слое света обратные грани отбрасываются.
+                if (bothSides) {
+                    vertex(out, l, color, u0, v1);
+                    vertex(out, r, color, u1, v1);
+                    vertex(out, right, color, u1, v0);
+                    vertex(out, left, color, u0, v0);
                 }
             }
-            previous = c;
-            previousRadius = r;
+            left = l;
+            right = r;
         }
     }
 
-    private static void heartVertex(VertexConsumer out, Frame f, Vector3f c, float angle, float r) {
-        float ca = MathHelper.cos(angle), sa = MathHelper.sin(angle);
-        float nx = f.a.x * ca + f.b.x * sa, ny = f.a.y * ca + f.b.y * sa, nz = f.a.z * ca + f.b.z * sa;
-        Vector3f view = f.matrix.transformPosition(c.x + nx * r, c.y + ny * r, c.z + nz * r, new Vector3f());
-        out.vertex(view.x, view.y, view.z, 0xE0060002, 0.5F, 0.5F, OverlayTexture.DEFAULT_UV, FULL_LIGHT, 0.0F, 1.0F, 0.0F);
+    /** Нормаль вверх: этот слой затеняется по ней, а огню тень не нужна. */
+    private static void vertex(VertexConsumer out, Vector3f p, int color, float u, float v) {
+        out.vertex(p.x, p.y, p.z, color, u, v, OverlayTexture.DEFAULT_UV, FULL_LIGHT, 0.0F, 1.0F, 0.0F);
     }
 
     /** Искра: крошечный раскалённый ромб. */

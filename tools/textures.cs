@@ -104,12 +104,181 @@ public static class ZangetsuTextures
         Out(SlashTrail(), assets, "textures/misc/slash.png", 4);
         Out(CrescentMoon(), assets, "textures/environment/crescent_moon.png", 6);
         Out(Cloak(), assets, "textures/entity/cloak.png", 16);
+        double[,,] fire = FireFrames();
+        Out(FireBody(fire), assets, "textures/misc/fire_body.png", 1);
+        Out(FireCore(fire), assets, "textures/misc/fire_core.png", 1);
         Out(EnderCut(), assets, "textures/entity/cut_ender.png", 16);
         Out(FleshCut(C(92, 14, 16), C(150, 26, 24), C(226, 196, 170), 31), assets, "textures/entity/cut_flesh.png", 16);
         Out(FleshCut(C(58, 40, 18), C(92, 62, 24), C(120, 136, 54), 32), assets, "textures/entity/cut_rot.png", 16);
         Out(BoneCut(C(226, 220, 196), C(148, 132, 104), C(112, 52, 40), 33), assets, "textures/entity/cut_bone.png", 16);
         Out(BoneCut(C(46, 46, 50), C(18, 18, 20), C(224, 92, 24), 34), assets, "textures/entity/cut_soot.png", 16);
         Out(FleshCut(C(22, 66, 24), C(46, 118, 44), C(28, 28, 30), 35), assets, "textures/entity/cut_powder.png", 16);
+    }
+
+    // ---------------------------------------------------------------- огонь
+
+    /** Пламя: зацикленная покадровая анимация, настоящие сгустки огня, а не трубки. Кадр — 64x96, всего 8x8 кадров. */
+    const int FIRE_W = 64, FIRE_H = 96, FIRE_COLS = 8, FIRE_ROWS = 8;
+
+    /** Плавный шум, зацикленный по y с периодом py. */
+    static double FireNoise(double x, double y, int py, int seed)
+    {
+        int x0 = (int)Math.Floor(x), y0 = (int)Math.Floor(y);
+        double fx = x - x0, fy = y - y0;
+        fx = fx * fx * (3 - 2 * fx);
+        fy = fy * fy * (3 - 2 * fy);
+        int y1 = y0 + 1;
+        y0 = ((y0 % py) + py) % py;
+        y1 = ((y1 % py) + py) % py;
+        double a = Hash(x0, y0, seed), b = Hash(x0 + 1, y0, seed), c = Hash(x0, y1, seed), d = Hash(x0 + 1, y1, seed);
+        return a + (b - a) * fx + (c - a) * fy + (a - b - c + d) * fx * fy;
+    }
+
+    static double FireFbm(double x, double y, int py, int seed, int octaves)
+    {
+        double sum = 0, amp = 0.5, total = 0;
+        for (int i = 0; i < octaves; i++)
+        {
+            sum += amp * FireNoise(x, y, py, seed + i * 17);
+            total += amp;
+            x *= 2.03;
+            y *= 2.0;
+            py *= 2;
+            amp *= 0.5;
+        }
+        return sum / total;
+    }
+
+
+    /** Жар пламени в точке кадра: u от -1 до 1, v от 0 (основание) до 1 (верх), tau — доля цикла. Меньше нуля — огня нет. */
+    static double FireHeat(double u, double v, double tau)
+    {
+        // Несколько языков разной высоты: большой посередине и меньшие по бокам. Каждый дышит сам и за цикл возвращается к началу.
+        double[,] tongues = {
+            { 0.00, 1.00, 0.58, 2, 0.0 },
+            { -0.40, 0.60, 0.38, 3, 0.3 },
+            { 0.42, 0.70, 0.40, 2, 0.6 },
+            { 0.14, 0.44, 0.36, 4, 0.8 },
+            { -0.16, 0.36, 0.36, 5, 0.1 }
+        };
+        double sum = 0;
+        // Весь огонь сносит общим потоком: снизу почти нет, к верху всё сильнее.
+        double flow = (FireFbm(u * 1.1 + 7.0, v * 1.8 - tau * 16, 16, 411, 3) - 0.5) * 1.5;
+        for (int i = 0; i < tongues.GetLength(0); i++)
+        {
+            double cx = tongues[i, 0], h = tongues[i, 1], w = tongues[i, 2], k = tongues[i, 3], phase = tongues[i, 4];
+            h *= 0.84 + 0.16 * Math.Sin(Math.PI * 2 * (tau * k + phase));
+            double y = v / h;
+            if (y >= 1.0)
+            {
+                continue;
+            }
+            double sway = 0.09 * Math.Sin(Math.PI * 2 * (tau * (k + 1) + phase + v * 1.1)) * y;
+            double x = u - cx - sway + flow * (0.1 + 0.55 * y * y);
+            // Капля: узкое начало, широкое брюхо и острый кончик.
+            double body = w * Math.Pow(1 - y, 0.72) * (0.42 + 0.58 * Smooth(0.0, 0.3, y));
+            // Языки сливаются плавно, без резких швов между ними.
+            sum += Math.Exp(5.0 * (1 - Math.Abs(x) / Math.Max(body, 0.001)));
+        }
+        // Поток огня бежит вверх и рвёт края, особенно у верхушки: так появляются лохмотья и отдельные языки.
+        double fine = FireFbm(u * 2.6 + 3.0, v * 3.4 - tau * 24, 24, 97, 4) - 0.5;
+        double finer = FireFbm(u * 5.2, v * 6.5 - tau * 48, 48, 173, 3) - 0.5;
+        double best = sum > 0 ? Math.Log(sum) / 5.0 : -9;
+        // Основание мягко сходит на нет: огонь растёт из тела, а не обрезан снизу.
+        return (best + fine * (0.6 + 1.1 * v) + finer * (0.28 + 0.6 * v) - 0.24 * Smooth(0.55, 1.0, v)) * Smooth(0.0, 0.14, v) - 0.3 * (1.0 - Smooth(0.0, 0.1, v));
+    }
+
+    /** Все кадры: температура от 0 и выше, отрицательная — пусто. */
+    static double[,,] FireFrames()
+    {
+        int frames = FIRE_COLS * FIRE_ROWS;
+        double[,,] heat = new double[frames, FIRE_W, FIRE_H];
+        for (int n = 0; n < frames; n++)
+        {
+            double tau = (double)n / frames;
+            for (int py = 0; py < FIRE_H; py++)
+            {
+                double v = 1.0 - (py + 0.5) / FIRE_H;
+                for (int px = 0; px < FIRE_W; px++)
+                {
+                    double u = (px + 0.5) / FIRE_W * 2.0 - 1.0;
+                    // К краям кадра огонь сходит на нет: соседний кадр в текстуру не попадёт.
+                    double edge = Smooth(0.0, 0.1, 1.0 - Math.Abs(u)) * Smooth(0.0, 0.05, 1.0 - v);
+                    heat[n, px, py] = FireHeat(u, v, tau) * edge - (1 - edge) * 0.5;
+                }
+            }
+        }
+        return heat;
+    }
+
+    /** Цвет огня по температуре: дым и сажа, тёмный багрянец, алый, оранжевый, жёлтый, почти белое сердце. */
+    static Color FireRamp(double t)
+    {
+        double[] stops = { 0.0, 0.14, 0.3, 0.5, 0.68, 0.86, 1.0 };
+        int[,] colors = { { 26, 0, 2 }, { 96, 2, 4 }, { 205, 14, 6 }, { 255, 62, 6 }, { 255, 140, 20 }, { 255, 214, 92 }, { 255, 248, 214 } };
+        for (int i = 0; i + 1 < stops.Length; i++)
+        {
+            if (t <= stops[i + 1])
+            {
+                double k = Sat((t - stops[i]) / (stops[i + 1] - stops[i]));
+                return C(Cl(colors[i, 0] + (colors[i + 1, 0] - colors[i, 0]) * k), Cl(colors[i, 1] + (colors[i + 1, 1] - colors[i, 1]) * k), Cl(colors[i, 2] + (colors[i + 1, 2] - colors[i, 2]) * k));
+            }
+        }
+        return C(255, 248, 214);
+    }
+
+    /** Температура для цвета: чем глубже внутри языка и чем ниже, тем горячее. */
+    static double FireTemperature(double heat, double v)
+    {
+        return Sat(heat * 0.92 * (1.0 - 0.42 * v));
+    }
+
+    /** Полупрозрачное тело огня: не выцветает на светлом снегу. */
+    static Canvas FireBody(double[,,] heat)
+    {
+        Canvas c = new Canvas(FIRE_W * FIRE_COLS, FIRE_H * FIRE_ROWS);
+        for (int n = 0; n < FIRE_COLS * FIRE_ROWS; n++)
+        {
+            int ox = n % FIRE_COLS * FIRE_W, oy = n / FIRE_COLS * FIRE_H;
+            for (int py = 0; py < FIRE_H; py++)
+            {
+                double v = 1.0 - (py + 0.5) / FIRE_H;
+                for (int px = 0; px < FIRE_W; px++)
+                {
+                    double h = heat[n, px, py];
+                    double alpha = Smooth(0.0, 0.14, h);
+                    if (alpha <= 0.0)
+                    {
+                        continue;
+                    }
+                    Color col = FireRamp(FireTemperature(h, v));
+                    c.Set(ox + px, oy + py, CA(Cl(alpha * 255), col.R, col.G, col.B));
+                }
+            }
+        }
+        return c;
+    }
+
+    /** Раскалённая серединка: рисуется светом, поэтому фон чёрный, а яркость уже в цвете. */
+    static Canvas FireCore(double[,,] heat)
+    {
+        Canvas c = new Canvas(FIRE_W * FIRE_COLS, FIRE_H * FIRE_ROWS);
+        for (int n = 0; n < FIRE_COLS * FIRE_ROWS; n++)
+        {
+            int ox = n % FIRE_COLS * FIRE_W, oy = n / FIRE_COLS * FIRE_H;
+            for (int py = 0; py < FIRE_H; py++)
+            {
+                double v = 1.0 - (py + 0.5) / FIRE_H;
+                for (int px = 0; px < FIRE_W; px++)
+                {
+                    double t = FireTemperature(heat[n, px, py], v);
+                    double k = Smooth(0.4, 0.9, t);
+                    Color col = FireRamp(t);
+                    c.Set(ox + px, oy + py, C(Cl(col.R * k), Cl(col.G * k), Cl(col.B * k)));
+                }
+            }
+        }
+        return c;
     }
 
     /** Ткань плаща: тёмное плетение почти белого цвета (цвет даёт вершина), с потёртостями. Повторяется без шва. */
