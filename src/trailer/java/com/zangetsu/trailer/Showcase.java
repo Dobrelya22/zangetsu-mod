@@ -8,7 +8,9 @@ import static com.zangetsu.trailer.Shots.shot;
 
 import com.zangetsu.entity.ThrownZangetsuEntity;
 import com.zangetsu.logic.Awakening;
+import com.zangetsu.client.ReactionCheck;
 import com.zangetsu.logic.Execution;
+import com.zangetsu.logic.Reaction;
 import com.zangetsu.logic.Eye;
 import com.zangetsu.logic.HollowForm;
 import com.zangetsu.registry.ModAttachments;
@@ -18,6 +20,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.mob.MobEntity;
 import net.minecraft.server.MinecraftServer;
@@ -60,6 +63,7 @@ final class Showcase {
         chains();
         cloakRun();
         firstPersonLook();
+        reactions2();
         moves("moves_side", 50.0, 270.0F, false);
         moves("moves_front", 75.0, 205.0F, false);
         moves("moves_fp", 100.0, 0.0F, true);
@@ -106,6 +110,7 @@ final class Showcase {
     private void mask(String name, double t0, int level) {
         scene(name, t0, t0 + 5.0);
         s.settle = 70;
+        s.gameCamera = true;
         s.setup = srv -> Script.base(srv, level, true);
         cut(t0, name + "_front", shot(arc(1.75, 180, 1.55), p(0, 1.55, 0), 40));
         cut(t0 + 1.0, name + "_34", shot(arc(1.85, 215, 1.65), p(0, 1.58, 0), 40));
@@ -282,7 +287,42 @@ final class Showcase {
         cut(322.0, "chains_side", shot(heroAt(2.6, 1.0, 0.8), heroAt(0, 0.8, 0), 44));
     }
 
-    /** От первого лица, взгляд почти отвесно вниз и вверх и взмах: огонь на клинке и на руке должен быть виден. */
+/** Проверка реакции: враг, которому остался один удар, круг, клик и то, что за ним следует. Настоящая камера и интерфейс. */
+    private void reactions2() {
+        reactionScene("qte_good_l4", 360.0, EntityType.ZOMBIE, null, ReactionCheck.GOOD, 4);
+        reactionScene("qte_great_zombie", 368.0, EntityType.ZOMBIE, Execution.Variant.IMPALE, ReactionCheck.GREAT, 5);
+        reactionScene("qte_great_cross", 378.0, EntityType.ZOMBIE, Execution.Variant.CROSS, ReactionCheck.GREAT, 5);
+        reactionScene("qte_great_skeleton", 388.0, EntityType.SKELETON, Execution.Variant.SHATTER, ReactionCheck.GREAT, 5);
+        reactionScene("qte_great_creeper", 398.0, EntityType.CREEPER, Execution.Variant.LAUNCH, ReactionCheck.GREAT, 5);
+        reactionScene("qte_great_enderman", 408.0, EntityType.ENDERMAN, Execution.Variant.CROSS, ReactionCheck.GREAT, 5);
+        reactionScene("qte_great_piglin", 418.0, EntityType.PIGLIN, Execution.Variant.BEHEAD, ReactionCheck.GREAT, 5);
+        reactionScene("qte_great_pillager", 428.0, EntityType.PILLAGER, Execution.Variant.KESA, ReactionCheck.GREAT, 5);
+    }
+
+    private void reactionScene(String name, double t0, EntityType<? extends MobEntity> type, Execution.Variant variant, int kind, int level) {
+        scene(name, t0, t0 + 8.0);
+        s.firstPerson = true;
+        s.settle = 70;
+        s.gameCamera = true;
+        s.setup = srv -> Script.base(srv, level, true);
+        // Моб появляется в самом начале сцены: иначе за время подготовки меч в форме зарубил бы его сам.
+        server(t0 + 0.1, srv -> {
+            Stage.spawn(Stage.player(srv), "V", type, Stage.at(0, 0, -3.4), 0.0F, false, 0.0F);
+            Entity e = Stage.entity(srv, "V");
+            if (e instanceof MobEntity mob) {
+                mob.setInvulnerable(false);
+                mob.setHealth(2.0F);
+                Execution.nextBehind = variant;
+                Reaction.enabled = true;
+                Reaction.start(Stage.player(srv), mob);
+            }
+        });
+        // Стрелка у зоны примерно к этому мигу: сервер сверяет время с запасом.
+        client(t0 + 1.0, () -> ReactionCheck.answerAt(ReactionCheck.zoneMiddle(kind)));
+        cut(t0, "qte", shot(p(0, 5, 5), p(0, 0, 0), 70));
+    }
+
+/** От первого лица, взгляд почти отвесно вниз и вверх и взмах: огонь на клинке и на руке должен быть виден. */
     private void firstPersonLook() {
         float[][] looks = {{348.0F, 82.0F}, {352.0F, -82.0F}, {356.0F, 45.0F}};
         String[] names = {"ff_fp_down", "ff_fp_up", "ff_fp_low"};

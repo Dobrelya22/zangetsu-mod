@@ -24,6 +24,8 @@ public record AnimationPayload(int entityId, int animation, int duration, int pa
     public static final int EXECUTE_FLASH = 8;
     /** Превращение на уровне V: злость, молния, колено, подъём, меч на плечо и выпад. */
     public static final int HOLLOW_FINAL = 9;
+    /** Отличное попадание: игрок уже за спиной врага, вынырнет через миг. {@code param} — id врага. */
+    public static final int EXECUTE_BEHIND = 10;
 
     public static final CustomPayload.Id<AnimationPayload> ID = new CustomPayload.Id<>(ZangetsuMod.id("animation"));
     public static final PacketCodec<ByteBuf, AnimationPayload> CODEC = PacketCodec.tuple(

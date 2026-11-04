@@ -39,9 +39,14 @@ public final class ServerEvents {
                 tickPlayer(player);
             }
         });
-        ServerLifecycleEvents.SERVER_STOPPED.register(server -> Scheduler.clear());
+        ServerLifecycleEvents.SERVER_STOPPED.register(server -> {
+            Scheduler.clear();
+            Reaction.clear();
+        });
 
         ServerLivingEntityEvents.ALLOW_DAMAGE.register(ServerEvents::allowDamage);
+        // Удар, который убил бы врага, вместо этого начинает проверку реакции.
+        ServerLivingEntityEvents.ALLOW_DEATH.register((entity, source, amount) -> !Reaction.interceptDeath(entity, source));
         ServerEntityCombatEvents.AFTER_KILLED_OTHER_ENTITY.register((world, killer, killed) -> {
             if (killer instanceof ServerPlayerEntity player) {
                 onKill(player, killed);
@@ -79,6 +84,7 @@ public final class ServerEvents {
             Eye.forget(player);
             Abilities.forget(player);
             Cinematic.forget(player);
+            Reaction.forget(player);
         });
 
         // Меч не выпадает при смерти: он остаётся у старого тела и переезжает к новому.
@@ -116,14 +122,18 @@ public final class ServerEvents {
     }
 
     private static boolean allowDamage(LivingEntity entity, DamageSource source, float amount) {
+        // Враг на проверке реакции замер: уже начатый удар меча не должен добить его и сорвать круг.
+        if (Reaction.isTarget(entity) && !source.isIn(DamageTypeTags.BYPASSES_INVULNERABILITY)) {
+            return false;
+        }
         if (!(entity instanceof ServerPlayerEntity player)) {
             return true;
         }
         if (Awakening.protects(player) && !source.isIn(DamageTypeTags.BYPASSES_INVULNERABILITY)) {
             return false;
         }
-        // Пока идёт сцена превращения, игрок не управляет собой: ранить его было бы нечестно.
-        if (HollowForm.isTransforming(player) && !source.isIn(DamageTypeTags.BYPASSES_INVULNERABILITY)) {
+        // Пока идёт сцена превращения, игрок не управляет собой: ранить его было бы нечестно. То же и в сцене за спиной врага.
+        if ((HollowForm.isTransforming(player) || Execution.inBehindScene(player)) && !source.isIn(DamageTypeTags.BYPASSES_INVULNERABILITY)) {
             return false;
         }
         ZangetsuData data = ModAttachments.data(player);
@@ -162,6 +172,7 @@ public final class ServerEvents {
 
         Dream.tick(player, data);
         HollowForm.tick(player, data);
+        Reaction.tick(player);
         if (player.age % 20 == 0) {
             checkSwords(player, data);
         }

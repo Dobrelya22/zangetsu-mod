@@ -7,7 +7,6 @@
   "entity.zangetsu.getsuga": "Гецуга Теншо",
 
   "key.categories.zangetsu": "Зангецу",
-  "key.zangetsu.execute": "Казнь",
   "key.zangetsu.hollow": "Форма Пустого",
 
   "zangetsu.level.1": "Пробуждение",
@@ -33,7 +32,11 @@
   "zangetsu.cut.right_arm": "Правая рука отсечена!",
   "zangetsu.cut.left_knee": "Левое колено рассечено!",
   "zangetsu.cut.right_knee": "Правое колено рассечено — он не может уйти!",
-  "zangetsu.cut.execute_hint": "[%s] — КАЗНЬ!",
+  "zangetsu.reaction.click": "ЛКМ",
+  "zangetsu.reaction.good": "ХОРОШО",
+  "zangetsu.reaction.great": "ОТЛИЧНО",
+  "zangetsu.reaction.miss": "МИМО",
+  "zangetsu.reaction.too_slow": "ТЫ СЛИШКОМ МЕДЛИТЕЛЕН",
 
   "zangetsu.awaken.title": "Ты ещё не готов умереть...",
   "zangetsu.awaken.subtitle": "Что-то появилось в небе",
@@ -85,7 +88,6 @@
   "zangetsu.hud.hollow_ready": "[%s] Пустой",
   "zangetsu.hud.hollow_empty": "Пустой: завтра",
   "zangetsu.hud.lost": "Меч потерян — ляг спать",
-  "zangetsu.hud.execute": "[%s] КАЗНЬ",
 
   "zangetsu.command.already_bonded": "Меч уже с тобой. Сначала /zangetsu reset",
   "zangetsu.command.not_bonded": "У тебя ещё нет Зангецу (/zangetsu give)",

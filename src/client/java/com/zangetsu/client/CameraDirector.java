@@ -34,6 +34,10 @@ public final class CameraDirector {
     private CameraDirector() {
     }
 
+    public static boolean isActive() {
+        return until >= 0;
+    }
+
     /** Точка плавного пролёта: тик сцены и весь ракурс в этот момент. */
     public record Key(float at, float yaw, float pitch, float distance, float forward, float lift) {
         float value(int field) {

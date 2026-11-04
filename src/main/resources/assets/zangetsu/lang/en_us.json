@@ -7,7 +7,6 @@
   "entity.zangetsu.getsuga": "Getsuga Tensho",
 
   "key.categories.zangetsu": "Zangetsu",
-  "key.zangetsu.execute": "Execute",
   "key.zangetsu.hollow": "Hollow Form",
 
   "zangetsu.level.1": "Awakening",
@@ -33,7 +32,11 @@
   "zangetsu.cut.right_arm": "Right arm severed!",
   "zangetsu.cut.left_knee": "Left knee cut!",
   "zangetsu.cut.right_knee": "Right knee cut — it cannot escape!",
-  "zangetsu.cut.execute_hint": "[%s] — EXECUTE!",
+  "zangetsu.reaction.click": "LMB",
+  "zangetsu.reaction.good": "GOOD",
+  "zangetsu.reaction.great": "GREAT",
+  "zangetsu.reaction.miss": "MISS",
+  "zangetsu.reaction.too_slow": "YOU'RE TOO SLOW",
 
   "zangetsu.awaken.title": "You are not ready to die yet...",
   "zangetsu.awaken.subtitle": "Something has appeared in the sky",
@@ -85,7 +88,6 @@
   "zangetsu.hud.hollow_ready": "[%s] Hollow",
   "zangetsu.hud.hollow_empty": "Hollow: tomorrow",
   "zangetsu.hud.lost": "Sword lost — go to sleep",
-  "zangetsu.hud.execute": "[%s] EXECUTE",
 
   "zangetsu.command.already_bonded": "The sword is already yours. Run /zangetsu reset first",
   "zangetsu.command.not_bonded": "You don't have Zangetsu yet (/zangetsu give)",

@@ -18,6 +18,7 @@ import com.zangetsu.logic.Awakening;
 import com.zangetsu.logic.Dream;
 import com.zangetsu.logic.Eye;
 import com.zangetsu.logic.HollowForm;
+import com.zangetsu.logic.Reaction;
 import com.zangetsu.logic.Limbs;
 import com.zangetsu.logic.Scheduler;
 import com.zangetsu.logic.ZangetsuData;
@@ -725,6 +726,7 @@ final class Script {
     /** Подготовка площадки: герой с мечом нужного уровня, в форме Пустого или без. */
     static ServerPlayerEntity base(MinecraftServer srv, int level, boolean hollow) {
         HollowForm.skipRite = true;
+        Reaction.enabled = false;
         Stage.arena(srv);
         ServerPlayerEntity p = Stage.player(srv);
         ZangetsuData data = ModAttachments.data(p);

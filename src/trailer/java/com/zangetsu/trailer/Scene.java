@@ -38,6 +38,8 @@ public final class Scene {
     Insert.Spec insert;
     /** Снимать глазами игрока (витрина анимаций от первого лица), без кино-камеры. */
     boolean firstPerson;
+    /** Камеру ведёт сама игра: сцены с настоящей камерой ({@link com.zangetsu.client.CameraDirector}) не перебиваем. */
+    boolean gameCamera;
     final List<Cut> cuts = new ArrayList<>();
     final List<Event> events = new ArrayList<>();
     final TreeMap<Double, Float> speeds = new TreeMap<>();

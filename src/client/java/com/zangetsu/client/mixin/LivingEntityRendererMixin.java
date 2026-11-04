@@ -1,6 +1,7 @@
 package com.zangetsu.client.mixin;
 
 import com.zangetsu.client.ClientState;
+import com.zangetsu.client.TooSlowScene;
 import com.zangetsu.client.render.PlayerPoses;
 import com.zangetsu.logic.Limbs;
 import net.minecraft.client.render.VertexConsumerProvider;
@@ -36,7 +37,7 @@ public abstract class LivingEntityRendererMixin {
             at = @At("HEAD"), cancellable = true)
     private void zangetsu$hideSplit(LivingEntity entity, float yaw, float tickDelta, MatrixStack matrices, VertexConsumerProvider consumers,
             int light, CallbackInfo ci) {
-        if ((ClientState.limbs(entity) & Limbs.SPLIT) != 0) {
+        if ((ClientState.limbs(entity) & Limbs.SPLIT) != 0 || TooSlowScene.hidden(entity, tickDelta)) {
             ci.cancel();
         }
     }

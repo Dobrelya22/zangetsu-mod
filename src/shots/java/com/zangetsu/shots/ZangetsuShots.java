@@ -12,6 +12,7 @@ import com.zangetsu.logic.Dream;
 import com.zangetsu.logic.Execution;
 import com.zangetsu.logic.HollowForm;
 import com.zangetsu.logic.Limbs;
+import com.zangetsu.logic.Reaction;
 import com.zangetsu.logic.SwordStacks;
 import com.zangetsu.registry.ModAttachments;
 import net.minecraft.inventory.SimpleInventory;
@@ -30,6 +31,7 @@ import net.minecraft.client.MinecraftClient;
 import com.zangetsu.client.CameraDirector;
 import com.zangetsu.client.ClientState;
 import com.zangetsu.client.ZangetsuCombat;
+import com.zangetsu.client.ReactionCheck;
 import com.zangetsu.client.render.FormPhysics;
 import com.zangetsu.client.render.PlayerPoses;
 import com.zangetsu.network.AnimationPayload;
@@ -188,6 +190,8 @@ public class ZangetsuShots implements ClientModInitializer {
     }
 
     private void write() {
+        // В основной части мобов убивают напрямую, проверка реакции идёт отдельным разделом.
+        Reaction.enabled = false;
         // ---- Пробуждение днём.
         command("time set 6000", "weather clear", "gamerule doDaylightCycle false", "gamerule doMobSpawning false",
                 "tp @p 0.5 -60 0.5 180 0");
@@ -568,7 +572,6 @@ public class ZangetsuShots implements ClientModInitializer {
         look(180.0F, 2.0F);
         onServer(s -> this.attacker = summon(player(s), EntityType.ZOMBIE, 11.0));
         pause(4);
-        act(c -> check("в финальной форме R видит цель издалека", KeyBindings.executionTarget(c) != null));
         onServer(s -> Execution.request(player(s), this.attacker.getId()));
         pause(3);
         onServer(s -> check("шаг вынес игрока к мобу", player(s).distanceTo(this.attacker) < 4.5F));
@@ -606,6 +609,7 @@ public class ZangetsuShots implements ClientModInitializer {
             check("взрыв крипера никого не задел", player(s).getHealth() >= this.healthBefore);
         });
         pause(10);
+        writeReaction();
         onServer(s -> HollowForm.toggle(player(s)));
         view(Perspective.FIRST_PERSON);
         pause(30);
@@ -784,6 +788,137 @@ public class ZangetsuShots implements ClientModInitializer {
                 worstTurn, worstPart, worstTurnAt, worstBend, worstDip, worstFist, worstBlade, worstBladeAt));
         check("подбор меча: суставы без скачков", worstTurn < 0.09F && worstBend < 0.12F && worstDip < 0.2F);
         check("подбор меча: кулак и клинок идут плавно", worstFist < 0.9F && worstBlade < 0.09F);
+    }
+
+    // ---------------------------------------------------------------- проверка реакции
+
+    /** Круг вместо кнопки казни: отличная зона, хорошая, промах, время вышло и удар, который должен был убить. */
+    private void writeReaction() {
+        onServer(s -> Reaction.enabled = true);
+        look(180.0F, 2.0F);
+        // Враг, с которым игрок дерётся и которому остался один удар: круг появляется сам.
+        onServer(s -> {
+            this.attacker = summonHostile(player(s), EntityType.ZOMBIE, 3.2);
+            this.attacker.setHealth(2.0F);
+            this.attacker.setAttacker(player(s));
+            this.healthBefore = player(s).getHealth();
+        });
+        waitFor("круг реакции", c -> ReactionCheck.isActive());
+        shot("qte_ring");
+        onServer(s -> {
+            check("враг замер на проверке", Reaction.isTarget(this.attacker) && ((MobEntity) this.attacker).isAiDisabled());
+            check("кнопки казни больше нет: проверка идёт сама", Reaction.isActive(player(s)));
+            this.bondBefore = ModAttachments.data(player(s)).bond;
+        });
+        waitFor("стрелка у отличной зоны", c -> ReactionCheck.needle() >= ReactionCheck.zoneStart(ReactionCheck.GREAT) - 0.03F);
+        shot("qte_needle");
+        act(c -> ReactionCheck.answerAt(ReactionCheck.zoneMiddle(ReactionCheck.GREAT)));
+        pause(3);
+        onServer(s -> {
+            ServerPlayerEntity player = player(s);
+            check("отличная: игрок в сцене за спиной", Execution.inBehindScene(player));
+            Vec3d toEnemy = this.attacker.getPos().subtract(player.getPos()).multiply(1.0, 0.0, 1.0).normalize();
+            check("отличная: игрок стоит за спиной врага", toEnemy.dotProduct(this.attacker.getRotationVector().multiply(1.0, 0.0, 1.0).normalize()) > 0.5);
+        });
+        shot("qte_zoom");
+        pause(Execution.BEHIND_APPEAR + 3);
+        shot("qte_mask");
+        pause(14);
+        shot("qte_phrase");
+        pause(Execution.BEHIND_HOLD - Execution.BEHIND_APPEAR - 16);
+        shot("qte_turn");
+        pause(10);
+        shot("qte_strike");
+        pause(30);
+        onServer(s -> {
+            check("отличная: враг казнён", !this.attacker.isAlive());
+            check("отличная: дружба выросла", ModAttachments.data(player(s)).bond > this.bondBefore);
+            check("сцена кончилась, игрок свободен", !Cinematic.isLocked(player(s)) && !Execution.inBehindScene(player(s)));
+        });
+        pause(40);
+        // Хорошая зона: обычная быстрая казнь.
+        look(180.0F, 2.0F);
+        onServer(s -> {
+            this.attacker = summonHostile(player(s), EntityType.SKELETON, 3.2);
+            this.attacker.setHealth(2.0F);
+            this.attacker.setAttacker(player(s));
+        });
+        waitFor("круг реакции", c -> ReactionCheck.isActive());
+        waitFor("стрелка у хорошей зоны", c -> ReactionCheck.needle() >= ReactionCheck.zoneStart(ReactionCheck.GOOD) - 0.03F);
+        act(c -> ReactionCheck.answerAt(ReactionCheck.zoneMiddle(ReactionCheck.GOOD)));
+        pause(3);
+        onServer(s -> check("хорошая: казнь без сцены за спиной", Execution.isBusy(player(s)) && !Execution.inBehindScene(player(s))));
+        shot("qte_good_answer");
+        pause(30);
+        onServer(s -> check("хорошая: враг казнён", !this.attacker.isAlive()));
+        pause(40);
+        // Промах: враг приходит в себя, и второй проверки на него сразу нет.
+        look(180.0F, 2.0F);
+        onServer(s -> {
+            this.attacker = summonHostile(player(s), EntityType.PIGLIN, 3.2);
+            this.attacker.setHealth(2.0F);
+            this.attacker.setAttacker(player(s));
+        });
+        waitFor("круг реакции", c -> ReactionCheck.isActive());
+        pause(Reaction.LEAD + 5);
+        act(c -> ReactionCheck.answerAt(0.3F));
+        pause(1);
+        shot("qte_miss_answer");
+        pause(2);
+        onServer(s -> {
+            check("промах: враг не остался замершим", !((MobEntity) this.attacker).isAiDisabled());
+            check("промах: игрок не в казни", !Execution.isBusy(player(s)));
+        });
+        pause(40);
+        onServer(s -> {
+            check("промах: второй проверки на него нет", !Reaction.isActive(player(s)));
+            this.attacker.discard();
+        });
+        pause(5);
+        // Время вышло без клика: то же, что промах.
+        look(180.0F, 2.0F);
+        onServer(s -> {
+            this.attacker = summonHostile(player(s), EntityType.VINDICATOR, 3.2);
+            this.attacker.setHealth(2.0F);
+            this.attacker.setAttacker(player(s));
+        });
+        waitFor("круг реакции", c -> ReactionCheck.isActive());
+        pause(Reaction.LEAD + 38);
+        onServer(s -> {
+            check("время вышло: проверка кончилась", !Reaction.isActive(player(s)));
+            check("время вышло: враг не остался замершим", !((MobEntity) this.attacker).isAiDisabled());
+            this.attacker.discard();
+        });
+        pause(40);
+        // Удар, который убил бы: враг остаётся с каплей здоровья, и начинается проверка.
+        look(180.0F, 2.0F);
+        onServer(s -> {
+            this.attacker = summonHostile(player(s), EntityType.ZOMBIE, 3.2);
+            this.attacker.timeUntilRegen = 0;
+            this.attacker.damage(player(s).getServerWorld().getDamageSources().playerAttack(player(s)), 1000.0F);
+            check("смертельный удар: враг жив", this.attacker.isAlive() && this.attacker.getHealth() > 0.0F);
+            check("смертельный удар: началась проверка", Reaction.isActive(player(s)));
+        });
+        pause(Reaction.LEAD + 34);
+        onServer(s -> {
+            this.attacker.timeUntilRegen = 0;
+            this.attacker.damage(player(s).getServerWorld().getDamageSources().playerAttack(player(s)), 1000.0F);
+            check("после промаха его можно просто добить", !this.attacker.isAlive());
+        });
+        pause(40);
+        // Мирного не трогает и за низкое здоровье.
+        onServer(s -> {
+            this.attacker = summonHostile(player(s), EntityType.VILLAGER, 3.2);
+            this.attacker.setHealth(1.0F);
+            this.attacker.setAttacker(player(s));
+        });
+        pause(8);
+        onServer(s -> {
+            check("мирного проверка не трогает", !Reaction.isActive(player(s)));
+            this.attacker.discard();
+            Reaction.enabled = false;
+        });
+        pause(5);
     }
 
     // ---------------------------------------------------------------- покадровые замеры

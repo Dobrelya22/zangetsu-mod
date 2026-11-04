@@ -14,7 +14,7 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.text.Text;
 import net.minecraft.util.math.MathHelper;
 
-/** Надписи на экране: уровень и дружба меча, сила Пустого ({@link ReiatsuHud}), подсказка казни и вспышки сцен. */
+/** Надписи на экране: уровень и дружба меча, сила Пустого ({@link ReiatsuHud}), проверка реакции ({@link ReactionCheck}) и вспышки сцен. */
 public final class ZangetsuHud {
     private static final String[] ROMAN = {"I", "II", "III", "IV", "V"};
     private static final ItemStack ICON = new ItemStack(ModItems.ZANGETSU);
@@ -29,6 +29,8 @@ public final class ZangetsuHud {
         }
         float tickDelta = counter.getTickDelta(false);
         renderFlash(context, tickDelta);
+        TooSlowScene.render(context, tickDelta);
+        ReactionCheck.render(context, tickDelta);
         if (client.options.hudHidden) {
             return;
         }
@@ -68,18 +70,6 @@ public final class ZangetsuHud {
         }
         if (level >= Bond.HOLLOW_LEVEL) {
             ReiatsuHud.render(context, font, state, level >= Bond.FINAL_LEVEL, ClientState.ticks + tickDelta);
-        }
-
-        // Подсказка казни под прицелом.
-        if (ClientState.animation(client.player) == null && KeyBindings.executionTarget(client) != null) {
-            int cx = context.getScaledWindowWidth() / 2, cy = context.getScaledWindowHeight() / 2;
-            float pulse = 0.75F + 0.25F * (float) Math.sin((ClientState.ticks + tickDelta) * 0.4);
-            context.getMatrices().push();
-            context.getMatrices().translate(cx, cy + 14, 0);
-            context.getMatrices().scale(1.6F * pulse + 0.4F, 1.6F * pulse + 0.4F, 1.0F);
-            context.drawCenteredTextWithShadow(font, Text.translatable("zangetsu.hud.execute", KeyBindings.execute.getBoundKeyLocalizedText()),
-                    0, 0, 0xFF2020);
-            context.getMatrices().pop();
         }
     }
 

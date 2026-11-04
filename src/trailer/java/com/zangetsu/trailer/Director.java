@@ -288,7 +288,7 @@ public final class Director {
         boolean firstPerson = scene != null && scene.firstPerson;
         client.options.hudHidden = !firstPerson;
         Perspective perspective = firstPerson ? Perspective.FIRST_PERSON : Perspective.THIRD_PERSON_BACK;
-        if (client.options.getPerspective() != perspective) {
+        if (client.options.getPerspective() != perspective && !(scene != null && scene.gameCamera && com.zangetsu.client.CameraDirector.isActive())) {
             client.options.setPerspective(perspective);
         }
         client.options.sneakKey.setPressed(sneaking);

@@ -196,9 +196,6 @@ public final class Limbs {
             case LEFT_KNEE -> "left_knee";
             default -> "right_knee";
         }).formatted(Formatting.RED);
-        if (target.isAlive() && executable(target, limbs, false, 0)) {
-            message = Text.translatable("zangetsu.cut.execute_hint", Text.keybind("key.zangetsu.execute")).formatted(Formatting.DARK_RED, Formatting.BOLD);
-        }
         player.sendMessage(message, true);
     }
 

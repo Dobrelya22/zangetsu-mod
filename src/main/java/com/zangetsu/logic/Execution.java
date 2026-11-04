@@ -30,7 +30,7 @@ import net.minecraft.util.math.Vec3d;
  * Казнь. У каждого вида мобов несколько приёмов: голову с плеч, пополам по поясу, сверху вниз на две половины, наискось от плеча, скелет
  * разлетается костями, крипера подбрасывает и он рвётся в воздухе, никого не задев. Обычно игрок замирает, а камера уходит в сторону.
  *
- * <p>В финальной форме (Пустой на уровне V) меч не ждёт: любого такого моба под прицелом можно казнить сразу — вспышка шага, и приём
+ * <p>Начинает казнь проверка реакции ({@link Reaction}). В финальной форме (Пустой на уровне V): любого такого моба под прицелом можно казнить сразу — вспышка шага, и приём
  * проходит быстрее обычного удара, без замирания камеры.
  */
 public final class Execution {
@@ -45,7 +45,9 @@ public final class Execution {
         KESA(0, 18.0F, 0.42F, 1.7F),
         SHATTER(3, 20.0F, 0.47F, 1.6F),
         IMPALE(5, 17.0F, 0.40F, 1.7F),
-        LAUNCH(6, 19.0F, 0.44F, 1.6F);
+        LAUNCH(6, 19.0F, 0.44F, 1.6F),
+        /** Только со спины: косой удар и сразу встречный снизу, моб распадается крестом на четыре куска. */
+        CROSS(0, 18.0F, 0.42F, 0.85F);
 
         private final int move;
         private final float duration, hit, stretch;
@@ -76,9 +78,17 @@ public final class Execution {
     private static final int LAUNCH_TICKS = 11;
     private static final double LAUNCH_HEIGHT = 2.4;
     /** Куда падают куски (градусы в плоскости тела). */
-    private static final float BACK = 90.0F, TO_LEFT = 180.0F, TO_RIGHT = 0.0F;
+    private static final float BACK = 90.0F, TO_LEFT = 180.0F, TO_RIGHT = 0.0F, FORWARD = 270.0F;
+    /** Сцена отличного попадания (тики): игрок появляется за спиной и начинает удар. */
+    public static final int BEHIND_APPEAR = 12, BEHIND_HOLD = 44;
+    /** Встречный удар креста: приём меча и его длительность. */
+    private static final int CROSS_SECOND_MOVE = 6, CROSS_SECOND_TICKS = 14;
+    private static final float CROSS_SECOND_HIT = 0.44F;
 
     private static final Set<UUID> BUSY = new HashSet<>();
+    private static final Set<UUID> BEHIND = new HashSet<>();
+    /** Каким приёмом пойдёт следующая казнь со спины (null — случайно). Для сцен и игровых проверок. */
+    public static Variant nextBehind;
     private static final Map<UUID, Variant> LAST = new HashMap<>();
 
     private Execution() {
@@ -121,6 +131,53 @@ public final class Execution {
         return variant;
     }
 
+    /** Приёмы со спины: у каждого вида свои, и самый зрелищный для него идёт в них всегда. */
+    private static Variant[] behindPool(LivingEntity target) {
+        if (target instanceof WitherSkeletonEntity) {
+            return new Variant[]{Variant.SHATTER, Variant.CROSS, Variant.CLEAVE};
+        }
+        if (target instanceof AbstractSkeletonEntity) {
+            return new Variant[]{Variant.SHATTER, Variant.CROSS, Variant.BEHEAD};
+        }
+        if (target instanceof CreeperEntity) {
+            return new Variant[]{Variant.LAUNCH, Variant.CLEAVE, Variant.BEHEAD};
+        }
+        if (target instanceof EndermanEntity) {
+            return new Variant[]{Variant.CROSS, Variant.WAIST, Variant.CLEAVE};
+        }
+        if (target instanceof RavagerEntity) {
+            return new Variant[]{Variant.CLEAVE, Variant.WAIST};
+        }
+        if (target instanceof AbstractPiglinEntity) {
+            return new Variant[]{Variant.IMPALE, Variant.CROSS, Variant.BEHEAD};
+        }
+        if (target instanceof ZombieEntity) {
+            return new Variant[]{Variant.IMPALE, Variant.CROSS, Variant.BEHEAD, Variant.WAIST};
+        }
+        return new Variant[]{Variant.IMPALE, Variant.CROSS, Variant.BEHEAD, Variant.KESA};
+    }
+
+    /** Случайный приём со спины, но не тот же, что в прошлый раз. */
+    private static Variant pickBehind(ServerPlayerEntity player, LivingEntity target) {
+        Variant[] pool = behindPool(target);
+        Variant last = LAST.get(player.getUuid());
+        Variant variant;
+        do {
+            variant = pool[player.getRandom().nextInt(pool.length)];
+        } while (variant == last && pool.length > 1);
+        return variant;
+    }
+
+    /** Идёт сцена за спиной врага: игрока нельзя ранить. */
+    public static boolean inBehindScene(Entity player) {
+        return BEHIND.contains(player.getUuid());
+    }
+
+    /** На каком расстоянии от врага встаёт игрок за его спиной. */
+    public static double behindDistance(LivingEntity target) {
+        return target.getWidth() * 0.5 + 1.15;
+    }
+
     /** Игрок казнит или моба сейчас казнят. */
     public static boolean isBusy(Entity entity) {
         return BUSY.contains(entity.getUuid());
@@ -144,6 +201,124 @@ public final class Execution {
             return;
         }
         start(player, target, forced != null ? forced : pick(player, target), flash);
+    }
+
+    /** Хорошее попадание по кругу реакции: казнь. Далеко стоящего игрока выносит к врагу шаг, быстрый удар — только в финальной форме. */
+    public static void fromReaction(ServerPlayerEntity player, LivingEntity target) {
+        ZangetsuData data = ModAttachments.data(player);
+        if (BUSY.contains(player.getUuid()) || BUSY.contains(target.getUuid()) || !target.isAlive()) {
+            return;
+        }
+        boolean flash = data.hollowActive && HollowForm.isFinal(data);
+        if (!flash && target.squaredDistanceTo(player) > REACH * REACH) {
+            flashStep(player.getServerWorld(), player, target);
+        }
+        start(player, target, pick(player, target), flash);
+    }
+
+    /**
+     * Отличное попадание: время будто встаёт, игрок исчезает и выныривает за спиной врага (тот так и смотрит туда, где он стоял), «ты слишком медлителен» и казнь сзади.
+     * Если за спиной не встать (стена, обрыв), остаётся обычная быстрая казнь.
+     */
+    public static void behind(ServerPlayerEntity player, LivingEntity target) {
+        if (BUSY.contains(player.getUuid()) || BUSY.contains(target.getUuid()) || !target.isAlive()) {
+            return;
+        }
+        ServerWorld world = player.getServerWorld();
+        Vec3d from = player.getPos();
+        Vec3d forward = target.getPos().subtract(from).multiply(1.0, 0.0, 1.0);
+        forward = forward.lengthSquared() < 1.0E-4 ? player.getRotationVector().multiply(1.0, 0.0, 1.0).normalize() : forward.normalize();
+        Vec3d spot = spotBehind(world, player, target, forward);
+        if (spot == null) {
+            fromReaction(player, target);
+            return;
+        }
+        Variant variant = nextBehind != null ? nextBehind : pickBehind(player, target);
+        nextBehind = null;
+        LAST.put(player.getUuid(), variant);
+        UUID self = player.getUuid();
+        BUSY.add(self);
+        BUSY.add(target.getUuid());
+        BEHIND.add(self);
+
+        // Враг так и смотрит туда, где только что стоял игрок.
+        if (target instanceof MobEntity mob) {
+            mob.setAiDisabled(true);
+        }
+        if (target instanceof CreeperEntity creeper) {
+            creeper.setFuseSpeed(-1);
+        }
+        target.setVelocity(Vec3d.ZERO);
+        float enemyYaw = (float) Math.toDegrees(Math.atan2(from.z - target.getZ(), from.x - target.getX())) - 90.0F;
+        target.setYaw(enemyYaw);
+        target.setBodyYaw(enemyYaw);
+        target.setHeadYaw(enemyYaw);
+
+        // Там, где стоял игрок, тает его тень.
+        Vec3d chest = from.add(0.0, 1.0, 0.0);
+        Fx.particles(world, Fx.REIATSU_BLACK, chest, 40, 0.35, 0.02);
+        Fx.particles(world, Fx.REIATSU_RED, chest, 18, 0.3, 0.02);
+        Fx.sound(world, from, SoundEvents.ENTITY_ILLUSIONER_MIRROR_MOVE, 1.0F, 0.7F);
+        Fx.sound(player, SoundEvents.BLOCK_BEACON_DEACTIVATE, 0.8F, 1.6F);
+
+        Vec3d eye = spot.add(0.0, player.getStandingEyeHeight(), 0.0), look = target.getEyePos().subtract(eye);
+        float yaw = (float) (MathHelper.atan2(look.z, look.x) * (180.0 / Math.PI)) - 90.0F;
+        float pitch = (float) -(MathHelper.atan2(look.y, Math.sqrt(look.x * look.x + look.z * look.z)) * (180.0 / Math.PI));
+        player.networkHandler.requestTeleport(spot.x, spot.y, spot.z, yaw, pitch);
+        player.setHeadYaw(yaw);
+        player.setBodyYaw(yaw);
+
+        boolean cross = variant == Variant.CROSS;
+        int duration = variant.ticks(false), hit = variant.hitTick(false);
+        int end = cross ? hit + CROSS_SECOND_TICKS + 6 : Math.max(duration, hit + LAUNCH_TICKS + 2);
+        int total = BEHIND_HOLD + end;
+        Sync.animation(player, AnimationPayload.EXECUTE_BEHIND, BEHIND_HOLD - 1, target.getId());
+        Cinematic.lock(player, total);
+
+        Scheduler.later(BEHIND_APPEAR, () -> {
+            // Появился: удар воздуха, чёрно-алая вспышка, низкий гул.
+            Vec3d at = spot.add(0.0, 1.0, 0.0);
+            Fx.particles(world, Fx.REIATSU_BLACK, at, 50, 0.4, 0.06);
+            Fx.particles(world, Fx.REIATSU_RED, at, 30, 0.4, 0.05);
+            Fx.ring(world, Fx.REIATSU_RED, spot.add(0.0, 0.1, 0.0), 1.1, 24);
+            Fx.sound(world, spot, SoundEvents.ENTITY_ENDERMAN_TELEPORT, 1.0F, 0.5F);
+            Fx.sound(world, spot, SoundEvents.ENTITY_WARDEN_SONIC_CHARGE, 0.5F, 1.6F);
+            Fx.sound(player, SoundEvents.ENTITY_WARDEN_HEARTBEAT, 1.0F, 0.7F);
+        });
+        Scheduler.later(BEHIND_HOLD, () -> {
+            if (player.isAlive() && target.isAlive()) {
+                Sync.animation(player, AnimationPayload.EXECUTE_FLASH, duration, variant.move);
+            }
+        });
+        Scheduler.later(BEHIND_HOLD + hit, () -> {
+            if (!player.isAlive() || !target.isAlive() || target.getWorld() != player.getWorld()) {
+                return;
+            }
+            strike(world, player, target, variant, true, true);
+            Bond.change(player, Bond.EXECUTION_BONUS * 2);
+        });
+        Scheduler.later(total, () -> {
+            BEHIND.remove(self);
+            finish(player, target);
+        });
+    }
+
+    /** Куда встать за спиной: прямо сзади, а если там занято — чуть вбок. Земля под ногами должна быть на той же высоте, что у врага, плюс-минус блок. */
+    private static Vec3d spotBehind(ServerWorld world, ServerPlayerEntity player, LivingEntity target, Vec3d forward) {
+        double distance = behindDistance(target);
+        for (double angle : new double[]{0.0, 25.0, -25.0, 50.0, -50.0, 80.0, -80.0}) {
+            double r = Math.toRadians(angle), c = Math.cos(r), s = Math.sin(r);
+            Vec3d way = new Vec3d(forward.x * c - forward.z * s, 0.0, forward.x * s + forward.z * c);
+            Vec3d at = target.getPos().add(way.multiply(distance));
+            for (double dy : new double[]{0.0, 1.0, -1.0}) {
+                Vec3d spot = at.add(0.0, dy, 0.0);
+                var box = player.getDimensions(player.getPose()).getBoxAt(spot);
+                if (world.isSpaceEmpty(player, box) && !world.isSpaceEmpty(player, box.offset(0.0, -0.3, 0.0))) {
+                    return spot;
+                }
+            }
+        }
+        return null;
     }
 
     private static void start(ServerPlayerEntity player, LivingEntity target, Variant variant, boolean flash) {
@@ -182,7 +357,7 @@ public final class Execution {
             if (!player.isAlive() || !target.isAlive() || target.getWorld() != player.getWorld()) {
                 return;
             }
-            strike(world, player, target, variant, flash);
+            strike(world, player, target, variant, flash, false);
             Bond.change(player, Bond.EXECUTION_BONUS);
         });
         Scheduler.later(Math.max(duration, hit + LAUNCH_TICKS + 2), () -> finish(player, target));
@@ -246,7 +421,8 @@ public final class Execution {
         return Limbs.modelToWorld(target, x, y, z).subtract(Limbs.modelToWorld(target, 0.0, 0.0, 0.0)).normalize();
     }
 
-    private static void strike(ServerWorld world, ServerPlayerEntity player, LivingEntity target, Variant variant, boolean flash) {
+    private static void strike(ServerWorld world, ServerPlayerEntity player, LivingEntity target, Variant variant, boolean flash, boolean behind) {
+        float fall = behind ? FORWARD : BACK;
         int limbs = ModAttachments.limbs(target);
         Body body = body(target, limbs);
         Vec3d away = target.getPos().subtract(player.getPos()).multiply(1.0, 0.0, 1.0);
@@ -264,25 +440,26 @@ public final class Execution {
             Fx.sound(target, SoundEvents.ENTITY_WITHER_SHOOT, 0.5F, 0.7F);
         }
         switch (variant) {
-            case BEHEAD -> behead(world, target, limbs, body, away, gore);
-            case WAIST -> waist(world, target, limbs, body, away, gore);
+            case BEHEAD -> behead(world, target, limbs, body, away, gore, fall);
+            case WAIST -> waist(world, target, limbs, body, away, gore, fall);
             case CLEAVE -> cleave(world, target, limbs, body, gore);
-            case KESA -> kesa(world, target, limbs, body, away, gore);
-            case SHATTER -> shatter(world, target, limbs, away, gore);
+            case KESA -> kesa(world, target, limbs, body, away, gore, fall);
+            case SHATTER -> shatter(world, target, limbs, away, gore, fall);
             case IMPALE -> impale(world, player, target, away, gore, variant, flash);
             case LAUNCH -> launch(world, player, target, limbs, body, gore);
+            case CROSS -> cross(world, player, target, limbs, body, away, gore);
         }
-        if (variant != Variant.IMPALE && variant != Variant.LAUNCH) {
+        if (variant != Variant.IMPALE && variant != Variant.LAUNCH && variant != Variant.CROSS) {
             hideAndKill(world, player, target, limbs);
         }
     }
 
     /** Голову с плеч: тело ещё миг стоит, из шеи бьёт фонтан, потом рушится. */
-    private static void behead(ServerWorld world, LivingEntity target, int limbs, Body body, Vec3d away, Fx.Gore gore) {
+    private static void behead(ServerWorld world, LivingEntity target, int limbs, Body body, Vec3d away, Fx.Gore gore, float fall) {
         float neck = body.neck();
         SeveredPartEntity.spawn(world, target, limbs, new Piece(new float[][]{{0.0F, -1.0F, 0.0F, -neck}}, 0.0F, neck - 4.0F, 0.0F, 0.2F,
-                away.multiply(0.16).add(0.0, 0.44, 0.0), BACK, SeveredPartEntity.FREE, 26.0F));
-        SeveredPartEntity.spawn(world, target, limbs, new Piece(new float[][]{{0.0F, 1.0F, 0.0F, neck}}, 0.0F, 24.0F, 0.0F, 0.0F, Vec3d.ZERO, BACK, 11, 0.0F));
+                away.multiply(0.16).add(0.0, 0.44, 0.0), fall, SeveredPartEntity.FREE, 26.0F));
+        SeveredPartEntity.spawn(world, target, limbs, new Piece(new float[][]{{0.0F, 1.0F, 0.0F, neck}}, 0.0F, 24.0F, 0.0F, 0.0F, Vec3d.ZERO, fall, 11, 0.0F));
         Vec3d at = Limbs.modelToWorld(target, 0.0, neck, 0.0);
         burst(world, gore, at, 1.0);
         for (int i = 1; i <= 10; i++) {
@@ -294,11 +471,11 @@ public final class Execution {
     }
 
     /** Пополам по поясу: верх взлетает и кувыркается, ноги подкашиваются. */
-    private static void waist(ServerWorld world, LivingEntity target, int limbs, Body body, Vec3d away, Fx.Gore gore) {
+    private static void waist(ServerWorld world, LivingEntity target, int limbs, Body body, Vec3d away, Fx.Gore gore, float fall) {
         float waist = body.waist();
         SeveredPartEntity.spawn(world, target, limbs, new Piece(new float[][]{{0.0F, -1.0F, 0.0F, -waist}}, 0.0F, waist - 6.0F, 0.0F, 0.26F,
-                away.multiply(0.13).add(0.0, 0.3, 0.0), BACK, SeveredPartEntity.FREE, 15.0F));
-        SeveredPartEntity.spawn(world, target, limbs, new Piece(new float[][]{{0.0F, 1.0F, 0.0F, waist}}, 0.0F, 24.0F, 0.0F, 0.0F, Vec3d.ZERO, BACK, 6, 0.0F));
+                away.multiply(0.13).add(0.0, 0.3, 0.0), fall, SeveredPartEntity.FREE, 15.0F));
+        SeveredPartEntity.spawn(world, target, limbs, new Piece(new float[][]{{0.0F, 1.0F, 0.0F, waist}}, 0.0F, 24.0F, 0.0F, 0.0F, Vec3d.ZERO, fall, 6, 0.0F));
         burst(world, gore, Limbs.modelToWorld(target, 0.0, waist, 0.0), 1.2);
     }
 
@@ -313,18 +490,18 @@ public final class Execution {
     }
 
     /** Наискось от плеча к бедру: верхний кусок съезжает по срезу, нижний стоит и валится. */
-    private static void kesa(ServerWorld world, LivingEntity target, int limbs, Body body, Vec3d away, Fx.Gore gore) {
+    private static void kesa(ServerWorld world, LivingEntity target, int limbs, Body body, Vec3d away, Fx.Gore gore, float fall) {
         float y = body.waist() - 1.0F, nx = -0.678F, ny = -0.735F;
         float d = ny * y;
         Vec3d left = modelAxis(target, 1.0, 0.0, 0.0);
         SeveredPartEntity.spawn(world, target, limbs, new Piece(new float[][]{{nx, ny, 0.0F, d}}, -1.5F, y - 7.0F, 0.0F, 0.26F,
                 left.multiply(-0.11).add(away.multiply(0.03)).add(0.0, 0.1, 0.0), TO_RIGHT, SeveredPartEntity.FREE, 8.0F));
-        SeveredPartEntity.spawn(world, target, limbs, new Piece(new float[][]{{-nx, -ny, 0.0F, -d}}, 0.0F, 24.0F, 0.0F, 0.0F, Vec3d.ZERO, BACK, 8, 0.0F));
+        SeveredPartEntity.spawn(world, target, limbs, new Piece(new float[][]{{-nx, -ny, 0.0F, -d}}, 0.0F, 24.0F, 0.0F, 0.0F, Vec3d.ZERO, fall, 8, 0.0F));
         burst(world, gore, Limbs.modelToWorld(target, 0.0, y, 0.0), 1.2);
     }
 
     /** Скелет разлетается костями: череп, рёбра, руки и ноги — каждая часть сама по себе. */
-    private static void shatter(ServerWorld world, LivingEntity target, int limbs, Vec3d away, Fx.Gore gore) {
+    private static void shatter(ServerWorld world, LivingEntity target, int limbs, Vec3d away, Fx.Gore gore, float fall) {
         Vec3d left = modelAxis(target, 1.0, 0.0, 0.0);
         float[][] head = {{0.0F, -1.0F, 0.0F, 0.25F}};
         float[][] ribs = {{0.0F, 1.0F, 0.0F, -0.25F}, {0.0F, -1.0F, 0.0F, -12.0F}, {1.0F, 0.0F, 0.0F, -4.0F}, {-1.0F, 0.0F, 0.0F, -4.0F}};
@@ -333,8 +510,8 @@ public final class Execution {
         float[][] leftLeg = {{0.0F, 1.0F, 0.0F, 12.0F}, {1.0F, 0.0F, 0.0F, 0.0F}, {-1.0F, 0.0F, 0.0F, -3.99F}};
         float[][] rightLeg = {{0.0F, 1.0F, 0.0F, 12.0F}, {-1.0F, 0.0F, 0.0F, 0.0F}, {1.0F, 0.0F, 0.0F, -3.99F}};
         var random = target.getRandom();
-        SeveredPartEntity.spawn(world, target, limbs, new Piece(head, 0.0F, -4.0F, 0.0F, 0.2F, away.multiply(0.14).add(0.0, 0.34, 0.0), BACK, SeveredPartEntity.FREE, 24.0F));
-        SeveredPartEntity.spawn(world, target, limbs, new Piece(ribs, 0.0F, 6.0F, 0.0F, 0.16F, away.multiply(0.1).add(0.0, 0.12, 0.0), BACK, SeveredPartEntity.FREE, 12.0F));
+        SeveredPartEntity.spawn(world, target, limbs, new Piece(head, 0.0F, -4.0F, 0.0F, 0.2F, away.multiply(0.14).add(0.0, 0.34, 0.0), fall, SeveredPartEntity.FREE, 24.0F));
+        SeveredPartEntity.spawn(world, target, limbs, new Piece(ribs, 0.0F, 6.0F, 0.0F, 0.16F, away.multiply(0.1).add(0.0, 0.12, 0.0), fall, SeveredPartEntity.FREE, 12.0F));
         SeveredPartEntity.spawn(world, target, limbs, new Piece(leftArm, 5.0F, 7.0F, 0.0F, 0.08F, left.multiply(0.16).add(0.0, 0.24, 0.0), TO_LEFT, SeveredPartEntity.FREE, 26.0F));
         SeveredPartEntity.spawn(world, target, limbs, new Piece(rightArm, -5.0F, 7.0F, 0.0F, 0.08F, left.multiply(-0.16).add(0.0, 0.2, 0.0), TO_RIGHT, SeveredPartEntity.FREE, 30.0F));
         SeveredPartEntity.spawn(world, target, limbs, new Piece(leftLeg, 2.0F, 18.0F, 0.0F, 0.08F, left.multiply(0.1).add(away.multiply(0.07)).add(0.0, 0.12, 0.0), TO_LEFT, SeveredPartEntity.FREE, 18.0F + random.nextFloat() * 8.0F));
@@ -368,6 +545,33 @@ public final class Execution {
             target.velocityModified = true;
             burst(world, gore, chest, 0.8);
             Fx.sound(target, SoundEvents.ITEM_TRIDENT_RETURN, 0.8F, 0.6F);
+        });
+    }
+
+    /**
+     * Крест со спины: первый косой удар только вскрывает врага, он ещё стоит. Следом встречный снизу, и тело распадается на четыре куска: верх с головой взлетает, бока расходятся,
+     * ноги подламываются.
+     */
+    private static void cross(ServerWorld world, ServerPlayerEntity player, LivingEntity target, int limbs, Body body, Vec3d away, Fx.Gore gore) {
+        burst(world, gore, Limbs.modelToWorld(target, 0.0, body.waist() - 2.0F, 0.0), 0.7);
+        Sync.animation(player, AnimationPayload.EXECUTE_FLASH, CROSS_SECOND_TICKS, CROSS_SECOND_MOVE);
+        Scheduler.later(Math.round(CROSS_SECOND_TICKS * CROSS_SECOND_HIT), () -> {
+            if (!target.isAlive()) {
+                return;
+            }
+            float y = body.waist() - 2.0F, a = 0.678F, b = 0.735F, d = b * y;
+            Vec3d left = modelAxis(target, 1.0, 0.0, 0.0);
+            float[][] top = {{-a, -b, 0.0F, -d}, {a, -b, 0.0F, -d}}, bottom = {{a, b, 0.0F, d}, {-a, b, 0.0F, d}};
+            float[][] leftSide = {{a, b, 0.0F, d}, {a, -b, 0.0F, -d}}, rightSide = {{-a, -b, 0.0F, -d}, {-a, b, 0.0F, d}};
+            SeveredPartEntity.spawn(world, target, limbs, new Piece(top, 0.0F, y - 7.0F, 0.0F, 0.24F, away.multiply(0.15).add(0.0, 0.38, 0.0), FORWARD, SeveredPartEntity.FREE, 16.0F));
+            SeveredPartEntity.spawn(world, target, limbs, new Piece(leftSide, 3.5F, y, 0.0F, 0.14F, left.multiply(0.2).add(away.multiply(0.05)).add(0.0, 0.2, 0.0), TO_LEFT, SeveredPartEntity.FREE, 20.0F));
+            SeveredPartEntity.spawn(world, target, limbs, new Piece(rightSide, -3.5F, y, 0.0F, 0.14F, left.multiply(-0.2).add(away.multiply(0.05)).add(0.0, 0.2, 0.0), TO_RIGHT, SeveredPartEntity.FREE, 20.0F));
+            SeveredPartEntity.spawn(world, target, limbs, new Piece(bottom, 0.0F, 24.0F, 0.0F, 0.0F, Vec3d.ZERO, FORWARD, 8, 0.0F));
+            burst(world, gore, Limbs.modelToWorld(target, 0.0, y, 0.0), 1.5);
+            Fx.ring(world, Fx.REIATSU_RED, Limbs.modelToWorld(target, 0.0, y, 0.0), 1.2, 22);
+            Fx.sound(target, SoundEvents.ITEM_TRIDENT_HIT, 1.2F, 0.5F);
+            Fx.sound(target, SoundEvents.ENTITY_PLAYER_ATTACK_CRIT, 1.0F, 0.6F);
+            hideAndKill(world, player, target, limbs);
         });
     }
 

@@ -46,6 +46,11 @@ public final class ZangetsuCombat {
         if (player == null || player.isSpectator()) {
             return false;
         }
+        // Идёт проверка реакции: клик принадлежит ей.
+        if (ReactionCheck.onAttackKey()) {
+            queued = false;
+            return true;
+        }
         // Пока идёт превращение, бить нельзя ничем.
         ClientState.Animation animation = ClientState.animation(player);
         if (animation != null && (animation.type() == AnimationPayload.HOLLOW || animation.type() == AnimationPayload.HOLLOW_FINAL)) {
@@ -145,6 +150,7 @@ public final class ZangetsuCombat {
         ClientPlayerEntity player = client.player;
         if (player != null) {
             walkToSword(client, player);
+            TooSlowScene.holdStance(player);
         }
         if (queued && player != null) {
             ClientState.Swing swing = ClientState.swing(player, player.age);
@@ -204,7 +210,7 @@ public final class ZangetsuCombat {
             return false;
         }
         ClientState.Animation animation = ClientState.animation((ClientPlayerEntity) entity);
-        return animation != null && (animation.type() == AnimationPayload.TOUCH_HANDLE || animation.type() == AnimationPayload.DREAM_PULL);
+        return animation != null && (animation.type() == AnimationPayload.TOUCH_HANDLE || animation.type() == AnimationPayload.DREAM_PULL || animation.type() == AnimationPayload.EXECUTE_BEHIND);
     }
 
     /** Рука махнула сама (чужой удар, рубка блоков, сцены) — показываем приём. */

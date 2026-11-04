@@ -20,6 +20,7 @@ import com.zangetsu.network.ClientFxPayload;
 import com.zangetsu.network.HollowPayload;
 import com.zangetsu.network.LimbPayload;
 import com.zangetsu.network.PlayerStatePayload;
+import com.zangetsu.network.ReactionPayload;
 import com.zangetsu.registry.ModComponents;
 import com.zangetsu.registry.ModEntities;
 import com.zangetsu.registry.ModItems;
@@ -68,6 +69,7 @@ public class ZangetsuClient implements ClientModInitializer {
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             ClientState.ticks++;
             KeyBindings.tick(client);
+            ReactionCheck.tick();
             CameraDirector.tick(client);
             ZangetsuCombat.tick(client);
         });
@@ -77,6 +79,8 @@ public class ZangetsuClient implements ClientModInitializer {
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
             ClientState.reset();
             CameraDirector.reset();
+            ReactionCheck.reset();
+            TooSlowScene.reset();
             SlashTrails.clear();
         });
 
@@ -85,6 +89,7 @@ public class ZangetsuClient implements ClientModInitializer {
 
     private static void registerReceivers() {
         ClientPlayNetworking.registerGlobalReceiver(PlayerStatePayload.ID, (payload, context) -> ClientState.state = payload);
+        ClientPlayNetworking.registerGlobalReceiver(ReactionPayload.ID, (payload, context) -> ReactionCheck.receive(payload));
         ClientPlayNetworking.registerGlobalReceiver(LimbPayload.ID, (payload, context) -> {
             if (payload.limbs() == 0) {
                 ClientState.LIMBS.remove(payload.entityId());
@@ -128,6 +133,10 @@ public class ZangetsuClient implements ClientModInitializer {
             if (entity instanceof PlayerEntity player && payload.animation() == AnimationPayload.GETSUGA) {
                 SlashTrails.getsuga(player, payload.duration() * 0.4F);
                 ZangetsuCombat.flare(player, 1.2F, 0.3F);
+                return;
+            }
+            if (entity == client.player && payload.animation() == AnimationPayload.EXECUTE_BEHIND) {
+                TooSlowScene.begin(client.world.getEntityById(payload.param()));
                 return;
             }
             if (entity == client.player && payload.animation() == AnimationPayload.HOLLOW) {

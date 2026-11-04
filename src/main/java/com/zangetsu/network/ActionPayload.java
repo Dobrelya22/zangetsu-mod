@@ -6,10 +6,10 @@ import net.minecraft.network.codec.PacketCodec;
 import net.minecraft.network.codec.PacketCodecs;
 import net.minecraft.network.packet.CustomPayload;
 
-/** Клиент → сервер: нажата клавиша мода. */
+/** Клиент → сервер: действие игрока. */
 public record ActionPayload(int action, int target) implements CustomPayload {
-    /** Казнь моба {@code target} (id сущности под прицелом). */
-    public static final int EXECUTE = 1;
+    /** Клик по кругу проверки реакции: {@code target} — положение стрелки, доля круга × 10000. */
+    public static final int REACTION = 1;
     /** Принять или сбросить форму Пустого. */
     public static final int HOLLOW = 2;
 

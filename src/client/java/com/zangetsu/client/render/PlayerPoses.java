@@ -54,6 +54,7 @@ public final class PlayerPoses {
             case AnimationPayload.HOLLOW -> maskTouch(model, player, t);
             case AnimationPayload.HOLLOW_FINAL -> rite(model, player, t, animationProgress);
             case AnimationPayload.GETSUGA -> getsuga(model, t, animationProgress);
+            case AnimationPayload.EXECUTE_BEHIND -> behind(model, t);
             default -> {
             }
         }
@@ -245,6 +246,18 @@ public final class PlayerPoses {
             plantFoot(player, mainLeg, mainLegIndex, ground, hip - 5.1F * lunge, k);
             plantFoot(player, offLeg, offLegIndex, ground, hip + 8.0F * lunge, k);
         }
+    }
+
+    // ---------------------------------------------------------------- за спиной врага
+
+    /** Вынырнул за спиной и смотрит ему в затылок: голова чуть склонена, меч опущен, плечи спокойные. Он никуда не торопится. */
+    private static void behind(BipedEntityModel<?> m, float t) {
+        float lift = phase(t, 0.3F, 0.7F);
+        m.head.pitch = MathHelper.lerp(0.7F, m.head.pitch, 0.16F - 0.14F * lift);
+        m.head.roll = 0.09F * (1.0F - lift);
+        m.rightArm.pitch += 0.12F;
+        m.leftArm.pitch += 0.06F;
+        m.leftArm.roll -= 0.1F;
     }
 
     // ---------------------------------------------------------------- подбор меча
