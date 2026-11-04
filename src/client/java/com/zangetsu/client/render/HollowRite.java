@@ -55,7 +55,7 @@ public final class HollowRite {
             float t = animation.progress(entity, tickDelta);
             // Маска проступает прямо за ладонью, а когда рука ушла, дорастает подбородок.
             float bottom = MathHelper.lerp(swipe(t), MASK_TOP, 2.2F) + 4.0F * SwordMoves.smooth(0.6F, 0.66F, t);
-            float eyes = SwordMoves.smooth(0.72F, 0.78F, t);
+            float eyes = SwordMoves.smooth(0.6F, 0.64F, t);
             return new Mask(-NO_CLIP, bottom >= CHIN + 1.0F ? NO_CLIP : bottom, eyes);
         }
         if (animation.type() == AnimationPayload.HOLLOW_FINAL) {
@@ -80,7 +80,7 @@ public final class HollowRite {
         int tick = player.age - animation.startAge();
         FormPhysics physics = FormPhysics.of(player);
         if (animation.type() == AnimationPayload.HOLLOW) {
-            if (tick == HollowForm.MASK_ROAR) {
+            if (tick == HollowForm.MASK_WHIP) {
                 physics.kick(1.2F);
             }
             return;

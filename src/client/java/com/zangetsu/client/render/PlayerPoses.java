@@ -1,6 +1,9 @@
 package com.zangetsu.client.render;
 
 import com.zangetsu.client.ClientState;
+import com.zangetsu.entity.ThrownZangetsuEntity;
+import com.zangetsu.logic.Awakening;
+import com.zangetsu.logic.Dream;
 import com.zangetsu.logic.HollowForm;
 import com.zangetsu.network.AnimationPayload;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
@@ -44,9 +47,9 @@ public final class PlayerPoses {
         }
         float t = MathHelper.clamp((animationProgress - animation.startAge()) / Math.max(1, animation.duration()), 0.0F, 1.0F);
         switch (animation.type()) {
-            case AnimationPayload.TOUCH_HANDLE -> touch(model, t, animationProgress, false);
-            case AnimationPayload.DREAM_PULL -> touch(model, t, animationProgress, true);
-            case AnimationPayload.HOLLOW -> maskTouch(model, player, t, animationProgress);
+            case AnimationPayload.TOUCH_HANDLE -> claim(model, player, animation, animationProgress);
+            case AnimationPayload.DREAM_PULL -> dreamPull(model, player, animation, animationProgress);
+            case AnimationPayload.HOLLOW -> maskTouch(model, player, t);
             case AnimationPayload.HOLLOW_FINAL -> rite(model, player, t, animationProgress);
             case AnimationPayload.GETSUGA -> getsuga(model, t, animationProgress);
             default -> {
@@ -65,6 +68,8 @@ public final class PlayerPoses {
     static final float MIN_BEND = 0.02F;
     /** Длина плеча и предплечья до ладони (пиксели модели). */
     private static final float UPPER_ARM = 4.0F, FOREARM = 4.6F;
+    /** Вся нога (бедро и голень поровну), где земля в координатах модели и насколько центр лежащей на земле голени выше земли. */
+    private static final float LEG_LENGTH = 12.0F, LEG_GROUND = 24.0F, SHIN_ON_GROUND = 2.2F;
 
     /** Сгибы игрока в этот кадр (четыре угла и четыре признака верхнего слоя скина) или null, если всё прямое. */
     public static float[] bends(LivingEntity player) {
@@ -129,51 +134,75 @@ public final class PlayerPoses {
         bend(player, limb, -(float) Math.acos(dot) * k);
     }
 
+    /**
+     * Нога ставит ступню в точку (пиксели модели, в плоскости ноги): бедро и голень равной длины, колено смотрит вперёд. Ступня стоит там, где сказано,
+     * как бы ни двигалось тело: поэтому она не скользит и не проваливается, а нога сама сгибается ровно настолько, насколько нужно. Вес {@code k}.
+     */
+    private static void plantFoot(LivingEntity player, ModelPart leg, int limb, float footY, float footZ, float k) {
+        float dy = footY - leg.pivotY, dz = footZ - leg.pivotZ;
+        float distance = Math.min(MathHelper.sqrt(dy * dy + dz * dz), LEG_LENGTH - 0.02F);
+        float half = (float) Math.acos(distance / LEG_LENGTH);
+        float direction = (float) Math.atan2(dz, dy);
+        leg.pitch = MathHelper.lerp(k, leg.pitch, direction - half);
+        leg.yaw = MathHelper.lerp(k, leg.yaw, 0.0F);
+        leg.roll = MathHelper.lerp(k, leg.roll, 0.0F);
+        bend(player, limb, 2.0F * half * k);
+    }
+
     // ---------------------------------------------------------------- превращение
 
     /**
      * Уровень IV, как в аниме: голова опускается, свободная рука поднимается ко лбу и медленно проводит по лицу до подбородка, за ладонью проступает маска.
-     * Рука уходит вниз, он резко поднимает голову, глаза загораются, и он ревёт, раскинув руки.
+     * Затем рука хлёстко уходит в сторону: плечо первым, предплечье догоняет и распрямляется с перехлёстом, а голова в этот миг поднимается и загораются глаза.
+     * Он так и стоит мгновение с отброшенной рукой, потом спокойно опускает её.
      */
-    private static void maskTouch(BipedEntityModel<?> m, LivingEntity player, float t, float time) {
+    private static void maskTouch(BipedEntityModel<?> m, LivingEntity player, float t) {
         boolean lefty = player.getMainArm() == Arm.LEFT;
         ModelPart off = lefty ? m.rightArm : m.leftArm;
+        int limb = lefty ? RIGHT_ARM : LEFT_ARM;
         float side = lefty ? -1.0F : 1.0F;
-        float lift = phase(t, 0.02F, 0.2F), drop = phase(t, 0.6F, 0.72F);
-        float roar = phase(t, 0.74F, 0.8F) * (1.0F - phase(t, 0.93F, 1.0F));
-        float shake = MathHelper.sin(time * 3.1F) * 0.035F * roar;
-        float swipe = HollowRite.swipe(t);
-        m.head.yaw *= 1.0F - lift;
-        float pitch = MathHelper.lerp(lift, m.head.pitch, 0.3F);
-        m.head.pitch = MathHelper.lerp(roar, pitch, -0.62F) + shake;
-        m.body.pitch += (0.12F * (1.0F - roar) - 0.14F * roar) * lift;
+        float lift = phase(t, 0.02F, 0.2F), whip = phase(t, 0.6F, 0.655F), settle = phase(t, 0.86F, 1.0F);
+        float restPitch = off.pitch, restYaw = off.yaw, restRoll = off.roll;
+
+        float headPitch = m.head.pitch, headYaw = m.head.yaw;
+        float look = MathHelper.lerp(phase(t, 0.6F, 0.66F), 0.3F, -0.06F);
+        float headWeight = lift * (1.0F - settle);
+        m.head.pitch = MathHelper.lerp(headWeight, headPitch, look);
+        m.head.yaw = MathHelper.lerp(headWeight, headYaw, 0.0F);
+        m.body.pitch += 0.12F * lift * (1.0F - whip);
+
         // Ладонь — в координатах головы: ото лба к подбородку перед своей половиной лица, чтобы вторая половина была видна.
-        float k = lift * (1.0F - drop);
-        if (k > 0.001F) {
-            Vector3f palm = new Vector3f(side * MathHelper.lerp(swipe, 3.0F, 2.2F), MathHelper.lerp(swipe, -8.2F, 3.0F), -5.8F);
-            new Quaternionf().rotationZYX(m.head.roll, m.head.yaw, m.head.pitch).transform(palm).add(m.head.pivotX, m.head.pivotY, m.head.pivotZ);
-            reach(player, off, lefty ? RIGHT_ARM : LEFT_ARM, side, palm, k);
+        float swipe = HollowRite.swipe(t);
+        Vector3f palm = new Vector3f(side * MathHelper.lerp(swipe, 3.0F, 2.2F), MathHelper.lerp(swipe, -8.2F, 3.0F), -5.8F);
+        new Quaternionf().rotationZYX(m.head.roll, m.head.yaw, m.head.pitch).transform(palm).add(m.head.pivotX, m.head.pivotY, m.head.pivotZ);
+        reach(player, off, limb, side, palm, lift);
+        if (whip > 0.0F) {
+            float forearm = phase(t, 0.615F, 0.675F);
+            float overshoot = MathHelper.sin(phase(t, 0.655F, 0.73F) * MathHelper.PI) * 0.22F;
+            off.pitch = angleLerp(whip, off.pitch, -0.08F);
+            off.yaw = angleLerp(whip, off.yaw, 0.0F);
+            off.roll = angleLerp(whip, off.roll, -side * (1.42F + overshoot));
+            bend(player, limb, bends(player)[limb] * (1.0F - forearm));
         }
-        if (roar > 0.0F) {
-            m.rightArm.roll = MathHelper.lerp(roar, m.rightArm.roll, 1.15F) + shake;
-            m.leftArm.roll = MathHelper.lerp(roar, m.leftArm.roll, -1.15F) - shake;
-            m.rightArm.pitch = MathHelper.lerp(roar, m.rightArm.pitch, -0.3F);
-            m.leftArm.pitch = MathHelper.lerp(roar, m.leftArm.pitch, -0.3F);
+        if (settle > 0.0F) {
+            off.pitch = angleLerp(settle, off.pitch, restPitch);
+            off.yaw = angleLerp(settle, off.yaw, restYaw);
+            off.roll = angleLerp(settle, off.roll, restRoll);
         }
     }
 
     /**
      * Уровень V, всё превращение: злится и дрожит, молния вбивает его на одно колено с мечом в земле, он поднимается, забрасывает меч на плечо и бьёт выпадом.
-     * Меч и корпус идут по {@link SwordMoves#RITE}, голова, свободная рука и суставы ног дополняются здесь.
+     * Меч и корпус идут по {@link SwordMoves#RITE}, голова и свободная рука дополняются здесь, а ноги ставят ступни на землю сами.
      */
     private static void rite(BipedEntityModel<?> m, LivingEntity player, float t, float time) {
         float tick = t * HollowForm.RITE_TICKS;
         boolean lefty = player.getMainArm() == Arm.LEFT;
         float headPitchLook = m.head.pitch, headYawLook = m.head.yaw;
-        applyMove(m, player, SwordMoves.RITE, t, 0.0F, SlashTrails.BLOOD);
+        applyMove(m, player, SwordMoves.RITE, t, 0.0F, SlashTrails.BLOOD, null, 0.0F);
         ModelPart off = lefty ? m.rightArm : m.leftArm;
-        ModelPart frontLeg = lefty ? m.rightLeg : m.leftLeg, backLeg = lefty ? m.leftLeg : m.rightLeg;
-        int frontIndex = lefty ? RIGHT_LEG : LEFT_LEG, backIndex = lefty ? LEFT_LEG : RIGHT_LEG;
+        ModelPart offLeg = lefty ? m.rightLeg : m.leftLeg, mainLeg = lefty ? m.leftLeg : m.rightLeg;
+        int offLegIndex = lefty ? RIGHT_LEG : LEFT_LEG, mainLegIndex = lefty ? LEFT_LEG : RIGHT_LEG;
         float side = lefty ? -1.0F : 1.0F;
 
         float rage = phase(tick, 2.0F, 30.0F) * (1.0F - phase(tick, 40.0F, 43.0F));
@@ -190,54 +219,119 @@ public final class PlayerPoses {
         m.head.pitch = MathHelper.lerp(weight, headPitchLook, head + shake);
         m.head.yaw = MathHelper.lerp(weight, headYawLook, shake * 0.7F);
 
-        // Свободная рука в злости сжата и отведена, на колене лежит на бедре.
+        // Свободная рука в злости сжата и отведена.
         if (rage > 0.0F) {
             off.roll = MathHelper.lerp(rage, off.roll, -side * 0.42F) + shake;
             off.pitch = MathHelper.lerp(rage, off.pitch, -0.22F) + shake;
         }
-        // Колено: передняя нога стоит ступнёй, задняя — коленом на земле, голень лежит назад.
+        float dip = SwordMoves.sample(SwordMoves.RITE.body(), t, ZERO)[SwordMoves.DIP];
+        float ground = LEG_GROUND - dip;
+        // Колено: передняя нога стоит на ступне, задняя — на колене, голень лежит на земле позади. Рука опирается на переднее колено.
         if (kneel > 0.0F) {
-            frontLeg.pitch = MathHelper.lerp(kneel, frontLeg.pitch, -1.3F);
-            frontLeg.yaw = MathHelper.lerp(kneel, frontLeg.yaw, -side * 0.14F);
-            bend(player, frontIndex, 1.3F * kneel);
-            backLeg.pitch = MathHelper.lerp(kneel, backLeg.pitch, 0.12F);
-            bend(player, backIndex, 1.45F * kneel);
-            Vector3f thigh = new Vector3f(frontLeg.pivotX, frontLeg.pivotY + 1.6F - 1.5F, frontLeg.pivotZ - 6.0F);
-            reach(player, off, lefty ? RIGHT_ARM : LEFT_ARM, side, thigh, kneel);
+            float k = Math.min(1.0F, kneel * 5.0F);
+            float hip = offLeg.pivotZ;
+            plantFoot(player, offLeg, offLegIndex, ground, hip - 6.5F * kneel, k);
+            plantFoot(player, mainLeg, mainLegIndex, ground - SHIN_ON_GROUND * kneel, hip + 6.6F * kneel, k);
+            Vector3f knee = new Vector3f(offLeg.pivotX, offLeg.pivotY + 6.0F * MathHelper.cos(offLeg.pitch) - 1.6F, offLeg.pivotZ + 6.0F * MathHelper.sin(offLeg.pitch));
+            reach(player, off, lefty ? RIGHT_ARM : LEFT_ARM, side, knee, kneel);
         }
-        // Выпад: передняя нога сгибается в колене, чтобы он действительно опустился в удар.
-        float lunge = phase(tick, HollowForm.RITE_LUNGE - 3.0F, HollowForm.RITE_LUNGE + 1.0F) * (1.0F - phase(tick, 166.0F, 176.0F));
+        // Выпад: ведущая нога широким шагом вперёд, колено над ступнёй; задняя вытянута назад. Обе ступни на земле.
+        float lunge = phase(tick, HollowForm.RITE_LUNGE - 5.0F, HollowForm.RITE_LUNGE) * (1.0F - phase(tick, 166.0F, 176.0F));
         if (lunge > 0.0F) {
-            ModelPart strikeLeg = lefty ? m.leftLeg : m.rightLeg;
-            strikeLeg.pitch -= 0.35F * lunge;
-            bend(player, lefty ? LEFT_LEG : RIGHT_LEG, 0.85F * lunge);
+            float k = Math.min(1.0F, lunge * 5.0F);
+            float hip = mainLeg.pivotZ;
+            plantFoot(player, mainLeg, mainLegIndex, ground, hip - 5.1F * lunge, k);
+            plantFoot(player, offLeg, offLegIndex, ground, hip + 8.0F * lunge, k);
         }
+    }
+
+    // ---------------------------------------------------------------- подбор меча
+
+    /** Где меч в земле сейчас держится за рукоять: для каждого игрока запоминается, потому что сам меч в руке уже исчезнет. */
+    private static final Int2ObjectOpenHashMap<float[]> GRIPS = new Int2ObjectOpenHashMap<>();
+
+    /** Кулак, клинок и лезвие воткнутого меча в координатах модели игрока (или последнее, что о них известно). */
+    private static float[] grip(LivingEntity player, int swordId, float time) {
+        if (player.getWorld().getEntityById(swordId) instanceof ThrownZangetsuEntity sword) {
+            GRIPS.put(player.getId(), ThrownZangetsuRenderer.gripInModel(sword, player, time - player.age));
+        }
+        return GRIPS.get(player.getId());
+    }
+
+    /**
+     * Меч выбрал его. Подходит, тяжело шагая; рука тянется к рукояти и сжимает её; второй рукой, с приседа, рывком вытаскивает клинок из земли, большим кругом
+     * через сторону забрасывает на плечо, упирает свободную руку в бок, смотрит на меч, коротко кивает: да, это мой меч. Потом смотрит вперёд.
+     */
+    private static void claim(BipedEntityModel<?> m, LivingEntity player, ClientState.Animation animation, float time) {
+        float tick = time - animation.startAge() - (animation.duration() - Awakening.CLAIM_TICKS);
+        float headPitch = m.head.pitch, headYaw = m.head.yaw;
+        if (tick < 0.0F) {
+            m.head.pitch = MathHelper.lerp(0.6F, headPitch, 0.32F);
+            m.body.pitch += 0.12F;
+            return;
+        }
+        boolean lefty = player.getMainArm() == Arm.LEFT;
+        float mx = lefty ? -1.0F : 1.0F;
+        ModelPart main = lefty ? m.leftArm : m.rightArm, off = lefty ? m.rightArm : m.leftArm;
+        int mainLimb = lefty ? LEFT_ARM : RIGHT_ARM, offLimb = lefty ? RIGHT_ARM : LEFT_ARM;
+        float[] grip = grip(player, animation.param(), time);
+        if (tick < Awakening.CLAIM_GRIP) {
+            if (grip != null) {
+                // Рука дрожит: он ещё едва жив, и сжимает рукоять всё крепче.
+                float tremble = MathHelper.sin(time * 2.7F) * 0.14F * phase(tick, 8.0F, Awakening.CLAIM_REACH);
+                reach(player, main, mainLimb, -mx, new Vector3f(grip[0], grip[1] + tremble, grip[2]), phase(tick, 0.0F, Awakening.CLAIM_REACH));
+            }
+            m.body.pitch += 0.2F * phase(tick, 0.0F, 16.0F);
+            m.head.pitch = MathHelper.lerp(phase(tick, 0.0F, 10.0F), headPitch, 0.42F);
+            m.head.yaw = MathHelper.lerp(phase(tick, 0.0F, 10.0F), headYaw, mx * 0.12F);
+            return;
+        }
+        float t = (tick - Awakening.CLAIM_GRIP) / (Awakening.CLAIM_TICKS - Awakening.CLAIM_GRIP);
+        // Первые тики меч в руке стоит ровно там, где стоял в земле: подмены не видно.
+        applyMove(m, player, SwordMoves.CLAIM, MathHelper.clamp(t, 0.0F, 1.0F), 0.0F, SlashTrails.STEEL, grip, 1.0F - phase(tick, Awakening.CLAIM_GRIP, Awakening.CLAIM_GRIP + 8.0F));
+
+        // Свободная рука упирается в бок.
+        float proud = phase(tick, Awakening.CLAIM_SHOULDER - 2.0F, Awakening.CLAIM_SHOULDER + 6.0F) * (1.0F - phase(tick, Awakening.CLAIM_HOLD_END, Awakening.CLAIM_HOLD_END + 10.0F));
+        if (proud > 0.0F) {
+            reach(player, off, offLimb, mx, new Vector3f(mx * 5.4F, 10.0F, -1.0F), proud);
+            m.rightLeg.roll = MathHelper.lerp(proud, m.rightLeg.roll, 0.1F);
+            m.leftLeg.roll = MathHelper.lerp(proud, m.leftLeg.roll, -0.1F);
+        }
+        // Голова: смотрит на клинок, пока тащит; на плече поворачивается к мечу, коротко кивает и поднимает подбородок.
+        float head = MathHelper.lerp(phase(tick, 34.0F, 44.0F), 0.42F, -0.18F);
+        head = MathHelper.lerp(phase(tick, 62.0F, 72.0F), head, 0.06F);
+        head += MathHelper.sin(phase(tick, 84.0F, 92.0F) * MathHelper.PI) * 0.2F;
+        head = MathHelper.lerp(phase(tick, 92.0F, 100.0F), head, -0.1F);
+        float turn = phase(tick, 66.0F, 74.0F) * (1.0F - phase(tick, 92.0F, 100.0F));
+        float weight = 1.0F - phase(tick, Awakening.CLAIM_HOLD_END + 4.0F, Awakening.CLAIM_TICKS);
+        m.head.pitch = MathHelper.lerp(weight, headPitch, head);
+        m.head.yaw = MathHelper.lerp(weight, headYaw, mx * 0.62F * turn);
+    }
+
+    /** Во сне: подходит, берётся за рукоять обеими руками и тянет; меч поднимается сам и уносит его из сна. */
+    private static void dreamPull(BipedEntityModel<?> m, LivingEntity player, ClientState.Animation animation, float time) {
+        float tick = time - animation.startAge() - (animation.duration() - Dream.PULL_DURATION);
+        float headPitch = m.head.pitch;
+        if (tick < 0.0F) {
+            m.head.pitch = MathHelper.lerp(0.5F, headPitch, 0.2F);
+            return;
+        }
+        boolean lefty = player.getMainArm() == Arm.LEFT;
+        float mx = lefty ? -1.0F : 1.0F;
+        float[] grip = grip(player, animation.param(), time);
+        float k = phase(tick, 0.0F, 14.0F);
+        if (grip != null) {
+            Vector3f hold = new Vector3f(grip[0], grip[1], grip[2]);
+            reach(player, lefty ? m.leftArm : m.rightArm, lefty ? LEFT_ARM : RIGHT_ARM, -mx, hold, k);
+            reach(player, lefty ? m.rightArm : m.leftArm, lefty ? RIGHT_ARM : LEFT_ARM, mx, new Vector3f(hold).sub(grip[3] * SECOND_HAND, grip[4] * SECOND_HAND, grip[5] * SECOND_HAND), k);
+        }
+        m.body.pitch += 0.18F * k * (1.0F - phase(tick, 16.0F, 26.0F));
+        m.head.pitch = MathHelper.lerp(k, headPitch, MathHelper.lerp(phase(tick, 16.0F, 28.0F), 0.42F, -0.4F));
     }
 
     private static float phase(float t, float from, float to) {
         float x = MathHelper.clamp((t - from) / (to - from), 0.0F, 1.0F);
         return x * x * (3.0F - 2.0F * x);
-    }
-
-    /** Тянется к рукояти, замирает на миг, затем поднимает меч над головой (во сне — обеими руками). */
-    private static void touch(BipedEntityModel<?> model, float t, float time, boolean bothHands) {
-        float reach = phase(t, 0.0F, 0.42F);
-        float raise = phase(t, 0.58F, 0.9F);
-        float tremble = t > 0.35F && t < 0.6F ? MathHelper.sin(time * 2.7F) * 0.035F : 0.0F;
-        float pitch = MathHelper.lerp(raise, MathHelper.lerp(reach, model.rightArm.pitch, -1.05F), -2.75F);
-        model.rightArm.pitch = pitch + tremble;
-        model.rightArm.yaw = MathHelper.lerp(reach, 0.0F, -0.12F) * (1.0F - raise);
-        model.rightArm.roll = tremble;
-        if (bothHands) {
-            model.leftArm.pitch = pitch - tremble;
-            model.leftArm.yaw = 0.35F * reach;
-            model.leftArm.roll = 0.0F;
-        } else {
-            model.leftArm.pitch = MathHelper.lerp(reach, model.leftArm.pitch, -0.25F);
-            model.leftArm.roll = -0.2F * reach;
-        }
-        model.body.pitch = 0.32F * reach * (1.0F - raise);
-        model.head.pitch = MathHelper.lerp(raise, MathHelper.lerp(reach, model.head.pitch, 0.55F), -0.35F);
     }
 
     /** Питч и рыск руки, чтобы кулак смотрел из плеча в точку (x, y, z) модели. */
@@ -291,19 +385,26 @@ public final class PlayerPoses {
             SWORD_POSES.remove(player.getId());
             return;
         }
-        applyMove(m, player, SwordMoves.ALL[swing.move], MathHelper.clamp(swing.progress(time), 0.0F, 1.0F), swing.aim, swing.color);
+        applyMove(m, player, SwordMoves.ALL[swing.move], MathHelper.clamp(swing.progress(time), 0.0F, 1.0F), swing.aim, swing.color, null, 0.0F);
     }
 
     /** Поставить тело и меч в приём {@code move} в его момент {@code t}. */
-    private static void applyMove(BipedEntityModel<?> m, LivingEntity player, SwordMoves.Move move, float t, float aim, int color) {
+    private static void applyMove(BipedEntityModel<?> m, LivingEntity player, SwordMoves.Move move, float t, float aim, int color, float[] from, float fromWeight) {
         boolean lefty = player.getMainArm() == Arm.LEFT;
         float mx = lefty ? -1.0F : 1.0F;
         ModelPart main = lefty ? m.leftArm : m.rightArm, off = lefty ? m.rightArm : m.leftArm;
         float[] rest = idle(main, mx, m);
         float[] v = SwordMoves.sample(move.body(), t, rest);
+        // Меч начинает приём не из обычной позы, а оттуда, где он сейчас (из земли).
+        if (from != null && fromWeight > 0.0F) {
+            for (int i = 0; i < 9; i++) {
+                float value = i % 3 == 0 ? mx * from[i] : from[i];
+                v[SwordMoves.FX + i] = MathHelper.lerp(fromWeight, v[SwordMoves.FX + i], value);
+            }
+        }
         // Длинный обряд входит и выходит за те же тики, что и обычный удар, а не за ту же долю времени.
-        boolean rite = move == SwordMoves.RITE;
-        float weight = SwordMoves.smooth(0.0F, rite ? 0.03F : 0.1F, t) * (1.0F - SwordMoves.smooth(rite ? 0.96F : 0.86F, 1.0F, t));
+        boolean scene = move == SwordMoves.RITE || move == SwordMoves.CLAIM;
+        float weight = (move == SwordMoves.CLAIM ? 1.0F : SwordMoves.smooth(0.0F, scene ? 0.03F : 0.1F, t)) * (1.0F - SwordMoves.smooth(scene ? 0.96F : 0.86F, 1.0F, t));
 
         float bodyYaw = v[SwordMoves.YAW] * mx;
         m.body.yaw = bodyYaw;
@@ -341,6 +442,11 @@ public final class PlayerPoses {
         main.yScale = MathHelper.lerp(weight, 1.0F, reach);
         Quaternionf arm = new Quaternionf().rotationZYX(main.roll, main.yaw, main.pitch);
         Vector3f fist = arm.transform(new Vector3f(handX, FIST_Y * main.yScale, 0.0F)).add(main.pivotX, main.pivotY, main.pivotZ);
+        // В сценах рука с настоящим локтем: кулак стоит точно на рукояти, а не тянется укорачиванием всей руки.
+        if (scene) {
+            fist.lerp(target, weight);
+            reach(player, main, lefty ? LEFT_ARM : RIGHT_ARM, handX, target, weight);
+        }
         SWORD_POSES.put(player.getId(), new SwordPose(fist, blade, edge, color, SwordMoves.trail(move, t)));
 
         // Свободная рука уходит в противовес; в двуручных — ложится на рукоять.

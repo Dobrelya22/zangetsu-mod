@@ -10,6 +10,7 @@ import com.zangetsu.registry.ModComponents;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import net.minecraft.block.BlockState;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.attribute.EntityAttributeInstance;
 import net.minecraft.entity.attribute.EntityAttributeModifier;
@@ -17,16 +18,19 @@ import net.minecraft.entity.attribute.EntityAttributes;
 import net.minecraft.entity.effect.StatusEffectInstance;
 import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.entity.mob.HostileEntity;
+import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.network.packet.s2c.play.SubtitleS2CPacket;
 import net.minecraft.network.packet.s2c.play.TitleFadeS2CPacket;
 import net.minecraft.network.packet.s2c.play.TitleS2CPacket;
+import net.minecraft.particle.BlockStateParticleEffect;
 import net.minecraft.particle.ParticleTypes;
 import net.minecraft.registry.RegistryKey;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.sound.SoundEvents;
 import net.minecraft.text.Text;
+import net.minecraft.util.Arm;
 import net.minecraft.util.Formatting;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.hit.HitResult;
@@ -45,8 +49,18 @@ public final class Awakening {
     public static final Identifier HEALTH_BONUS = ZangetsuMod.id("bond_health");
     /** Сколько ещё игрок неуязвим после того, как меч вонзился (чтобы успеть его взять). */
     private static final int PROTECTION_AFTER_LANDING = 600;
-    public static final int PICKUP_DURATION = 46;
-    private static final int TOUCH_TICK = 22;
+    /**
+     * Сцена подбора меча (тики от момента, когда игрок подошёл): рука сжала рукоять, меч признал его, клинок вышел из земли, лёг на плечо,
+     * появилось имя меча, игрок перестал держать позу, сцена кончилась.
+     */
+    public static final int CLAIM_REACH = 20, CLAIM_GRIP = 30, CLAIM_CLEAR = 46, CLAIM_SHOULDER = 66, CLAIM_TITLE = 72, CLAIM_HOLD_END = 108, CLAIM_TICKS = 122;
+    /** Шаг к мечу: скорость (блоки за тик; он едва жив, поэтому медленно) и самое долгое время подхода. */
+    public static final float WALK_SPEED = 0.13F;
+    private static final int MAX_WALK = 34;
+    /** На каком расстоянии от меча встать и насколько сбоку от него: так рукоять оказывается прямо перед рукой (блоки). */
+    private static final float GRIP_DISTANCE = 0.6F, GRIP_SIDE = 0.2F;
+    /** Высота рукояти воткнутого меча над землёй (блоки). */
+    private static final double HILT_HEIGHT = 1.26;
 
     private static final class Session {
         int tick;
@@ -166,23 +180,94 @@ public final class Awakening {
             return;
         }
         session.picking = true;
-        Cinematic.face(player, sword.getPos().add(0.0, 1.3, 0.0));
-        Cinematic.play(player, AnimationPayload.TOUCH_HANDLE, PICKUP_DURATION);
-        Fx.sound(player, SoundEvents.BLOCK_BEACON_POWER_SELECT, 1.0F, 0.6F);
-        Fx.particles(player.getServerWorld(), Fx.EYE_GOLD, sword.getPos().add(0, 1.0, 0), 30, 0.3, 0.0);
-        Scheduler.later(TOUCH_TICK, () -> {
-            if (!player.isAlive() || player.isRemoved()) {
-                cancel(player);
-                return;
+        if (HollowForm.skipRite) {
+            Scheduler.later(CLAIM_GRIP, () -> bond(player, sword));
+            Scheduler.later(CLAIM_TICKS, () -> SESSIONS.remove(player.getUuid()));
+            return;
+        }
+        claim(player, sword);
+    }
+
+    /** Куда встать, чтобы рука доставала рукоять: прямо перед мечом, чуть в стороне, так что он оказывается против руки с оружием. */
+    public static Vec3d gripSpot(PlayerEntity player, Vec3d sword) {
+        Vec3d away = player.getPos().subtract(sword).multiply(1.0, 0.0, 1.0);
+        away = away.lengthSquared() < 1.0E-4 ? new Vec3d(0.0, 0.0, 1.0) : away.normalize();
+        float toLeft = player.getMainArm() == Arm.LEFT ? -GRIP_SIDE : GRIP_SIDE;
+        return new Vec3d(sword.x + away.x * GRIP_DISTANCE - away.z * toLeft, player.getY(), sword.z + away.z * GRIP_DISTANCE + away.x * toLeft);
+    }
+
+    /** Сколько тиков идти до меча. */
+    public static int walkTicks(PlayerEntity player, Vec3d sword) {
+        return Math.min(MAX_WALK, (int) Math.ceil(gripSpot(player, sword).distanceTo(player.getPos()) / WALK_SPEED));
+    }
+
+    /**
+     * Сцена подбора: подходит, рука тянется к рукояти и сжимает её, и в этот миг меч признаёт его (сердца, сила, глаз открыт). Рывком вытаскивает клинок из
+     * земли, забрасывает на плечо и смотрит на него. Само движение играет клиент, здесь — что и когда происходит в мире.
+     */
+    private static void claim(ServerPlayerEntity player, ThrownZangetsuEntity sword) {
+        ServerWorld world = player.getServerWorld();
+        Vec3d spot = gripSpot(player, sword.getPos());
+        int walk = walkTicks(player, sword.getPos());
+        int total = walk + CLAIM_TICKS;
+        Sync.animation(player, AnimationPayload.TOUCH_HANDLE, total, sword.getId());
+        Cinematic.lock(player, total);
+        at(player, walk, () -> {
+            // Игрок в точности там, где рука дотянется, и смотрит на рукоять.
+            Vec3d hilt = sword.getPos().add(0.0, HILT_HEIGHT, 0.0), eye = spot.add(0.0, player.getStandingEyeHeight(), 0.0), look = hilt.subtract(eye);
+            float yaw = (float) Math.toDegrees(Math.atan2(look.z, look.x)) - 90.0F;
+            float pitch = (float) -Math.toDegrees(Math.atan2(look.y, Math.sqrt(look.x * look.x + look.z * look.z)));
+            if (world.isSpaceEmpty(player, player.getBoundingBox().offset(spot.subtract(player.getPos())))) {
+                player.networkHandler.requestTeleport(spot.x, spot.y, spot.z, yaw, pitch);
             }
-            bond(player, sword);
+            player.setBodyYaw(yaw);
+            player.setHeadYaw(yaw);
+            Fx.sound(player, SoundEvents.ENTITY_WARDEN_HEARTBEAT, 1.0F, 0.8F);
         });
-        Scheduler.later(PICKUP_DURATION, () -> SESSIONS.remove(player.getUuid()));
+        at(player, walk + CLAIM_REACH, () -> {
+            Fx.sound(player, SoundEvents.BLOCK_BEACON_POWER_SELECT, 1.0F, 0.6F);
+            Fx.particles(world, Fx.EYE_GOLD, sword.getPos().add(0.0, HILT_HEIGHT, 0.0), 14, 0.2, 0.0);
+        });
+        at(player, walk + CLAIM_GRIP, () -> bond(player, sword));
+        Vec3d groundAt = sword.getPos();
+        at(player, walk + CLAIM_CLEAR - 3, () -> {
+            // Клинок выходит из земли: земля разлетается.
+            BlockState ground = world.getBlockState(BlockPos.ofFloored(groundAt).down());
+            if (!ground.isAir()) {
+                Fx.particles(world, new BlockStateParticleEffect(ParticleTypes.BLOCK, ground), groundAt.add(0.0, 0.1, 0.0), 30, 0.25, 0.12);
+            }
+            Fx.sound(world, groundAt, SoundEvents.BLOCK_GRAVEL_BREAK, 1.0F, 0.6F);
+            Fx.sound(player, SoundEvents.ITEM_TRIDENT_RETURN, 1.0F, 0.7F);
+        });
+        at(player, walk + 54, () -> Fx.sound(player, SoundEvents.ENTITY_PLAYER_ATTACK_SWEEP, 0.9F, 0.7F));
+        at(player, walk + CLAIM_SHOULDER, () -> {
+            Fx.sound(player, SoundEvents.ITEM_ARMOR_EQUIP_IRON.value(), 1.0F, 0.8F);
+            Fx.sound(player, SoundEvents.BLOCK_CHAIN_PLACE, 1.0F, 1.0F);
+        });
+        at(player, walk + CLAIM_TITLE, () -> {
+            Fx.sound(player, SoundEvents.BLOCK_BEACON_ACTIVATE, 1.0F, 0.7F);
+            player.networkHandler.sendPacket(new TitleFadeS2CPacket(10, 50, 25));
+            player.networkHandler.sendPacket(new SubtitleS2CPacket(Text.translatable("zangetsu.bonded.subtitle").formatted(Formatting.GRAY)));
+            player.networkHandler.sendPacket(new TitleS2CPacket(Text.translatable("zangetsu.bonded.title").formatted(Formatting.DARK_RED, Formatting.BOLD)));
+        });
+        Scheduler.later(total, () -> SESSIONS.remove(player.getUuid()));
+    }
+
+    private static void at(ServerPlayerEntity player, int tick, Runnable action) {
+        Scheduler.later(tick, () -> {
+            if (player.isAlive() && !player.isRemoved()) {
+                action.run();
+            }
+        });
     }
 
     private static void bond(ServerPlayerEntity player, ThrownZangetsuEntity sword) {
+        if (!player.isAlive() || player.isRemoved()) {
+            cancel(player);
+            return;
+        }
         ServerWorld world = player.getServerWorld();
-        Vec3d at = sword.getPos().add(0.0, 1.0, 0.0);
+        Vec3d at = sword.getPos().add(0.0, HILT_HEIGHT, 0.0);
         sword.discard();
 
         ZangetsuData data = ModAttachments.data(player);
@@ -197,17 +282,11 @@ public final class Awakening {
         stack.set(ModComponents.EYE, Eye.OPEN);
         SwordStacks.giveToHand(player, stack);
 
-        Fx.particles(world, ParticleTypes.TOTEM_OF_UNDYING, player.getPos().add(0, 1, 0), 120, 0.6, 0.6);
-        Fx.particles(world, ParticleTypes.END_ROD, at, 40, 0.2, 0.25);
+        Fx.particles(world, ParticleTypes.TOTEM_OF_UNDYING, player.getPos().add(0, 1, 0), 12, 0.7, 0.2);
+        Fx.particles(world, ParticleTypes.END_ROD, at, 10, 0.2, 0.12);
         Fx.particles(world, ParticleTypes.FLASH, at, 1, 0.0, 0.0);
         Fx.ring(world, ParticleTypes.SOUL_FIRE_FLAME, player.getPos().add(0, 0.1, 0), 2.0, 40);
         Fx.sound(player, SoundEvents.ITEM_TOTEM_USE, 1.0F, 0.8F);
-        Fx.sound(player, SoundEvents.BLOCK_BEACON_ACTIVATE, 1.0F, 0.7F);
-        Sync.fx(player, ClientFxPayload.FLOATING_SWORD, 0);
-
-        player.networkHandler.sendPacket(new TitleFadeS2CPacket(10, 70, 25));
-        player.networkHandler.sendPacket(new SubtitleS2CPacket(Text.translatable("zangetsu.bonded.subtitle").formatted(Formatting.GRAY)));
-        player.networkHandler.sendPacket(new TitleS2CPacket(Text.translatable("zangetsu.bonded.title").formatted(Formatting.DARK_RED, Formatting.BOLD)));
         player.sendMessage(Text.translatable("zangetsu.bonded.guide").formatted(Formatting.GOLD), false);
         Sync.player(player);
     }

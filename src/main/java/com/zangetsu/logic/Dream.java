@@ -175,18 +175,20 @@ public final class Dream {
             return;
         }
         PULLING.add(player.getUuid());
-        Cinematic.face(player, sword.getPos().add(0.0, 1.3, 0.0));
-        Cinematic.play(player, AnimationPayload.DREAM_PULL, PULL_DURATION);
+        // Подходит сам: рука должна дотянуться до рукояти.
+        int walk = Awakening.walkTicks(player, sword.getPos());
+        Sync.animation(player, AnimationPayload.DREAM_PULL, walk + PULL_DURATION, sword.getId());
+        Cinematic.lock(player, walk + PULL_DURATION);
         Fx.sound(player, SoundEvents.BLOCK_BEACON_POWER_SELECT, 1.0F, 0.8F);
-        Scheduler.later(16, () -> {
+        Scheduler.later(walk + 16, () -> {
             sword.setState(ThrownZangetsuEntity.RISING);
             ServerWorld world = player.getServerWorld();
             Fx.particles(world, ParticleTypes.END_ROD, sword.getPos().add(0, 0.3, 0), 30, 0.3, 0.1);
             Fx.sound(player, SoundEvents.ITEM_TRIDENT_RETURN, 1.0F, 0.6F);
             Fx.sound(player, SoundEvents.BLOCK_AMETHYST_BLOCK_CHIME, 1.0F, 0.5F);
         });
-        Scheduler.later(32, () -> Sync.fx(player, ClientFxPayload.WHITE_FLASH, 46));
-        Scheduler.later(44, () -> wake(player));
+        Scheduler.later(walk + 32, () -> Sync.fx(player, ClientFxPayload.WHITE_FLASH, 46));
+        Scheduler.later(walk + 44, () -> wake(player));
     }
 
     private static void wake(ServerPlayerEntity player) {

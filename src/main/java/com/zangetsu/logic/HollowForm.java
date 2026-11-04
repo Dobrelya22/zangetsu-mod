@@ -23,6 +23,7 @@ import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.sound.SoundEvents;
 import net.minecraft.text.Text;
+import net.minecraft.util.Arm;
 import net.minecraft.util.Formatting;
 import net.minecraft.util.math.Vec3d;
 
@@ -33,8 +34,8 @@ import net.minecraft.util.math.Vec3d;
  */
 public final class HollowForm {
     public static final int BUDGET = 2 * 60 * 20;
-    /** Превращение на уровне IV: рука по лицу и маска. Сколько длится и когда он поднимает голову с ревом. */
-    public static final int MASK_TICKS = 72, MASK_ROAR = 53;
+    /** Превращение на уровне IV: рука по лицу и маска. Сколько длится и когда рука хлёстко уходит в сторону. */
+    public static final int MASK_TICKS = 72, MASK_WHIP = 44;
     /**
      * Превращение на уровне V: сколько длится весь обряд и его мгновения — молния, конец стояния на колене, глаза загораются, он выпрямился,
      * меч лёг на плечо, выпад.
@@ -155,7 +156,7 @@ public final class HollowForm {
         });
     }
 
-    /** Уровень IV: хруст кости под ладонью, с которой проступает маска, и рёв, когда он поднимает голову. */
+    /** Уровень IV: хруст кости под ладонью, с которой проступает маска, и хлёст рукой в сторону, когда маска готова. */
     private static void maskRite(ServerPlayerEntity player) {
         ServerWorld world = player.getServerWorld();
         Fx.sound(player, SoundEvents.ENTITY_WARDEN_HEARTBEAT, 1.0F, 0.9F);
@@ -169,13 +170,22 @@ public final class HollowForm {
                 Fx.particles(world, ParticleTypes.WHITE_ASH, face, 8, 0.16, 0.01);
             });
         }
-        at(MASK_ROAR, player, () -> {
-            Vec3d chest = player.getPos().add(0.0, 1.2, 0.0);
-            Sync.fx(player, ClientFxPayload.RED_FLASH, 22);
-            Fx.sound(player, SoundEvents.ENTITY_WARDEN_ROAR, 1.0F, 0.9F);
-            Fx.sound(player, SoundEvents.ENTITY_WITHER_SPAWN, 0.5F, 1.4F);
-            Fx.particles(world, Fx.REIATSU_BLACK, chest, 10, 1.1, 0.04);
-            Fx.particles(world, Fx.REIATSU_RED, chest, 10, 1.3, 0.04);
+        at(MASK_WHIP, player, () -> {
+            // Хлёст рукой: след реяцу в сторону, куда ушла ладонь, и резкий свист вместо крика.
+            Vec3d look = player.getRotationVector().multiply(1.0, 0.0, 1.0).normalize();
+            Vec3d out = new Vec3d(look.z, 0.0, -look.x).multiply(player.getMainArm() == Arm.LEFT ? -1.0 : 1.0);
+            Vec3d shoulder = player.getPos().add(0.0, 1.35, 0.0);
+            for (int i = 1; i <= 7; i++) {
+                Vec3d at = shoulder.add(out.multiply(0.35 * i)).add(look.multiply(0.35 - 0.05 * i));
+                Fx.particles(world, Fx.REIATSU_RED, at, 2, 0.05, 0.01);
+                Fx.particles(world, ParticleTypes.WHITE_ASH, at, 3, 0.08, 0.01);
+            }
+            Fx.particles(world, ParticleTypes.SWEEP_ATTACK, shoulder.add(out.multiply(1.5)), 1, 0.0, 0.0);
+            Sync.fx(player, ClientFxPayload.RED_FLASH, 14);
+            Fx.sound(player, SoundEvents.ENTITY_PLAYER_ATTACK_SWEEP, 1.0F, 1.3F);
+            Fx.sound(player, SoundEvents.ITEM_TRIDENT_THROW.value(), 0.9F, 0.8F);
+            Fx.sound(player, SoundEvents.ENTITY_BLAZE_SHOOT, 0.7F, 0.6F);
+            Fx.sound(player, SoundEvents.ENTITY_WITHER_SPAWN, 0.25F, 1.6F);
             Fx.ring(world, ParticleTypes.SMOKE, player.getPos().add(0, 0.2, 0), 2.5, 30);
         });
     }

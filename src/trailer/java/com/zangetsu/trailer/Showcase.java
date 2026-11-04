@@ -6,6 +6,8 @@ import static com.zangetsu.trailer.Shots.hero;
 import static com.zangetsu.trailer.Shots.p;
 import static com.zangetsu.trailer.Shots.shot;
 
+import com.zangetsu.entity.ThrownZangetsuEntity;
+import com.zangetsu.logic.Awakening;
 import com.zangetsu.logic.Execution;
 import com.zangetsu.logic.Eye;
 import com.zangetsu.logic.HollowForm;
@@ -54,6 +56,8 @@ final class Showcase {
         finalForm();
         transformations();
         reactions();
+        claim();
+        chains();
         moves("moves_side", 50.0, 270.0F, false);
         moves("moves_front", 75.0, 205.0F, false);
         moves("moves_fp", 100.0, 0.0F, true);
@@ -222,10 +226,10 @@ final class Showcase {
         speed(268.0, 0.8F);
         cut(268.0, "rage", shot(arc(3.0, 200, 1.4), p(0, 1.1, 0), 46));
         cut(270.5, "strike", shot(arc(8.0, 190, 2.2), p(0, 2.0, 0), 56));
-        cut(271.3, "kneel", shot(arc(3.6, 200, 0.8), p(0, 0.6, 0), 46));
+        cut(271.3, "kneel", shot(arc(2.6, 140, 0.7, 2.6, 300, 0.7), p(0, 0.55, 0), 46));
         cut(273.5, "rise", shot(arc(3.2, 180, 0.6), p(0, 1.2, 0), 50));
         cut(275.5, "shoulder", shot(arc(2.8, 212, 1.5), p(0, 1.2, 0), 46));
-        cut(277.3, "lunge", shot(arc(5.0, 268, 1.2), p(0, 1.0, -1.0), 50));
+        cut(277.0, "lunge", shot(arc(3.6, 268, 0.7, 3.6, 330, 0.7), p(0, 0.7, -0.4), 50));
     }
 
     /** Бег, удары и Гецуга: как плащ, цепи и огонь отвечают на движение. */
@@ -245,6 +249,35 @@ final class Showcase {
             client(286.3 + i * 1.3, () -> MinecraftClient.getInstance().player.swingHand(Hand.MAIN_HAND));
         }
         cut(286.0, "swing_all", shot(arc(4.2, 240, 1.3), p(0, 1.0, 0), 50));
+    }
+
+    /** Подбор меча целиком: меч падает, игрок подходит, вытаскивает его и закидывает на плечо. */
+    private void claim() {
+        scene("claim", 300.0, 322.0);
+        s.settle = 20;
+        s.setup = srv -> Script.base(srv, 0, false);
+        server(300.1, srv -> Awakening.start(Stage.player(srv)));
+        server(308.0, srv -> {
+            HollowForm.skipRite = false;
+            ServerPlayerEntity p = Stage.player(srv);
+            ThrownZangetsuEntity sword = Stage.nearestSword(p.getServerWorld(), p.getPos(), 12.0, 0.0);
+            if (sword != null) {
+                Awakening.pickUp(p, sword);
+            }
+        });
+        cut(300.0, "sky", shot(heroAt(3.0, 1.4, 3.0), heroAt(0, 1.0, -1.0), 50));
+        cut(308.0, "walk", shot(heroAt(3.2, 1.3, 1.6), heroAt(0, 1.0, -0.4), 44));
+        cut(313.0, "pull", shot(heroAt(-2.4, 0.9, -2.8), heroAt(0, 1.2, -0.3), 46));
+        cut(317.0, "shoulder", shot(heroAt(-1.4, 1.5, -2.6), heroAt(0, 1.4, 0), 44));
+    }
+
+    /** Цепи: бег, развороты и удары, крупно. */
+    private void chains() {
+        scene("react_chains", 322.0, 328.0);
+        s.settle = 70;
+        s.setup = srv -> Script.base(srv, 5, true);
+        client(322.1, () -> Director.walkTo = Stage.at(0, 0, -60));
+        cut(322.0, "chains_side", shot(heroAt(2.6, 1.0, 0.8), heroAt(0, 0.8, 0), 44));
     }
 
     /** Точка рядом с героем, куда бы он ни убежал. */

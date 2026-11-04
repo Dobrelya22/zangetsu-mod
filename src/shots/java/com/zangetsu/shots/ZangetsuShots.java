@@ -216,14 +216,22 @@ public class ZangetsuShots implements ClientModInitializer {
                 Awakening.pickUp(player, sword);
             }
         });
-        pause(10);
-        shot("touch_reach");
-        pause(13);
-        shot("touch_flash");
         pause(6);
-        shot("floating_sword");
+        shot("claim_walk");
         waitFor("меч в руке", c -> com.zangetsu.logic.SwordStacks.isHolding(c.player));
+        shot("claim_grip");
+        pause(14);
+        shot("claim_pull");
+        pause(10);
+        shot("claim_arc");
+        pause(12);
+        shot("claim_shoulder");
+        pause(16);
+        shot("claim_look");
+        pause(28);
+        shot("claim_proud");
         pause(30);
+        onServer(s -> check("сцена подбора кончилась, игрок свободен", !Cinematic.isLocked(player(s)) && !Awakening.isActive(player(s).getUuid())));
         look(180.0F, 10.0F);
         pause(4);
         shot("bonded_hud_day");

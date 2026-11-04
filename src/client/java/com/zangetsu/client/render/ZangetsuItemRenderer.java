@@ -213,6 +213,19 @@ public class ZangetsuItemRenderer implements BuiltinItemRendererRegistry.Dynamic
         return client.world == null ? 0.0F : client.world.getTime() + client.getRenderTickCounter().getTickDelta(false);
     }
 
+    /** Где кулак держит рукоять и оси клинка (к острию и к лезвию) в координатах предмета. */
+    static Vector3f holdPoint() {
+        return toModel(HOLD_U, HILT_V, 0.0F);
+    }
+
+    static Vector3f bladeAxis() {
+        return new Vector3f(AXIS_U);
+    }
+
+    static Vector3f edgeAxis() {
+        return new Vector3f(AXIS_V);
+    }
+
     /** Точка меча (u, v, w) → координаты предмета в блоках (середина рукояти — в центре предмета). */
     static Vector3f toModel(float u, float v, float w) {
         float du = u - GRIP_U;

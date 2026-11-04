@@ -13,11 +13,15 @@ import net.minecraft.client.render.item.ItemRenderer;
 import net.minecraft.client.render.model.json.ModelTransformationMode;
 import net.minecraft.client.texture.SpriteAtlasTexture;
 import net.minecraft.client.util.math.MatrixStack;
+import net.minecraft.entity.LivingEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.RotationAxis;
 import net.minecraft.util.math.Vec3d;
+import org.joml.Matrix4f;
+import org.joml.Quaternionf;
+import org.joml.Vector3f;
 
 /**
  * Летящий и воткнутый Зангецу. В полёте меч кувыркается и за последние тики докручивается так,
@@ -41,6 +45,36 @@ public class ThrownZangetsuRenderer extends EntityRenderer<ThrownZangetsuEntity>
         this.itemRenderer = context.getItemRenderer();
         this.awake.set(ModComponents.EYE, Eye.OPEN);
         this.sleeping.set(ModComponents.EYE, Eye.CLOSED);
+    }
+
+    /**
+     * Где кулак должен держать этот меч, куда смотрят клинок и лезвие: в координатах модели игрока {кулак (пиксели), клинок, лезвие}, в том же виде,
+     * что позы меча в руке. Рука в сцене подбора идёт ровно сюда, поэтому и хватается за настоящую рукоять, и меч из земли в руку переходит без рывка.
+     */
+    static float[] gripInModel(ThrownZangetsuEntity sword, LivingEntity player, float tickDelta) {
+        float rise = 0.0F;
+        if (sword.getState() == ThrownZangetsuEntity.RISING) {
+            float t = MathHelper.clamp((sword.age - sword.stateAge + tickDelta) / 22.0F, 0.0F, 1.0F);
+            rise = t * t * (3.0F - 2.0F * t) * 1.6F;
+        }
+        Matrix4f matrix = new Matrix4f().translate(0.0F, TIP * SCALE - SINK + rise, 0.0F)
+                .rotateY(-sword.getYaw() * MathHelper.RADIANS_PER_DEGREE)
+                .rotateX(sword.getTiltX() * MathHelper.RADIANS_PER_DEGREE)
+                .rotateZ(sword.getTiltZ() * MathHelper.RADIANS_PER_DEGREE)
+                .rotateZ(-135.0F * MathHelper.RADIANS_PER_DEGREE)
+                .scale(SCALE).translate(-0.5F, -0.5F, -0.5F);
+        Vector3f hold = matrix.transformPosition(ZangetsuItemRenderer.holdPoint(), new Vector3f());
+        Vector3f blade = matrix.transformDirection(ZangetsuItemRenderer.bladeAxis(), new Vector3f()).normalize();
+        Vector3f edge = matrix.transformDirection(ZangetsuItemRenderer.edgeAxis(), new Vector3f()).normalize();
+        float bodyYaw = MathHelper.lerpAngleDegrees(tickDelta, player.prevBodyYaw, player.bodyYaw);
+        Quaternionf toBody = new Quaternionf().rotationY((180.0F - bodyYaw) * MathHelper.RADIANS_PER_DEGREE).conjugate();
+        Vector3f local = toBody.transform(
+                (float) (MathHelper.lerp(tickDelta, sword.prevX, sword.getX()) - MathHelper.lerp(tickDelta, player.prevX, player.getX())) + hold.x,
+                (float) (MathHelper.lerp(tickDelta, sword.prevY, sword.getY()) - MathHelper.lerp(tickDelta, player.prevY, player.getY())) + hold.y,
+                (float) (MathHelper.lerp(tickDelta, sword.prevZ, sword.getZ()) - MathHelper.lerp(tickDelta, player.prevZ, player.getZ())) + hold.z, new Vector3f());
+        toBody.transform(blade);
+        toBody.transform(edge);
+        return new float[]{-local.x * 16.0F, (1.501F - local.y) * 16.0F, local.z * 16.0F, -blade.x, -blade.y, blade.z, -edge.x, -edge.y, edge.z};
     }
 
     @Override

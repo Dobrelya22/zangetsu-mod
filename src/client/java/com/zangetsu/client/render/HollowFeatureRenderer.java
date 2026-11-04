@@ -12,7 +12,6 @@ import net.minecraft.util.math.MathHelper;
 /**
  * Рисует маску Пустого на игроке, который принял эту форму. Во время превращения маска проступает ({@link HollowRite}),
  * к концу трескается: трещина, скол, почти рассыпалась. На уровне V — финальная маска с одним рогом.
- * Здесь же согнутые руки и ноги из сцены превращения: она бывает только в этой форме.
  */
 public class HollowFeatureRenderer extends FeatureRenderer<AbstractClientPlayerEntity, PlayerEntityModel<AbstractClientPlayerEntity>> {
     public HollowFeatureRenderer(FeatureRendererContext<AbstractClientPlayerEntity, PlayerEntityModel<AbstractClientPlayerEntity>> context) {
@@ -24,10 +23,6 @@ public class HollowFeatureRenderer extends FeatureRenderer<AbstractClientPlayerE
             float limbAngle, float limbDistance, float tickDelta, float animationProgress, float headYaw, float headPitch) {
         if (!ClientState.isHollow(player) || player.isInvisible()) {
             return;
-        }
-        float[] bends = PlayerPoses.bends(player);
-        if (bends != null) {
-            BentLimbs.render(matrices, consumers, light, this.getContextModel(), this.getTexture(player), bends);
         }
         HollowRite.Mask mask = HollowRite.mask(player, tickDelta);
         int crack = MathHelper.clamp(ClientState.maskCrack(player), 0, 3);

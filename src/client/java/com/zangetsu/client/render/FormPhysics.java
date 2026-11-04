@@ -469,9 +469,20 @@ public final class FormPhysics {
         }
     }
 
-    /** Цепь: звенья одинаковой длины, первое держится за кольцо на теле. Тяжелее ткани и почти не чувствует воздуха. */
+    /**
+     * Цепь: звенья одинаковой длины, первое держится за кольцо на теле. Тяжёлая: быстро падает, не парит на ветру, а раскачка гаснет за пару движений,
+     * потому что звенья трутся друг о друга. Толчки, от которых ткань взлетает, железо почти не сдвигают.
+     */
     public static final class Rope extends Simulated {
-        private static final float GRAVITY = 0.075F, DRAG = 0.018F;
+        private static final float GRAVITY = 0.24F, DRAG = 0.04F;
+        /** Трение звеньев: насколько быстро гаснет движение относительно крепления (за тик). */
+        private static final float FRICTION = 0.3F;
+        /** Цепь всё время тянет повиснуть прямо под креплением. */
+        private static final float HANG = 0.14F;
+        /** Какая доля толчка достаётся железу. */
+        private static final float WEIGHT = 0.15F;
+        /** Самая большая скорость звена относительно крепления (блоки за тик): иначе конец цепи хлещет, как нитка. */
+        private static final float MAX_SWING = 0.38F;
         private static final int ITERATIONS = 6;
         private final int nodes;
         /** Как сильно цепь дёрнуло в этот кадр: от этого она звенит. */
@@ -480,6 +491,16 @@ public final class FormPhysics {
         private Rope(int links) {
             this.nodes = links + 1;
             this.allocate(this.nodes);
+        }
+
+        @Override
+        void impulse(float ix, float iy, float iz) {
+            super.impulse(ix * WEIGHT, iy * WEIGHT, iz * WEIGHT);
+        }
+
+        @Override
+        void blast(float cx, float cy, float cz, float strength) {
+            super.blast(cx, cy, cz, strength * WEIGHT);
         }
 
         public void step(Vector3f anchor, Vector3f restDirection, float linkLength, float now, float[][] capsules, float ground) {
@@ -505,8 +526,9 @@ public final class FormPhysics {
                 this.shift(jx, jy, jz);
             }
             int steps = Math.min(8, Math.max(1, (int) Math.ceil(dt / STEP)));
-            float h = dt / steps, keep = Math.max(0.0F, 1.0F - DRAG * h);
+            float h = dt / steps, keep = Math.max(0.0F, 1.0F - DRAG * h), rub = Math.max(0.0F, 1.0F - FRICTION * h), hang = Math.min(1.0F, HANG * h);
             float fromX = this.x[0], fromY = this.y[0], fromZ = this.z[0];
+            float anchorVx = (anchor.x - fromX) / dt, anchorVy = (anchor.y - fromY) / dt, anchorVz = (anchor.z - fromZ) / dt;
             int end = this.nodes - 1;
             float before = MathHelper.sqrt(this.vx[end] * this.vx[end] + this.vy[end] * this.vy[end] + this.vz[end] * this.vz[end]);
             for (int s = 1; s <= steps; s++) {
@@ -516,12 +538,22 @@ public final class FormPhysics {
                 this.pz[0] = MathHelper.lerp(k, fromZ, anchor.z);
                 for (int i = 1; i < this.nodes; i++) {
                     this.vy[i] -= GRAVITY * h;
-                    this.vx[i] *= keep;
-                    this.vy[i] *= keep;
-                    this.vz[i] *= keep;
+                    float rx = (this.vx[i] - anchorVx) * rub, ry = (this.vy[i] - anchorVy) * rub, rz = (this.vz[i] - anchorVz) * rub;
+                    float swing = rx * rx + ry * ry + rz * rz;
+                    if (swing > MAX_SWING * MAX_SWING) {
+                        float cut = MAX_SWING / MathHelper.sqrt(swing);
+                        rx *= cut;
+                        ry *= cut;
+                        rz *= cut;
+                    }
+                    this.vx[i] = (anchorVx + rx) * keep;
+                    this.vy[i] = (anchorVy + ry) * keep;
+                    this.vz[i] = (anchorVz + rz) * keep;
                     this.px[i] = this.x[i] + this.vx[i] * h;
                     this.py[i] = this.y[i] + this.vy[i] * h;
                     this.pz[i] = this.z[i] + this.vz[i] * h;
+                    this.px[i] += (this.px[0] - this.px[i]) * hang;
+                    this.pz[i] += (this.pz[0] - this.pz[i]) * hang;
                 }
                 for (int iteration = 0; iteration < ITERATIONS; iteration++) {
                     for (int i = 0; i < end; i++) {

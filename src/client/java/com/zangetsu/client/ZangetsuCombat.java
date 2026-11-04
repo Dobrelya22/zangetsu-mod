@@ -4,6 +4,9 @@ import com.zangetsu.client.render.FormPhysics;
 import com.zangetsu.client.render.HollowRite;
 import com.zangetsu.client.render.SlashTrails;
 import com.zangetsu.client.render.SwordMoves;
+import com.zangetsu.entity.ThrownZangetsuEntity;
+import com.zangetsu.logic.Awakening;
+import com.zangetsu.logic.Dream;
 import com.zangetsu.logic.Fx;
 import com.zangetsu.network.AnimationPayload;
 import com.zangetsu.registry.ModItems;
@@ -139,6 +142,9 @@ public final class ZangetsuCombat {
             }
         }
         ClientPlayerEntity player = client.player;
+        if (player != null) {
+            walkToSword(client, player);
+        }
         if (queued && player != null) {
             ClientState.Swing swing = ClientState.swing(player, player.age);
             boolean holding = player.getMainHandStack().isOf(ModItems.ZANGETSU);
@@ -146,6 +152,34 @@ public final class ZangetsuCombat {
                 queued = false;
             } else if ((swing == null || swing.progress(player.age) >= SwordMoves.ALL[swing.move].chain()) && ClientState.animation(player) == null) {
                 attack(client, player);
+            }
+        }
+    }
+
+    /**
+     * Сцена подбора меча: своего игрока ведём к мечу шагом (настоящим движением, поэтому и ноги идут сами), а пока рука не сжала рукоять, он смотрит на неё,
+     * что бы ни делала мышь.
+     */
+    private static void walkToSword(MinecraftClient client, ClientPlayerEntity player) {
+        ClientState.Animation animation = ClientState.animation(player);
+        if (animation == null || (animation.type() != AnimationPayload.TOUCH_HANDLE && animation.type() != AnimationPayload.DREAM_PULL)
+                || !(client.world.getEntityById(animation.param()) instanceof ThrownZangetsuEntity sword)) {
+            return;
+        }
+        int scene = animation.type() == AnimationPayload.TOUCH_HANDLE ? Awakening.CLAIM_TICKS : Dream.PULL_DURATION;
+        int walk = animation.duration() - scene;
+        int tick = player.age - animation.startAge();
+        Vec3d to = sword.getPos().subtract(player.getPos());
+        float yaw = (float) Math.toDegrees(Math.atan2(to.z, to.x)) - 90.0F;
+        player.setYaw(yaw);
+        player.setHeadYaw(yaw);
+        player.setBodyYaw(yaw);
+        if (tick < walk) {
+            Vec3d way = Awakening.gripSpot(player, sword.getPos()).subtract(player.getPos()).multiply(1.0, 0.0, 1.0);
+            double left = way.length();
+            if (left > 0.02) {
+                Vec3d step = way.multiply(Math.min(left, Awakening.WALK_SPEED) / left);
+                player.setVelocity(step.x, player.getVelocity().y, step.z);
             }
         }
     }

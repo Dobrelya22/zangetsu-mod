@@ -1,5 +1,6 @@
 package com.zangetsu.client.render;
 
+import com.zangetsu.logic.Awakening;
 import com.zangetsu.logic.HollowForm;
 import net.minecraft.util.math.MathHelper;
 
@@ -92,8 +93,8 @@ public final class SwordMoves {
     private static final Move THRUST = move(17.0F, 0.40F,
             rest(0.0F, 0.0F),
             k(0.26F, true, 0.26F, -0.42F, -0.50F, -0.16F, 0.30F, -0.94F, -0.90F, -0.38F, 0.03F, 0.45F, -0.05F, 0.25F, -0.20F, 1.0F, 0.0F, 0.4F),
-            k(0.33F, true, 0.28F, -0.42F, -0.46F, -0.16F, 0.30F, -0.94F, -0.90F, -0.38F, 0.03F, 0.50F, -0.08F, 0.28F, -0.22F, 1.0F, 0.0F, 0.5F),
-            k(0.40F, false, 0.10F, -0.36F, -0.92F, -0.06F, 0.18F, -0.98F, -0.93F, -0.33F, 0.0F, -0.15F, 0.20F, -0.60F, 0.45F, 1.0F, 0.0F, 1.0F),
+            k(0.33F, true, 0.28F, -0.42F, -0.46F, -0.16F, 0.30F, -0.94F, -0.90F, -0.38F, 0.03F, 0.50F, -0.04F, 0.0F, 0.0F, 1.0F, 0.0F, 0.8F),
+            k(0.40F, false, 0.10F, -0.36F, -0.92F, -0.06F, 0.18F, -0.98F, -0.93F, -0.33F, 0.0F, -0.15F, 0.16F, 0.0F, 0.0F, 1.0F, 0.0F, 2.4F),
             k(0.52F, false, 0.06F, -0.34F, -1.02F, -0.06F, 0.16F, -0.98F, -0.96F, -0.26F, 0.02F, -0.25F, 0.26F, -0.70F, 0.50F, 1.0F, 0.0F, 1.4F),
             k(0.64F, true, 0.08F, -0.36F, -0.98F, -0.08F, 0.14F, -0.98F, -0.94F, -0.30F, 0.03F, -0.22F, 0.24F, -0.68F, 0.48F, 1.0F, 0.0F, 1.3F),
             rest(1.0F, 0.0F));
@@ -129,20 +130,40 @@ public final class SwordMoves {
             rest(0.0F, 0.0F),
             k(rite(18.0F), true, 0.50F, -0.92F, -0.30F, 0.12F, -0.35F, -0.93F, 0.0F, -0.93F, 0.35F, 0.05F, 0.22F, -0.10F, 0.10F, 0.0F, 0.0F, 1.0F),
             k(rite(38.0F), true, 0.56F, -0.86F, -0.22F, 0.20F, -0.62F, -0.76F, 0.0F, -0.77F, 0.63F, -0.06F, -0.10F, -0.12F, 0.12F, 0.0F, 0.0F, 0.6F),
-            k(rite(HollowForm.RITE_STRIKE + 4.0F), true, 0.46F, -0.34F, -0.52F, 0.02F, -1.0F, -0.02F, 0.0F, 0.0F, -1.0F, 0.18F, 0.50F, 0.0F, 0.0F, 0.0F, 0.0F, 5.0F),
-            k(rite(HollowForm.RITE_KNEEL_END), true, 0.46F, -0.36F, -0.52F, 0.02F, -1.0F, -0.02F, 0.0F, 0.0F, -1.0F, 0.16F, 0.48F, 0.0F, 0.0F, 0.0F, 0.0F, 4.8F),
-            k(rite(104.0F), false, 0.52F, -0.62F, -0.48F, 0.20F, -0.96F, -0.20F, 0.0F, -0.2F, -0.98F, 0.10F, 0.25F, 0.0F, 0.0F, 0.0F, 0.0F, 2.4F),
+            k(rite(HollowForm.RITE_STRIKE + 4.0F), true, 0.46F, -0.34F, -0.52F, 0.02F, -1.0F, -0.02F, 0.0F, 0.0F, -1.0F, 0.18F, 0.50F, 0.0F, 0.0F, 0.0F, 0.0F, 4.0F),
+            k(rite(HollowForm.RITE_KNEEL_END), true, 0.46F, -0.36F, -0.52F, 0.02F, -1.0F, -0.02F, 0.0F, 0.0F, -1.0F, 0.16F, 0.48F, 0.0F, 0.0F, 0.0F, 0.0F, 3.9F),
+            k(rite(104.0F), false, 0.52F, -0.62F, -0.48F, 0.20F, -0.96F, -0.20F, 0.0F, -0.2F, -0.98F, 0.10F, 0.25F, 0.0F, 0.0F, 0.0F, 0.0F, 2.0F),
             k(rite(HollowForm.RITE_STAND), true, 0.62F, -0.70F, -0.30F, 0.62F, -0.78F, -0.10F, 0.0F, -0.10F, -0.99F, -0.10F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F),
             k(rite(127.0F), false, 0.50F, -0.12F, -0.30F, 0.42F, 0.90F, 0.10F, -0.10F, -0.05F, -0.99F, -0.20F, -0.12F, 0.05F, -0.05F, 0.0F, 0.0F, -0.3F),
             k(rite(HollowForm.RITE_SHOULDER), true, 0.50F, -0.31F, -0.42F, 0.12F, 0.42F, 0.90F, -0.05F, 0.82F, -0.38F, -0.22F, -0.06F, 0.10F, -0.10F, 0.0F, 0.0F, 0.3F),
             k(rite(146.0F), true, 0.50F, -0.30F, -0.40F, 0.12F, 0.40F, 0.91F, -0.05F, 0.83F, -0.37F, -0.25F, -0.05F, 0.10F, -0.10F, 0.0F, 0.0F, 0.2F),
-            k(rite(151.0F), true, 0.28F, -0.42F, -0.46F, -0.16F, 0.30F, -0.94F, -0.90F, -0.38F, 0.03F, 0.50F, -0.08F, 0.28F, -0.22F, 1.0F, 0.0F, 0.5F),
-            k(rite(HollowForm.RITE_LUNGE), false, 0.10F, -0.36F, -0.92F, -0.06F, 0.18F, -0.98F, -0.93F, -0.33F, 0.0F, -0.15F, 0.20F, -0.60F, 0.45F, 1.0F, 0.0F, 1.0F),
-            k(rite(160.0F), true, 0.06F, -0.34F, -1.02F, -0.06F, 0.16F, -0.98F, -0.96F, -0.26F, 0.02F, -0.25F, 0.26F, -0.70F, 0.50F, 1.0F, 0.0F, 1.6F),
-            k(rite(167.0F), true, 0.08F, -0.36F, -0.98F, -0.08F, 0.14F, -0.98F, -0.94F, -0.30F, 0.03F, -0.22F, 0.24F, -0.68F, 0.48F, 1.0F, 0.0F, 1.5F),
+            k(rite(151.0F), true, 0.28F, -0.42F, -0.46F, -0.16F, 0.30F, -0.94F, -0.90F, -0.38F, 0.03F, 0.50F, -0.04F, 0.0F, 0.0F, 1.0F, 0.0F, 0.8F),
+            k(rite(HollowForm.RITE_LUNGE), false, 0.10F, -0.36F, -0.92F, -0.06F, 0.18F, -0.98F, -0.93F, -0.33F, 0.0F, -0.15F, 0.16F, 0.0F, 0.0F, 1.0F, 0.0F, 2.4F),
+            k(rite(160.0F), true, 0.06F, -0.34F, -1.02F, -0.06F, 0.16F, -0.98F, -0.96F, -0.26F, 0.02F, -0.25F, 0.20F, 0.0F, 0.0F, 1.0F, 0.0F, 3.0F),
+            k(rite(167.0F), true, 0.08F, -0.36F, -0.98F, -0.08F, 0.14F, -0.98F, -0.94F, -0.30F, 0.03F, -0.22F, 0.18F, 0.0F, 0.0F, 1.0F, 0.0F, 2.9F),
             rest(1.0F, 0.0F));
 
-    public static final Move[] ALL = {KESA, RISING, SWEEP, OVERHEAD, BACKHAND, THRUST, UPSWING, WHIRL, RITE};
+    /** Доля времени подбора меча по тику сцены: меч в руке только с момента, когда он сжал рукоять. */
+    private static float claim(float tick) {
+        return (tick - Awakening.CLAIM_GRIP) / (Awakening.CLAIM_TICKS - Awakening.CLAIM_GRIP);
+    }
+
+    /**
+     * Подбор меча: присел, вторая рука на рукояти, рывком вытащил клинок из земли, большим кругом через сторону забросил на плечо, держит.
+     * Первый кадр — только заготовка: меч начинает оттуда, где стоял в земле (см. {@link PlayerPoses}).
+     */
+    public static final Move CLAIM = move(Awakening.CLAIM_TICKS - Awakening.CLAIM_GRIP, claim(50.0F),
+            rest(0.0F, 0.0F),
+            k(claim(Awakening.CLAIM_GRIP + 0.5F), true, 0.27F, -0.57F, -0.85F, 0.0F, -1.0F, 0.0F, 0.0F, 0.0F, -1.0F, 0.05F, 0.20F, 0.0F, 0.0F, 0.0F, 0.0F, 0.3F),
+            k(claim(37.0F), true, 0.24F, -0.66F, -0.80F, 0.0F, -1.0F, 0.0F, 0.0F, 0.0F, -1.0F, 0.02F, 0.32F, 0.05F, -0.05F, 1.0F, 0.0F, 2.0F),
+            k(claim(Awakening.CLAIM_CLEAR), false, 0.22F, 0.0F, -0.50F, 0.02F, -1.0F, 0.02F, 0.0F, 0.0F, -1.0F, -0.02F, -0.10F, 0.0F, 0.0F, 1.0F, 0.0F, -0.6F),
+            k(claim(54.0F), false, 0.62F, -0.30F, -0.22F, 0.96F, 0.22F, -0.10F, 0.0F, 0.0F, -1.0F, -0.10F, -0.05F, 0.0F, 0.0F, 0.0F, 0.0F, -0.2F),
+            k(claim(60.0F), false, 0.50F, -0.06F, -0.30F, 0.42F, 0.90F, 0.10F, -0.10F, -0.05F, -0.99F, -0.20F, -0.12F, 0.05F, -0.05F, 0.0F, 0.0F, -0.3F),
+            k(claim(Awakening.CLAIM_SHOULDER), true, 0.50F, -0.31F, -0.42F, 0.12F, 0.42F, 0.90F, -0.05F, 0.82F, -0.38F, -0.22F, -0.06F, 0.0F, 0.0F, 0.0F, 0.0F, 0.3F),
+            k(claim(Awakening.CLAIM_HOLD_END), true, 0.50F, -0.30F, -0.40F, 0.12F, 0.40F, 0.91F, -0.05F, 0.83F, -0.37F, -0.18F, -0.04F, 0.0F, 0.0F, 0.0F, 0.0F, 0.1F),
+            rest(1.0F, 0.0F));
+
+    public static final Move[] ALL = {KESA, RISING, SWEEP, OVERHEAD, BACKHAND, THRUST, UPSWING, WHIRL, RITE, CLAIM};
     /** Порядок серии: двуручные чередуются с быстрыми, разворот завершает. */
     private static final int[] COMBO = {0, 2, 1, 3, 4, 6, 5, 7};
     /** Какими приёмами меч бьёт сам. */
