@@ -30,7 +30,14 @@ import net.minecraft.client.MinecraftClient;
 import com.zangetsu.client.CameraDirector;
 import com.zangetsu.client.ClientState;
 import com.zangetsu.client.ZangetsuCombat;
+import com.zangetsu.client.render.PlayerPoses;
 import net.minecraft.client.gui.screen.TitleScreen;
+import net.minecraft.client.model.ModelPart;
+import net.minecraft.client.network.AbstractClientPlayerEntity;
+import net.minecraft.client.render.entity.PlayerEntityRenderer;
+import net.minecraft.client.render.entity.model.PlayerEntityModel;
+import org.joml.Quaternionf;
+import org.joml.Vector3f;
 import net.minecraft.client.gui.screen.ingame.InventoryScreen;
 import net.minecraft.client.option.Perspective;
 import net.minecraft.client.util.ScreenshotRecorder;
@@ -218,19 +225,25 @@ public class ZangetsuShots implements ClientModInitializer {
         });
         pause(6);
         shot("claim_walk");
+        waitFor("подошёл к мечу", c -> {
+            ClientState.Animation scene = ClientState.animation(c.player);
+            return scene != null && c.player.age - scene.startAge() >= scene.duration() - Awakening.CLAIM_TICKS + 12;
+        });
+        act(this::checkClaimSmooth);
         waitFor("меч в руке", c -> com.zangetsu.logic.SwordStacks.isHolding(c.player));
         shot("claim_grip");
-        pause(14);
+        pause(18);
         shot("claim_pull");
-        pause(10);
+        pause(14);
         shot("claim_arc");
-        pause(12);
+        pause(26);
         shot("claim_shoulder");
         pause(16);
         shot("claim_look");
-        pause(28);
-        shot("claim_proud");
         pause(30);
+        shot("claim_proud");
+        waitFor("сцена подбора кончилась", c -> ClientState.animation(c.player) == null);
+        pause(12);
         onServer(s -> check("сцена подбора кончилась, игрок свободен", !Cinematic.isLocked(player(s)) && !Awakening.isActive(player(s).getUuid())));
         look(180.0F, 10.0F);
         pause(4);
@@ -701,6 +714,72 @@ public class ZangetsuShots implements ClientModInitializer {
                     this.failed.isEmpty() ? "" : ", провалены: " + String.join("; ", this.failed));
             c.scheduleStop();
         });
+    }
+
+    /**
+     * Подбор меча без скачков: вся сцена считается с шагом в четверть тика и сравниваются соседние позы. Сравниваются сами повороты, а не углы Эйлера:
+     * у них бывают разрывы там, где рука в модели идёт совершенно плавно.
+     */
+    private void checkClaimSmooth(MinecraftClient c) {
+        ClientState.Animation scene = ClientState.animation(c.player);
+        if (scene == null) {
+            check("сцена подбора идёт", false);
+            return;
+        }
+        PlayerEntityRenderer renderer = (PlayerEntityRenderer) c.getEntityRenderDispatcher().getRenderer(c.player);
+        PlayerEntityModel<AbstractClientPlayerEntity> model = renderer.getModel();
+        ModelPart[] parts = {model.head, model.body, model.rightArm, model.leftArm, model.rightLeg, model.leftLeg};
+        String[] names = {"голова", "корпус", "правая рука", "левая рука", "правая нога", "левая нога"};
+        Quaternionf[] previous = new Quaternionf[parts.length];
+        float[] lastBends = new float[4];
+        Vector3f lastFist = null, lastBlade = null;
+        float lastDip = 0.0F;
+        float worstTurn = 0.0F, worstBend = 0.0F, worstFist = 0.0F, worstBlade = 0.0F, worstDip = 0.0F, worstTurnAt = 0.0F, worstBladeAt = 0.0F;
+        String worstPart = "";
+        int walk = scene.duration() - Awakening.CLAIM_TICKS;
+        for (float tick = 0.25F; tick <= scene.duration(); tick += 0.25F) {
+            float time = scene.startAge() + tick;
+            model.setAngles(c.player, 0.0F, 0.0F, time, 0.0F, 0.0F);
+            for (int i = 0; i < parts.length; i++) {
+                Quaternionf now = new Quaternionf().rotationZYX(parts[i].roll, parts[i].yaw, parts[i].pitch);
+                if (previous[i] != null) {
+                    float turn = 2.0F * (float) Math.acos(Math.min(1.0F, Math.abs(now.dot(previous[i]))));
+                    if (turn > worstTurn) {
+                        worstTurn = turn;
+                        worstTurnAt = tick - walk;
+                        worstPart = names[i];
+                    }
+                }
+                previous[i] = now;
+            }
+            float[] bends = PlayerPoses.bends(c.player);
+            for (int i = 0; i < 4; i++) {
+                float bend = bends == null ? 0.0F : bends[i];
+                worstBend = Math.max(worstBend, Math.abs(bend - lastBends[i]));
+                lastBends[i] = bend;
+            }
+            float[] root = PlayerPoses.root(c.player, time);
+            float dip = root == null ? 0.0F : root[1];
+            worstDip = Math.max(worstDip, Math.abs(dip - lastDip));
+            lastDip = dip;
+            PlayerPoses.SwordPose pose = tick - walk > Awakening.CLAIM_GRIP + 8.0F && tick < scene.duration() - 1.0F ? PlayerPoses.sword(c.player) : null;
+            if (pose != null) {
+                if (lastFist != null) {
+                    worstFist = Math.max(worstFist, pose.fist().distance(lastFist));
+                    float swing = pose.blade().angle(lastBlade);
+                    if (swing > worstBlade) {
+                        worstBlade = swing;
+                        worstBladeAt = tick - walk;
+                    }
+                }
+                lastFist = new Vector3f(pose.fist());
+                lastBlade = new Vector3f(pose.blade());
+            }
+        }
+        ZangetsuMod.LOGGER.info(String.format(Locale.ROOT, "Плавность подбора за 1/4 тика: поворот %.3f рад (%s, тик %.1f), сгиб %.3f, присед %.3f, кулак %.2f пикс, клинок %.3f рад (тик %.1f)",
+                worstTurn, worstPart, worstTurnAt, worstBend, worstDip, worstFist, worstBlade, worstBladeAt));
+        check("подбор меча: суставы без скачков", worstTurn < 0.09F && worstBend < 0.12F && worstDip < 0.2F);
+        check("подбор меча: кулак и клинок идут плавно", worstFist < 0.9F && worstBlade < 0.09F);
     }
 
     /** Проверка поведения (выполняется на сервере); итог — в журнале строкой «ПРОВЕРКИ: …». */

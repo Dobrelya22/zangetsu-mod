@@ -29,8 +29,51 @@ public final class CameraDirector {
     private static int start = -1;
     private static int until = -1;
     private static Cut[] cuts;
+    private static Key[] path;
 
     private CameraDirector() {
+    }
+
+    /** Точка плавного пролёта: тик сцены и весь ракурс в этот момент. */
+    public record Key(float at, float yaw, float pitch, float distance, float forward, float lift) {
+        float value(int field) {
+            return switch (field) {
+                case 0 -> this.yaw;
+                case 1 -> this.pitch;
+                case 2 -> this.distance;
+                case 3 -> this.forward;
+                default -> this.lift;
+            };
+        }
+    }
+
+    /** Сцена одним дублем: камера без склеек и остановок летит через все точки. */
+    public static void fly(int duration, Key... keys) {
+        begin(duration, new Cut(0, new Shot(0.0F, 0.0F, 0.0F, 3.0F, 0.0F)));
+        path = keys;
+    }
+
+    private static float[] along(float now) {
+        int i = 0;
+        while (i + 2 < path.length && now >= path[i + 1].at()) {
+            i++;
+        }
+        Key a = path[i], b = path[i + 1];
+        float dt = Math.max(0.001F, b.at() - a.at());
+        float s = MathHelper.clamp((now - a.at()) / dt, 0.0F, 1.0F), s2 = s * s, s3 = s2 * s;
+        float[] out = new float[5];
+        for (int f = 0; f < out.length; f++) {
+            out[f] = (2.0F * s3 - 3.0F * s2 + 1.0F) * a.value(f) + (s3 - 2.0F * s2 + s) * dt * slope(i, f) + (3.0F * s2 - 2.0F * s3) * b.value(f) + (s3 - s2) * dt * slope(i + 1, f);
+        }
+        return out;
+    }
+
+    /** Скорость в точке пролёта: на первой и последней нулевая, между ними камера проходит насквозь. */
+    private static float slope(int i, int field) {
+        if (i == 0 || i == path.length - 1) {
+            return 0.0F;
+        }
+        return (path[i + 1].value(field) - path[i - 1].value(field)) / Math.max(0.001F, path[i + 1].at() - path[i - 1].at());
     }
 
     public static void begin(int duration, Shot shot) {
@@ -45,6 +88,7 @@ public final class CameraDirector {
         }
         client.options.setPerspective(Perspective.THIRD_PERSON_BACK);
         cuts = newCuts;
+        path = null;
         start = ClientState.ticks;
         until = ClientState.ticks + duration;
     }
@@ -56,6 +100,9 @@ public final class CameraDirector {
             return null;
         }
         float now = ClientState.ticks + tickDelta - start;
+        if (path != null) {
+            return along(now);
+        }
         int index = 0;
         while (index + 1 < cuts.length && now >= cuts[index + 1].from()) {
             index++;
@@ -74,6 +121,7 @@ public final class CameraDirector {
             }
             until = -1;
             cuts = null;
+            path = null;
         }
     }
 
@@ -81,5 +129,6 @@ public final class CameraDirector {
         until = -1;
         saved = null;
         cuts = null;
+        path = null;
     }
 }

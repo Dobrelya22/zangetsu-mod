@@ -174,11 +174,12 @@ public final class ZangetsuCombat {
         player.setYaw(yaw);
         player.setHeadYaw(yaw);
         player.setBodyYaw(yaw);
-        if (tick < walk) {
+        if (tick < walk + Awakening.WALK_SETTLE) {
             Vec3d way = Awakening.gripSpot(player, sword.getPos()).subtract(player.getPos()).multiply(1.0, 0.0, 1.0);
             double left = way.length();
-            if (left > 0.02) {
-                Vec3d step = way.multiply(Math.min(left, Awakening.WALK_SPEED) / left);
+            if (left > 0.01) {
+                // Последние шаги всё короче: он замедляется и встаёт, а не упирается в точку.
+                Vec3d step = way.multiply(Math.min(left * 0.3, Awakening.WALK_SPEED) / left);
                 player.setVelocity(step.x, player.getVelocity().y, step.z);
             }
         }

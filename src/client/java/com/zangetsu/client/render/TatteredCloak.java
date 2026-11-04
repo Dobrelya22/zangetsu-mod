@@ -38,7 +38,9 @@ final class TatteredCloak {
         }
     }
 
-    private static final Layer CLOAK = new Layer("cloak", 20, 25.0F, 1.3F, 7.6F, 3.5F, 8.7F, 3.95F, 9.8F, 6.1F, 0.6F, shreds(0.8F, 91), 0.0F, 0.16F, 0.012F);
+    /** Ключ длинного плаща: под ним ходят цепи. */
+    static final String OUTER = "cloak";
+    private static final Layer CLOAK = new Layer(OUTER, 20, 25.0F, 1.3F, 7.6F, 3.5F, 8.7F, 3.95F, 9.8F, 6.1F, 0.6F, shreds(0.8F, 91), 0.0F, 0.16F, 0.012F);
     private static final Layer MANTLE = new Layer("mantle", 8, 8.6F, 0.7F, 8.2F, 4.1F, 9.5F, 4.6F, 10.6F, 5.7F, 0.42F, shreds(0.7F, 47), 1.0F, 0.3F, 0.05F);
 
     private static float[] shreds(float shortest, int seed) {

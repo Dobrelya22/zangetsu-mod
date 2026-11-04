@@ -50,12 +50,14 @@ public final class Awakening {
     /** Сколько ещё игрок неуязвим после того, как меч вонзился (чтобы успеть его взять). */
     private static final int PROTECTION_AFTER_LANDING = 600;
     /**
-     * Сцена подбора меча (тики от момента, когда игрок подошёл): рука сжала рукоять, меч признал его, клинок вышел из земли, лёг на плечо,
+     * Сцена подбора меча (тики от момента, когда игрок подошёл): рука дотянулась, сжала рукоять и меч признал его, клинок вышел из земли, идёт дугой, лёг на плечо,
      * появилось имя меча, игрок перестал держать позу, сцена кончилась.
      */
-    public static final int CLAIM_REACH = 20, CLAIM_GRIP = 30, CLAIM_CLEAR = 46, CLAIM_SHOULDER = 66, CLAIM_TITLE = 72, CLAIM_HOLD_END = 108, CLAIM_TICKS = 122;
+    public static final int CLAIM_REACH = 28, CLAIM_GRIP = 36, CLAIM_CLEAR = 66, CLAIM_SWING = 76, CLAIM_SHOULDER = 92, CLAIM_TITLE = 98, CLAIM_HOLD_END = 132, CLAIM_TICKS = 154;
     /** Шаг к мечу: скорость (блоки за тик; он едва жив, поэтому медленно) и самое долгое время подхода. */
     public static final float WALK_SPEED = 0.13F;
+    /** Сколько тиков после подхода он ещё мягко доходит последние сантиметры: останавливается, а не упирается. */
+    public static final int WALK_SETTLE = 10;
     private static final int MAX_WALK = 34;
     /** На каком расстоянии от меча встать и насколько сбоку от него: так рукоять оказывается прямо перед рукой (блоки). */
     private static final float GRIP_DISTANCE = 0.6F, GRIP_SIDE = 0.2F;
@@ -202,8 +204,8 @@ public final class Awakening {
     }
 
     /**
-     * Сцена подбора: подходит, рука тянется к рукояти и сжимает её, и в этот миг меч признаёт его (сердца, сила, глаз открыт). Рывком вытаскивает клинок из
-     * земли, забрасывает на плечо и смотрит на него. Само движение играет клиент, здесь — что и когда происходит в мире.
+     * Сцена подбора: подходит, рука тянется к рукояти и сжимает её, и в этот миг меч признаёт его (сердца, сила, глаз открыт). С приседа выносит клинок из
+     * земли, дугой кладёт на плечо и смотрит на него. Само движение играет клиент, здесь — что и когда происходит в мире.
      */
     private static void claim(ServerPlayerEntity player, ThrownZangetsuEntity sword) {
         ServerWorld world = player.getServerWorld();
@@ -213,16 +215,18 @@ public final class Awakening {
         Sync.animation(player, AnimationPayload.TOUCH_HANDLE, total, sword.getId());
         Cinematic.lock(player, total);
         at(player, walk, () -> {
-            // Игрок в точности там, где рука дотянется, и смотрит на рукоять.
-            Vec3d hilt = sword.getPos().add(0.0, HILT_HEIGHT, 0.0), eye = spot.add(0.0, player.getStandingEyeHeight(), 0.0), look = hilt.subtract(eye);
+            // Смотрит на рукоять. Шаг доводит клиент: в его движение здесь не вмешиваемся, поэтому никакого рывка.
+            Vec3d look = sword.getPos().add(0.0, HILT_HEIGHT, 0.0).subtract(player.getEyePos());
             float yaw = (float) Math.toDegrees(Math.atan2(look.z, look.x)) - 90.0F;
-            float pitch = (float) -Math.toDegrees(Math.atan2(look.y, Math.sqrt(look.x * look.x + look.z * look.z)));
-            if (world.isSpaceEmpty(player, player.getBoundingBox().offset(spot.subtract(player.getPos())))) {
-                player.networkHandler.requestTeleport(spot.x, spot.y, spot.z, yaw, pitch);
-            }
             player.setBodyYaw(yaw);
             player.setHeadYaw(yaw);
             Fx.sound(player, SoundEvents.ENTITY_WARDEN_HEARTBEAT, 1.0F, 0.8F);
+        });
+        at(player, walk + WALK_SETTLE, () -> {
+            // Только если что-то не дало дойти (выступ, блок на пути): рука должна достать рукоять.
+            if (player.getPos().distanceTo(spot) > 0.3 && world.isSpaceEmpty(player, player.getBoundingBox().offset(spot.subtract(player.getPos())))) {
+                player.networkHandler.requestTeleport(spot.x, spot.y, spot.z, player.getYaw(), player.getPitch());
+            }
         });
         at(player, walk + CLAIM_REACH, () -> {
             Fx.sound(player, SoundEvents.BLOCK_BEACON_POWER_SELECT, 1.0F, 0.6F);
@@ -239,7 +243,7 @@ public final class Awakening {
             Fx.sound(world, groundAt, SoundEvents.BLOCK_GRAVEL_BREAK, 1.0F, 0.6F);
             Fx.sound(player, SoundEvents.ITEM_TRIDENT_RETURN, 1.0F, 0.7F);
         });
-        at(player, walk + 54, () -> Fx.sound(player, SoundEvents.ENTITY_PLAYER_ATTACK_SWEEP, 0.9F, 0.7F));
+        at(player, walk + CLAIM_SWING, () -> Fx.sound(player, SoundEvents.ENTITY_PLAYER_ATTACK_SWEEP, 0.9F, 0.7F));
         at(player, walk + CLAIM_SHOULDER, () -> {
             Fx.sound(player, SoundEvents.ITEM_ARMOR_EQUIP_IRON.value(), 1.0F, 0.8F);
             Fx.sound(player, SoundEvents.BLOCK_CHAIN_PLACE, 1.0F, 1.0F);

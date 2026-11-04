@@ -14,6 +14,7 @@ import net.minecraft.util.Identifier;
 import net.minecraft.util.math.MathHelper;
 import org.joml.Matrix3f;
 import org.joml.Matrix4f;
+import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
 /**
@@ -23,12 +24,39 @@ import org.joml.Vector3f;
  */
 final class BentLimbs {
     /** Сустав от шарнира конечности (пиксели): брусок руки идёт от −2 до 10, ноги — от 0 до 12. */
-    private static final float ELBOW = 4.0F, KNEE = 6.0F;
+    static final float ELBOW = 4.0F, KNEE = 6.0F;
     /** Длина дуги на единицу угла. Радиус дуги должен быть больше половины толщины конечности (с верхним слоем скина — 2,25 пикселя), иначе сгиб вывернется. */
     private static final float ARC_PER_ANGLE = 2.4F;
     private static final int SLICES = 6;
 
     private BentLimbs() {
+    }
+
+    /** Куда попало поперечное сечение прямого бруска на высоте {@code y} после сгиба: {поворот, новая высота, новая глубина} (пиксели). */
+    private static float[] section(float joint, float angle, float y) {
+        float size = Math.abs(angle), band = ARC_PER_ANGLE * size, from = joint - band * 0.5F;
+        if (size < PlayerPoses.MIN_BEND || y <= from) {
+            return new float[]{0.0F, y, 0.0F};
+        }
+        float phi = angle * Math.min(1.0F, (y - from) / band);
+        float sin = MathHelper.sin(phi), cos = MathHelper.cos(phi), past = Math.max(0.0F, y - from - band);
+        return new float[]{phi, from + ARC_PER_ANGLE * Math.abs(sin) + past * cos, Math.signum(angle) * ARC_PER_ANGLE * (1.0F - cos) + past * sin};
+    }
+
+    /** Перейти от прямой конечности к её согнутому виду на высоте {@code y}: то, что надето на неё здесь (кандалы, огонь), идёт вместе с ней. */
+    static void toSection(MatrixStack matrices, float joint, float angle, float y) {
+        float[] s = section(joint, angle, y);
+        if (s[0] != 0.0F) {
+            matrices.translate(0.0F, s[1] / 16.0F, s[2] / 16.0F);
+            matrices.multiply(new Quaternionf().rotationX(s[0]));
+            matrices.translate(0.0F, -y / 16.0F, 0.0F);
+        }
+    }
+
+    /** Точка на оси согнутой конечности (пиксели). */
+    static Vector3f axisPoint(float x, float joint, float angle, float y) {
+        float[] s = section(joint, angle, y);
+        return new Vector3f(x, s[1], s[2]);
     }
 
     /** {@code bends} — угол сгиба и виден ли верхний слой скина для правой руки, левой руки, правой ноги и левой ноги (см. {@link PlayerPoses#bends}). */

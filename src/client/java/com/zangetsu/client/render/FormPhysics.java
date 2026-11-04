@@ -165,6 +165,11 @@ public final class FormPhysics {
         });
     }
 
+    /** Уже созданная ткань или null. */
+    public Cloth existingCloth(String key) {
+        return this.cloths.get(key);
+    }
+
     public Rope rope(String key, int links) {
         return this.ropes.computeIfAbsent(key, k -> {
             Rope rope = new Rope(links);
@@ -203,13 +208,16 @@ public final class FormPhysics {
                 strength > 0.3F ? SoundEvents.BLOCK_CHAIN_PLACE : SoundEvents.BLOCK_CHAIN_STEP, SoundCategory.PLAYERS, volume, pitch, false);
     }
 
-    /** Капсула столкновений: отрезок {a, b} и радиус (блоки). */
-    public static float[] capsule(Matrix4f simFromLocal, float ax, float ay, float az, float bx, float by, float bz, float radius) {
+    /**
+     * Капсула столкновений: отрезок {a, b} и радиусы для ткани и для цепей (блоки). {@code limb} — конечность: она ходит под плащом и выталкивает его наружу,
+     * а не просто отодвигает в ближайшую сторону.
+     */
+    public static float[] capsule(Matrix4f simFromLocal, float ax, float ay, float az, float bx, float by, float bz, float clothRadius, float ropeRadius, boolean limb) {
         Vector3f a = simFromLocal.transformPosition(ax, ay, az, new Vector3f()), b = simFromLocal.transformPosition(bx, by, bz, new Vector3f());
-        return new float[]{a.x, a.y, a.z, b.x, b.y, b.z, radius};
+        return new float[]{a.x, a.y, a.z, b.x, b.y, b.z, clothRadius, ropeRadius, limb ? 1.0F : 0.0F};
     }
 
-    /** Вытолкнуть точку (px[i], py[i], pz[i]) из капсул и не пустить её под землю. */
+    /** Вытолкнуть звено цепи (px[i], py[i], pz[i]) из капсул и не пустить его под землю. */
     private static void collide(float[] px, float[] py, float[] pz, int i, float[][] capsules, float ground) {
         for (float[] c : capsules) {
             float ax = c[0], ay = c[1], az = c[2];
@@ -217,7 +225,7 @@ public final class FormPhysics {
             float length = dx * dx + dy * dy + dz * dz;
             float t = length < 1.0E-6F ? 0.0F : MathHelper.clamp(((px[i] - ax) * dx + (py[i] - ay) * dy + (pz[i] - az) * dz) / length, 0.0F, 1.0F);
             float ox = px[i] - (ax + dx * t), oy = py[i] - (ay + dy * t), oz = pz[i] - (az + dz * t);
-            float distance = ox * ox + oy * oy + oz * oz, r = c[6];
+            float distance = ox * ox + oy * oy + oz * oz, r = c[7];
             if (distance < r * r && distance > 1.0E-8F) {
                 float d = MathHelper.sqrt(distance), push = (r - d) / d;
                 px[i] += ox * push;
@@ -277,11 +285,23 @@ public final class FormPhysics {
     /**
      * Ткань: сетка точек, связанных по длине. Верхние строки пришиты к телу, остальные свободны; слабая память о своей форме не даёт ей
      * свалиться в ком, но с рывком и ветром не спорит. Там, где полотно рвётся на полосы, поперечные связи слабые: полосы бьются сами по себе.
+     *
+     * <p>Плащ всегда снаружи: у каждой полосы своё направление «наружу от тела», и если рука или нога оказалась дальше по этому направлению, она выталкивает ткань перед собой,
+     * как бы быстро ни махнула. Толчок передаёт ткани только часть своей скорости: плащ вздрагивает, а не отлетает.
      */
     public static final class Cloth extends Simulated {
         private static final float GRAVITY = 0.042F, DRAG = 0.045F;
         private static final int ITERATIONS = 4;
+        /** Как далеко снаружи конечность ещё считается под тканью (блоки): дальше она уже просто вынесена в сторону. */
+        private static final float MAX_UNDER = 0.95F;
+        /** Самый быстрый ход ткани от толчка (блоки за тик): рука, влетевшая сбоку, поднимает ткань, а та не перескакивает. */
+        private static final float PUSH_SPEED = 0.6F;
+        /** Какая доля толчка превращается в скорость ткани. */
+        private static final float PUSH_TOSS = 0.08F;
         private final int cols, rows, pinnedRows;
+        private final float[] outX, outZ;
+        /** Куда сейчас «наружу» у каждой полосы в координатах физики: поворачивается вместе с туловищем. */
+        private final float[] nx, ny, nz;
         private final float[] restX, restY, restZ, softness;
         private final int[] linkA, linkB;
         private final float[] linkLength, linkStiffness;
@@ -305,6 +325,18 @@ public final class FormPhysics {
                     this.restY[i] = rest[c][j][1];
                     this.restZ[i] = rest[c][j][2];
                 }
+            }
+            // Наружу — по полосе от тела: больше назад, чем вбок, потому что эллипс плаща шире, чем глубже, а конечности ходят вперёд и назад.
+            this.outX = new float[this.cols];
+            this.outZ = new float[this.cols];
+            this.nx = new float[this.cols];
+            this.ny = new float[this.cols];
+            this.nz = new float[this.cols];
+            for (int c = 0; c < this.cols; c++) {
+                int i = this.index(c, pinnedRows);
+                float ox = this.restX[i] * 0.3F, oz = this.restZ[i], length = Math.max(1.0E-4F, MathHelper.sqrt(ox * ox + oz * oz));
+                this.outX[c] = ox / length;
+                this.outZ[c] = oz / length;
             }
             List<float[]> links = new ArrayList<>();
             for (int c = 0; c < this.cols; c++) {
@@ -388,12 +420,84 @@ public final class FormPhysics {
             int steps = Math.min(8, Math.max(1, (int) Math.ceil(dt / STEP)));
             float h = dt / steps;
             float flutter = 0.0015F + 0.013F * speed + 0.01F * heat;
+            for (int c = 0; c < this.cols; c++) {
+                simFromBody.transformDirection(this.outX[c], 0.0F, this.outZ[c], t).normalize();
+                this.nx[c] = t.x;
+                this.ny[c] = t.y;
+                this.nz[c] = t.z;
+            }
+            Vector3f axis = simFromBody.transformPosition(0.0F, 0.4F, 0.0F, new Vector3f());
             for (int s = 1; s <= steps; s++) {
-                this.substep(tx, ty, tz, (float) s / steps, h, now, flutter, capsules, ground, grow);
+                this.substep(tx, ty, tz, (float) s / steps, h, now, flutter, capsules, ground, grow, axis);
             }
         }
 
-        private void substep(float[] tx, float[] ty, float[] tz, float k, float h, float now, float flutter, float[][] capsules, float ground, float grow) {
+        /**
+         * Ткань поверх тела. Сначала конечность, оказавшаяся снаружи от точки ткани: точка выходит на её внешнюю сторону (так рука не проскочит сквозь плащ и на самом быстром махе).
+         * Потом обычное касание: точка отходит от капсулы в ближайшую сторону.
+         */
+        private void pushOut(float[][] capsules, float ground, float h, Vector3f axis) {
+            float limit = PUSH_SPEED * h;
+            for (int c = 0; c < this.cols; c++) {
+                float ux = this.nx[c], uy = this.ny[c], uz = this.nz[c];
+                for (int j = this.pinnedRows; j < this.rows; j++) {
+                    int i = this.index(c, j);
+                    float px = this.px[i], py = this.py[i], pz = this.pz[i];
+                    float startX = px, startY = py, startZ = pz;
+                    // Полоса, запахнувшаяся вокруг тела на другую сторону, наружу не выталкивается: иначе прыгнула бы сквозь него.
+                    boolean outside = (px - axis.x) * ux + (py - axis.y) * uy + (pz - axis.z) * uz > -0.06F;
+                    for (float[] capsule : capsules) {
+                        float ax = capsule[0], ay = capsule[1], az = capsule[2], r = capsule[6];
+                        float vx = capsule[3] - ax, vy = capsule[4] - ay, vz = capsule[5] - az;
+                        float wx = px - ax, wy = py - ay, wz = pz - az;
+                        float length = vx * vx + vy * vy + vz * vz, along = vx * wx + vy * wy + vz * wz;
+                        if (outside && capsule[8] > 0.0F) {
+                            // Ближайшие точки луча «наружу» из точки ткани и оси конечности.
+                            float b = ux * vx + uy * vy + uz * vz, d = ux * wx + uy * wy + uz * wz, denominator = length - b * b;
+                            float t = denominator > 1.0E-6F ? (along - b * d) / denominator : (length > 1.0E-6F ? along / length : 0.0F);
+                            t = MathHelper.clamp(t, 0.0F, 1.0F);
+                            float s = t * b - d;
+                            if (s > 0.0F) {
+                                float ox = ux * s - vx * t + wx, oy = uy * s - vy * t + wy, oz = uz * s - vz * t + wz;
+                                float side = ox * ox + oy * oy + oz * oz;
+                                if (side < r * r) {
+                                    float exit = s + MathHelper.sqrt(r * r - side);
+                                    if (exit < MAX_UNDER) {
+                                        float move = Math.min(exit, limit);
+                                        px += ux * move;
+                                        py += uy * move;
+                                        pz += uz * move;
+                                        continue;
+                                    }
+                                }
+                            }
+                        }
+                        float t = length < 1.0E-6F ? 0.0F : MathHelper.clamp(along / length, 0.0F, 1.0F);
+                        float ox = wx - vx * t, oy = wy - vy * t, oz = wz - vz * t;
+                        float distance = ox * ox + oy * oy + oz * oz;
+                        if (distance < r * r && distance > 1.0E-8F) {
+                            float root = MathHelper.sqrt(distance), push = (r - root) / root;
+                            px += ox * push;
+                            py += oy * push;
+                            pz += oz * push;
+                        }
+                    }
+                    if (py < ground) {
+                        py = ground;
+                    }
+                    this.px[i] = px;
+                    this.py[i] = py;
+                    this.pz[i] = pz;
+                    // Прошлое положение идёт вместе с толчком: от него скорость почти не меняется.
+                    float rest = 1.0F - PUSH_TOSS;
+                    this.x[i] += (px - startX) * rest;
+                    this.y[i] += (py - startY) * rest;
+                    this.z[i] += (pz - startZ) * rest;
+                }
+            }
+        }
+
+        private void substep(float[] tx, float[] ty, float[] tz, float k, float h, float now, float flutter, float[][] capsules, float ground, float grow, Vector3f axis) {
             float keep = Math.max(0.0F, 1.0F - DRAG * h);
             for (int c = 0; c < this.cols; c++) {
                 for (int j = 0; j < this.rows; j++) {
@@ -441,11 +545,13 @@ public final class FormPhysics {
                     this.py[b] -= dy * error * wb;
                     this.pz[b] -= dz * error * wb;
                 }
-            }
-            for (int i = 0; i < this.x.length; i++) {
-                if (i % this.rows >= this.pinnedRows) {
-                    collide(this.px, this.py, this.pz, i, capsules, ground);
+                // Толчок раньше последних связей: соседние точки успевают пойти за вытолкнутой, и ткань ложится горбом, а не пикой.
+                if (iteration == ITERATIONS - 2) {
+                    this.pushOut(capsules, ground, h, axis);
                 }
+            }
+            this.pushOut(capsules, ground, h, axis);
+            for (int i = 0; i < this.x.length; i++) {
                 this.vx[i] = (this.px[i] - this.x[i]) / h;
                 this.vy[i] = (this.py[i] - this.y[i]) / h;
                 this.vz[i] = (this.pz[i] - this.z[i]) / h;
@@ -453,6 +559,21 @@ public final class FormPhysics {
                 this.y[i] = this.py[i];
                 this.z[i] = this.pz[i];
             }
+        }
+
+        /** Настоящая нормаль ткани в точке: там, где конечность подняла горб, она смотрит совсем не туда, куда полоса в покое. Всегда наружу. */
+        private Vector3f surfaceNormal(int i) {
+            int c = i / this.rows, j = i % this.rows;
+            int left = this.index(Math.max(0, c - 1), j), right = this.index(Math.min(this.cols - 1, c + 1), j);
+            int up = this.index(c, Math.max(0, j - 1)), down = this.index(c, Math.min(this.rows - 1, j + 1));
+            Vector3f across = new Vector3f(this.x[right] - this.x[left], this.y[right] - this.y[left], this.z[right] - this.z[left]);
+            Vector3f along = new Vector3f(this.x[down] - this.x[up], this.y[down] - this.y[up], this.z[down] - this.z[up]);
+            Vector3f normal = across.cross(along);
+            if (normal.lengthSquared() < 1.0E-8F) {
+                return new Vector3f(this.nx[c], this.ny[c], this.nz[c]);
+            }
+            normal.normalize();
+            return normal.x * this.nx[c] + normal.y * this.ny[c] + normal.z * this.nz[c] < 0.0F ? normal.negate() : normal;
         }
 
         /** Сетка в координатах тела, в пикселях модели, как её ждёт отрисовка. Пока физика ни разу не считалась — покой. */
@@ -470,19 +591,23 @@ public final class FormPhysics {
     }
 
     /**
-     * Цепь: звенья одинаковой длины, первое держится за кольцо на теле. Тяжёлая: быстро падает, не парит на ветру, а раскачка гаснет за пару движений,
-     * потому что звенья трутся друг о друга. Толчки, от которых ткань взлетает, железо почти не сдвигают.
+     * Цепь: звенья одинаковой длины, первое держится за кольцо на теле. Тяжёлая, но живая: падает быстро и не парит на ветру, отстаёт от рывка и качается ещё около секунды,
+     * пока трение звеньев не погасит раскачку. Выше примерно 60° от отвеса вес тянет её вниз всё сильнее, поэтому на бегу цепь качается, а через голову не летает.
      */
     public static final class Rope extends Simulated {
-        private static final float GRAVITY = 0.24F, DRAG = 0.04F;
+        private static final float GRAVITY = 0.16F, DRAG = 0.03F;
         /** Трение звеньев: насколько быстро гаснет движение относительно крепления (за тик). */
-        private static final float FRICTION = 0.3F;
-        /** Цепь всё время тянет повиснуть прямо под креплением. */
-        private static final float HANG = 0.14F;
+        private static final float FRICTION = 0.1F;
+        /** Цепь всё время слегка тянет повиснуть прямо под креплением. */
+        private static final float HANG = 0.03F;
         /** Какая доля толчка достаётся железу. */
-        private static final float WEIGHT = 0.15F;
+        private static final float WEIGHT = 0.35F;
         /** Самая большая скорость звена относительно крепления (блоки за тик): иначе конец цепи хлещет, как нитка. */
-        private static final float MAX_SWING = 0.38F;
+        private static final float MAX_SWING = 0.7F;
+        /** Мягкий предел размаха: косинус угла от отвеса, откуда вес начинает возвращать цепь вниз, и сила возврата (за тик, на единицу косинуса). */
+        private static final float SWING_LIMIT = 0.5F, LIMIT_PULL = 1.0F;
+        /** С какого расстояния плащ считается рядом со звеном и насколько звено держится под ним, чтобы складки его не закрывали изнутри наружу (блоки). */
+        private static final float CLOTH_REACH = 0.3F, CLOTH_GAP = 0.12F;
         private static final int ITERATIONS = 6;
         private final int nodes;
         /** Как сильно цепь дёрнуло в этот кадр: от этого она звенит. */
@@ -554,6 +679,14 @@ public final class FormPhysics {
                     this.pz[i] = this.z[i] + this.vz[i] * h;
                     this.px[i] += (this.px[0] - this.px[i]) * hang;
                     this.pz[i] += (this.pz[0] - this.pz[i]) * hang;
+                    float ox = this.px[i] - this.px[0], oy = this.py[i] - this.py[0], oz = this.pz[i] - this.pz[0];
+                    float distance = MathHelper.sqrt(ox * ox + oy * oy + oz * oz);
+                    if (distance > 1.0E-4F && -oy / distance < SWING_LIMIT) {
+                        float pull = Math.min(1.0F, LIMIT_PULL * (SWING_LIMIT + oy / distance) * h);
+                        this.px[i] += (this.px[0] - this.px[i]) * pull;
+                        this.py[i] += (this.py[0] - distance - this.py[i]) * pull;
+                        this.pz[i] += (this.pz[0] - this.pz[i]) * pull;
+                    }
                 }
                 for (int iteration = 0; iteration < ITERATIONS; iteration++) {
                     for (int i = 0; i < end; i++) {
@@ -586,6 +719,49 @@ public final class FormPhysics {
             }
             float after = MathHelper.sqrt(this.vx[end] * this.vx[end] + this.vy[end] * this.vy[end] + this.vz[end] * this.vz[end]);
             this.shock = Math.abs(after - before) / Math.max(0.2F, dt) * 0.6F + after * 0.25F;
+        }
+
+        /**
+         * Цепь идёт под плащом, а не сквозь него: звено, оказавшееся снаружи ткани рядом с собой, возвращается внутрь, а следующее подтягивается за ним.
+         * Движение цепи от этого не меняется: сдвигается только положение, скорость остаётся своей.
+         */
+        public void under(Cloth cloth, float linkLength) {
+            if (cloth == null || !cloth.ready) {
+                return;
+            }
+            for (int i = 1; i < this.nodes; i++) {
+                int near = -1;
+                float best = CLOTH_REACH * CLOTH_REACH;
+                for (int k = 0; k < cloth.x.length; k++) {
+                    if (k % cloth.rows >= cloth.pinnedRows) {
+                        float dx = this.x[i] - cloth.x[k], dy = this.y[i] - cloth.y[k], dz = this.z[i] - cloth.z[k];
+                        float distance = dx * dx + dy * dy + dz * dz;
+                        if (distance < best) {
+                            best = distance;
+                            near = k;
+                        }
+                    }
+                }
+                if (near >= 0) {
+                    Vector3f n = cloth.surfaceNormal(near);
+                    float ux = n.x, uy = n.y, uz = n.z;
+                    float depth = (this.x[i] - cloth.x[near]) * ux + (this.y[i] - cloth.y[near]) * uy + (this.z[i] - cloth.z[near]) * uz + CLOTH_GAP;
+                    if (depth > 0.0F) {
+                        this.x[i] -= ux * depth;
+                        this.y[i] -= uy * depth;
+                        this.z[i] -= uz * depth;
+                    }
+                }
+                float dx = this.x[i] - this.x[i - 1], dy = this.y[i] - this.y[i - 1], dz = this.z[i] - this.z[i - 1];
+                float d = MathHelper.sqrt(dx * dx + dy * dy + dz * dz);
+                // Только не дать звену оторваться: сжатая цепь просто лежит складками, а распрямлять её здесь значило бы снова вытолкнуть наружу.
+                if (d > linkLength) {
+                    float k = linkLength / d;
+                    this.x[i] = this.x[i - 1] + dx * k;
+                    this.y[i] = this.y[i - 1] + dy * k;
+                    this.z[i] = this.z[i - 1] + dz * k;
+                }
+            }
         }
 
         /** Узлы цепи в координатах {@code localFromSim}, в пикселях модели. */

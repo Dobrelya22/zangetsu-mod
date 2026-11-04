@@ -138,14 +138,19 @@ public class ZangetsuClient implements ClientModInitializer {
                 return;
             }
             if (entity == client.player && payload.animation() == AnimationPayload.TOUCH_HANDLE) {
-                // Подход из-за плеча, рука на рукояти крупно, рывок снизу, а на плече — медленный наезд спереди.
+                // Одним дублем: из-за плеча на подходе, вплотную к руке на рукояти, снизу на подъёме клинка и плавно вокруг, пока меч не ляжет на плечо.
                 int walk = payload.duration() - Awakening.CLAIM_TICKS;
-                CameraDirector.begin(payload.duration() + 6,
-                        new CameraDirector.Cut(0, new CameraDirector.Shot(35.0F, 50.0F, 8.0F, 3.4F, 3.0F, 0.5F, -0.1F)),
-                        new CameraDirector.Cut(walk, new CameraDirector.Shot(72.0F, 86.0F, 5.0F, 2.5F, 2.1F, 0.35F, -0.15F)),
-                        new CameraDirector.Cut(walk + Awakening.CLAIM_REACH - 4, new CameraDirector.Shot(55.0F, 66.0F, 4.0F, 1.5F, 1.35F, 0.45F, -0.1F)),
-                        new CameraDirector.Cut(walk + Awakening.CLAIM_GRIP + 4, new CameraDirector.Shot(150.0F, 166.0F, -8.0F, 3.1F, 3.5F, 0.0F, -0.15F)),
-                        new CameraDirector.Cut(walk + Awakening.CLAIM_SHOULDER - 8, new CameraDirector.Shot(208.0F, 192.0F, -4.0F, 3.0F, 2.3F, 0.0F, 0.0F)));
+                CameraDirector.fly(payload.duration() + 6,
+                        new CameraDirector.Key(0.0F, 32.0F, 9.0F, 3.4F, 0.45F, -0.05F),
+                        new CameraDirector.Key(walk, 52.0F, 7.0F, 2.7F, 0.42F, -0.12F),
+                        new CameraDirector.Key(walk + Awakening.CLAIM_REACH, 74.0F, 3.0F, 2.2F, 0.42F, -0.16F),
+                        new CameraDirector.Key(walk + Awakening.CLAIM_GRIP + 6.0F, 94.0F, 0.0F, 2.5F, 0.36F, -0.18F),
+                        new CameraDirector.Key(walk + 50.0F, 126.0F, -6.0F, 2.9F, 0.2F, -0.2F),
+                        new CameraDirector.Key(walk + Awakening.CLAIM_CLEAR, 154.0F, -8.0F, 3.1F, 0.08F, -0.15F),
+                        new CameraDirector.Key(walk + Awakening.CLAIM_SHOULDER - 6.0F, 188.0F, -5.0F, 3.2F, 0.0F, -0.05F),
+                        new CameraDirector.Key(walk + Awakening.CLAIM_SHOULDER + 12.0F, 200.0F, -4.0F, 2.8F, 0.0F, 0.0F),
+                        new CameraDirector.Key(walk + Awakening.CLAIM_HOLD_END, 197.0F, -3.0F, 2.35F, 0.0F, 0.0F),
+                        new CameraDirector.Key(payload.duration() + 6.0F, 194.0F, -3.0F, 2.3F, 0.0F, 0.0F));
                 return;
             }
             if (entity == client.player && payload.animation() == AnimationPayload.HOLLOW_FINAL) {

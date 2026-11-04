@@ -58,6 +58,7 @@ final class Showcase {
         reactions();
         claim();
         chains();
+        cloakRun();
         moves("moves_side", 50.0, 270.0F, false);
         moves("moves_front", 75.0, 205.0F, false);
         moves("moves_fp", 100.0, 0.0F, true);
@@ -267,8 +268,8 @@ final class Showcase {
         });
         cut(300.0, "sky", shot(heroAt(3.0, 1.4, 3.0), heroAt(0, 1.0, -1.0), 50));
         cut(308.0, "walk", shot(heroAt(3.2, 1.3, 1.6), heroAt(0, 1.0, -0.4), 44));
-        cut(313.0, "pull", shot(heroAt(-2.4, 0.9, -2.8), heroAt(0, 1.2, -0.3), 46));
-        cut(317.0, "shoulder", shot(heroAt(-1.4, 1.5, -2.6), heroAt(0, 1.4, 0), 44));
+        cut(311.0, "pull", shot(heroAt(-2.4, 0.9, -2.8), heroAt(0, 1.2, -0.3), 46));
+        cut(314.0, "shoulder", shot(heroAt(-1.4, 1.5, -2.6), heroAt(0, 1.4, 0), 44));
     }
 
     /** Цепи: бег, развороты и удары, крупно. */
@@ -278,6 +279,17 @@ final class Showcase {
         s.setup = srv -> Script.base(srv, 5, true);
         client(322.1, () -> Director.walkTo = Stage.at(0, 0, -60));
         cut(322.0, "chains_side", shot(heroAt(2.6, 1.0, 0.8), heroAt(0, 0.8, 0), 44));
+    }
+
+    /** Плащ на бегу сзади и сбоку: руки и ноги толкают ткань, а не проходят сквозь неё. */
+    private void cloakRun() {
+        scene("react_cloak", 340.0, 346.0);
+        s.settle = 70;
+        s.setup = srv -> Script.base(srv, 5, true);
+        client(340.1, () -> Director.walkTo = Stage.at(0, 0, -60));
+        client(341.5, () -> MinecraftClient.getInstance().options.sprintKey.setPressed(true));
+        cut(340.0, "cloak_back", shot(heroAt(1.5, 1.2, 2.2), heroAt(0, 0.95, 0), 44));
+        cut(344.0, "cloak_side", shot(heroAt(2.5, 1.0, 0.5), heroAt(0, 0.95, 0), 44));
     }
 
     /** Точка рядом с героем, куда бы он ни убежал. */

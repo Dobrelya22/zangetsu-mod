@@ -95,10 +95,13 @@ final class Chains {
         }
     }
 
-    /** Кандалы на запястье или щиколотке: толстый железный обруч вокруг конечности с заклёпками. */
-    static void cuff(VertexConsumer out, MatrixStack.Entry entry, float cx, float y, float half, float tall, int light) {
+    /**
+     * Кандалы на запястье или щиколотке: толстый железный обруч вокруг конечности с заклёпками. {@code halfX} и {@code halfZ} — половины сечения конечности
+     * (у тонких рук скина оно не квадратное), {@code side} — внешняя сторона конечности: там скоба, за которую держится цепь.
+     */
+    static void cuff(VertexConsumer out, MatrixStack.Entry entry, float cx, float y, float halfX, float halfZ, float tall, float side, int light) {
         float t = 0.55F;
-        float x0 = cx - half, x1 = cx + half, y0 = y - tall, y1 = y + tall, z0 = -half, z1 = half;
+        float x0 = cx - halfX, x1 = cx + halfX, y0 = y - tall, y1 = y + tall, z0 = -halfZ, z1 = halfZ;
         box(out, entry, x0 - t, y0, z0 - t, x1 + t, y1, z0, IRON, light);
         box(out, entry, x0 - t, y0, z1, x1 + t, y1, z1 + t, IRON, light);
         box(out, entry, x0 - t, y0, z0, x0, y1, z1, IRON, light);
@@ -106,10 +109,11 @@ final class Chains {
         // Заклёпки и выпирающая скоба — чтобы обруч не был гладкой коробкой.
         float r = 0.32F;
         for (int i = -1; i <= 1; i += 2) {
-            box(out, entry, cx + i * half * 0.6F - r, y - r, z0 - t - r, cx + i * half * 0.6F + r, y + r, z0 - t, DARK_IRON, light);
-            box(out, entry, cx + i * half * 0.6F - r, y - r, z1 + t, cx + i * half * 0.6F + r, y + r, z1 + t + r, DARK_IRON, light);
+            box(out, entry, cx + i * halfX * 0.6F - r, y - r, z0 - t - r, cx + i * halfX * 0.6F + r, y + r, z0 - t, DARK_IRON, light);
+            box(out, entry, cx + i * halfX * 0.6F - r, y - r, z1 + t, cx + i * halfX * 0.6F + r, y + r, z1 + t + r, DARK_IRON, light);
         }
-        box(out, entry, x0 - t - 0.5F, y - 0.6F, -0.6F, x0 - t, y + 0.6F, 0.6F, DARK_IRON, light);
+        float bracket = side < 0.0F ? x0 - t - 0.5F : x1 + t;
+        box(out, entry, bracket, y - 0.6F, -0.6F, bracket + 0.5F, y + 0.6F, 0.6F, DARK_IRON, light);
     }
 
     /** Коробка из шести граней (пиксели). */
