@@ -81,19 +81,35 @@ public final class Dream {
                 player.getZ(), player.getYaw(), player.getPitch(), player.interactionManager.getGameMode().asString());
         Vec3d c = center(player.getUuid());
         loadField(dream, c);
+        // Меч сломан: это уже не просто сон, а испытание. Яхве смотрит с неба.
+        boolean trial = data.broken;
+        if (trial) {
+            Calling.clearing(dream, c);
+        }
         double y = groundY(dream, c.x, c.z);
-        player.teleport(dream, c.x, y, c.z, 0.0F, 10.0F);
+        player.teleport(dream, c.x, y, c.z, 0.0F, trial ? -38.0F : 10.0F);
         if (player.interactionManager.getGameMode() != GameMode.SPECTATOR) {
             player.changeGameMode(GameMode.ADVENTURE);
         }
         LAST_POS.put(player.getUuid(), new Vec3d(c.x, y, c.z));
+        if (trial) {
+            Trial.begin(player, new Vec3d(c.x, y, c.z));
+        }
         // Мечи — когда мир вокруг игрока прогрузится (через полсекунды).
         Scheduler.later(10, () -> {
             if (inDream(player)) {
                 spawnFirst(dream, player.getUuid(), player.getPos());
                 maintain(player, dream, true);
+                if (trial) {
+                    Trial.plantReal(player, dream);
+                }
             }
         });
+
+        if (trial) {
+            Sync.player(player);
+            return;
+        }
 
         player.networkHandler.sendPacket(new TitleFadeS2CPacket(30, 80, 30));
         player.networkHandler.sendPacket(new SubtitleS2CPacket(Text.translatable("zangetsu.dream.subtitle").formatted(Formatting.GRAY)));
@@ -128,8 +144,11 @@ public final class Dream {
         }
         Random random = dream.getRandom();
         double y = groundY(dream, x, z);
-        ThrownZangetsuEntity.plant(dream, new Vec3d(x, y, z), owner, random.nextFloat() * 360.0F,
+        ThrownZangetsuEntity sword = ThrownZangetsuEntity.plant(dream, new Vec3d(x, y, z), owner, random.nextFloat() * 360.0F,
                 (random.nextFloat() - 0.5F) * 24.0F, (random.nextFloat() - 0.5F) * 24.0F);
+        if (Trial.isActive(owner)) {
+            sword.setKind(ThrownZangetsuEntity.FAKE);
+        }
         return true;
     }
 
@@ -146,7 +165,7 @@ public final class Dream {
         for (ThrownZangetsuEntity sword : mine) {
             double dx = sword.getX() - here.x, dz = sword.getZ() - here.z;
             double d = Math.sqrt(dx * dx + dz * dz);
-            if (d > FAR && sword.getState() == ThrownZangetsuEntity.STUCK) {
+            if (d > FAR && sword.getState() == ThrownZangetsuEntity.STUCK && sword.getKind() != ThrownZangetsuEntity.REAL) {
                 sword.discard();
             } else if (d <= NEAR) {
                 near++;
@@ -201,7 +220,9 @@ public final class Dream {
         LAST_POS.remove(player.getUuid());
         bringBack(player, data, true);
 
+        Trial.finish(player);
         data.lost = false;
+        data.broken = false;
         ItemStack sword = SwordStacks.create(player);
         SwordStacks.giveToHand(player, sword);
         Fx.sound(player, SoundEvents.ITEM_TOTEM_USE, 0.8F, 1.1F);
@@ -253,9 +274,28 @@ private static void clearSwords(ServerPlayerEntity player) {
         player.teleport(overworld, spawn.getX() + 0.5, spawn.getY(), spawn.getZ() + 0.5, 0.0F, 0.0F);
     }
 
+    /** Испытание сорвалось (умер, вышел, команда): вернуть игрока, меч остаётся сломанным. */
+    static void afterAbort(ServerPlayerEntity player, ZangetsuData data) {
+        clearSwords(player);
+        LAST_POS.remove(player.getUuid());
+        PULLING.remove(player.getUuid());
+        if (inDream(player)) {
+            bringBack(player, data, false);
+        } else if (data.dream != null) {
+            player.changeGameMode(GameMode.byName(data.dream.gameMode(), GameMode.SURVIVAL));
+            data.dream = null;
+        }
+        Sync.player(player);
+    }
+
     /** Каждые полсекунды: мечи появляются вокруг идущего игрока; случайно попавший сюда уходит домой. */
     static void tick(ServerPlayerEntity player, ZangetsuData data) {
         if (!inDream(player) || PULLING.contains(player.getUuid()) || player.age % 10 != 0) {
+            return;
+        }
+        // Вышел посреди испытания: при входе он там, где лёг, сон придёт снова.
+        if (data.broken && !Trial.isActive(player.getUuid())) {
+            Trial.abort(player, data);
             return;
         }
         if (data.dream == null) {

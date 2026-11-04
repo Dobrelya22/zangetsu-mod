@@ -36,10 +36,16 @@ public class ThrownZangetsuEntity extends Entity {
     /** Меч вытаскивают из земли (во сне). */
     public static final int RISING = 2;
     public static final double GRAVITY = 0.06;
+    /** Сон после сломанного меча: обычный, фальшивый (глаз снаружи) и настоящий (глаз на внутренней стороне). */
+    public static final int ORDINARY = 0, FAKE = 1, REAL = 2;
+    /** Один цикл подмигивания: глаз открывается, дважды подмигивает и снова смыкается. */
+    public static final int WINK_CYCLE = 70;
 
     private static final TrackedData<Integer> STATE = DataTracker.registerData(ThrownZangetsuEntity.class, TrackedDataHandlerRegistry.INTEGER);
     private static final TrackedData<Integer> FLIGHT_TICKS = DataTracker.registerData(ThrownZangetsuEntity.class, TrackedDataHandlerRegistry.INTEGER);
     private static final TrackedData<Boolean> DREAM = DataTracker.registerData(ThrownZangetsuEntity.class, TrackedDataHandlerRegistry.BOOLEAN);
+    private static final TrackedData<Integer> KIND = DataTracker.registerData(ThrownZangetsuEntity.class, TrackedDataHandlerRegistry.INTEGER);
+    private static final TrackedData<Boolean> WINKING = DataTracker.registerData(ThrownZangetsuEntity.class, TrackedDataHandlerRegistry.BOOLEAN);
     private static final TrackedData<Float> TILT_X = DataTracker.registerData(ThrownZangetsuEntity.class, TrackedDataHandlerRegistry.FLOAT);
     private static final TrackedData<Float> TILT_Z = DataTracker.registerData(ThrownZangetsuEntity.class, TrackedDataHandlerRegistry.FLOAT);
 
@@ -90,6 +96,8 @@ public class ThrownZangetsuEntity extends Entity {
         builder.add(STATE, FLYING);
         builder.add(FLIGHT_TICKS, 28);
         builder.add(DREAM, false);
+        builder.add(KIND, ORDINARY);
+        builder.add(WINKING, false);
         builder.add(TILT_X, 0.0F);
         builder.add(TILT_Z, 0.0F);
     }
@@ -104,6 +112,33 @@ public class ThrownZangetsuEntity extends Entity {
 
     public int getFlightTicks() {
         return this.dataTracker.get(FLIGHT_TICKS);
+    }
+
+    public int getKind() {
+        return this.dataTracker.get(KIND);
+    }
+
+    public void setKind(int kind) {
+        this.dataTracker.set(KIND, kind);
+    }
+
+    public boolean isWinking() {
+        return this.dataTracker.get(WINKING);
+    }
+
+    public void setWinking(boolean winking) {
+        this.dataTracker.set(WINKING, winking);
+    }
+
+    /** Насколько открыт глаз, когда меч подмигивает. */
+    public static float winkOpenness(float time) {
+        float t = time % WINK_CYCLE;
+        float open = Math.min(1.0F, t / 10.0F) * Math.min(1.0F, (WINK_CYCLE - t) / 10.0F);
+        return open * wink(t - 26.0F) * wink(t - 40.0F);
+    }
+
+    private static float wink(float t) {
+        return t < 0.0F || t > 11.0F ? 1.0F : Math.abs(t - 4.0F) / (t < 4.0F ? 4.0F : 7.0F);
     }
 
     public boolean isDream() {
@@ -197,7 +232,9 @@ public class ThrownZangetsuEntity extends Entity {
         if (this.owner != null && !this.owner.equals(player.getUuid())) {
             return ActionResult.PASS;
         }
-        if (this.isDream()) {
+        if (this.getKind() != ORDINARY) {
+            com.zangetsu.logic.Trial.pull((net.minecraft.server.network.ServerPlayerEntity) player, this);
+        } else if (this.isDream()) {
             Dream.pull((net.minecraft.server.network.ServerPlayerEntity) player, this);
         } else {
             Awakening.pickUp((net.minecraft.server.network.ServerPlayerEntity) player, this);

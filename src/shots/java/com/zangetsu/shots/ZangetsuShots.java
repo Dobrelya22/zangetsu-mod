@@ -14,7 +14,9 @@ import com.zangetsu.logic.Execution;
 import com.zangetsu.logic.HollowForm;
 import com.zangetsu.logic.Limbs;
 import com.zangetsu.logic.Reaction;
+import com.zangetsu.logic.SwordBreak;
 import com.zangetsu.logic.SwordStacks;
+import com.zangetsu.logic.Trial;
 import com.zangetsu.logic.ZangetsuData;
 import com.zangetsu.registry.ModAttachments;
 import net.minecraft.inventory.SimpleInventory;
@@ -196,6 +198,14 @@ public class ZangetsuShots implements ClientModInitializer {
     private void write() {
         // В основной части мобов убивают напрямую, проверка реакции идёт отдельным разделом.
         Reaction.enabled = false;
+        // Только сцена, где меч ломают, и поиск настоящего.
+        if ("break".equals(System.getProperty("zangetsu.shots.only"))) {
+            command("time set 6000", "weather clear", "gamerule doDaylightCycle false", "gamerule doMobSpawning false", "tp @p 0.5 -60 0.5 180 0", "execute as @p run zangetsu give");
+            pause(20);
+            writeBreak();
+            this.writeEnd();
+            return;
+        }
         // ---- Первый сон: сначала отказ, потом меч.
         writeFirstDream();
         if ("calling".equals(System.getProperty("zangetsu.shots.only"))) {
@@ -714,6 +724,7 @@ public class ZangetsuShots implements ClientModInitializer {
         pause(6);
         shot("woke_up_third_person");
         onServer(s -> check("после сна меч снова в руке", SwordStacks.isHolding(player(s))));
+        writeBreak();
         this.writeEnd();
     }
 
@@ -725,6 +736,173 @@ public class ZangetsuShots implements ClientModInitializer {
                     this.failed.isEmpty() ? "" : ", провалены: " + String.join("; ", this.failed));
             c.scheduleStop();
         });
+    }
+
+    /** Смертельный удар: Яхве ломает меч, игрок жив. Следующий сон — поиск настоящего среди фальшивых, настоящий подмигивает, потом меч снова с игроком. */
+    private void writeBreak() {
+        command("gamemode survival @p", "time set 6000", "tp @p 0.5 -60 0.5 180 0", "setblock 3 -60 0 minecraft:red_bed[facing=east,part=head]", "setblock 2 -60 0 minecraft:red_bed[facing=east,part=foot]");
+        view(Perspective.FIRST_PERSON);
+        look(180.0F, 0.0F);
+        pause(12);
+        onServer(s -> {
+            ServerPlayerEntity player = player(s);
+            player.setHealth(3.0F);
+            player.damage(player.getDamageSources().generic(), 1000.0F);
+        });
+        pause(2);
+        onServer(s -> {
+            ServerPlayerEntity player = player(s);
+            ZangetsuData data = ModAttachments.data(player);
+            check("смертельный удар: игрок жив, сцена началась", player.isAlive() && SwordBreak.isActive(player.getUuid()));
+            check("смертельный удар: меч забран и сломан", SwordStacks.find(player).isEmpty() && data.lost && data.broken && data.bonded);
+        });
+        pause(14);
+        shot("break_void");
+        pause(14);
+        shot("break_sword_rises");
+        pause(20);
+        shot("break_figure_opens");
+        pause(18);
+        shot("break_arm_reaches");
+        pause(24);
+        shot("break_grip");
+        pause(24);
+        shot("break_cracks");
+        pause(26);
+        shot("break_face_speaks");
+        pause(36);
+        shot("break_crush");
+        pause(8);
+        shot("break_snap");
+        pause(6);
+        shot("break_shards");
+        pause(18);
+        shot("break_shards_float");
+        pause(30);
+        shot("break_figure_leaves");
+        onServer(s -> check("сцена: меч так и не вернулся", SwordStacks.find(player(s)).isEmpty()));
+        pause(66);
+        shot("break_after");
+        onServer(s -> {
+            ServerPlayerEntity player = player(s);
+            check("после сцены: игрок свободен и жив", player.isAlive() && !SwordBreak.isActive(player.getUuid()) && !Cinematic.isLocked(player) && !player.hasNoGravity());
+            check("после сцены: как после тотема", player.hasStatusEffect(net.minecraft.entity.effect.StatusEffects.REGENERATION) && player.hasStatusEffect(net.minecraft.entity.effect.StatusEffects.ABSORPTION));
+        });
+        // Сон: поле мечей и Яхве.
+        command("time set 18000", "tp @p 0.5 -60 0.5 180 0");
+        pause(6);
+        sleep();
+        waitFor("снится поле мечей", c -> c.world != null && c.world.getRegistryKey() == Dream.WORLD);
+        pause(70);
+        shot("trial_figure_comes");
+        pause(50);
+        onServer(s -> check("поле мечей: идёт испытание, мечи фальшивые", Trial.isActive(player(s).getUuid()) && fakes(player(s)) >= 40));
+        shot("trial_speech");
+        onServer(s -> {
+            ServerPlayerEntity player = player(s);
+            check("поле мечей: среди них ровно один настоящий", realSword(player) != null);
+            check("поле мечей: кроме настоящего глаз снаружи", realSword(player) != null && fakes(player) > 0 && !Trial.isSearching(player.getUuid()));
+            Trial.hurry(player);
+        });
+        pause(4);
+        // Настоящий и фальшивый вблизи: встаём лицом к глазу, у настоящего лезвие справа, у фальшивого слева.
+        view(Perspective.FIRST_PERSON);
+        onServer(s -> {
+            ServerPlayerEntity player = player(s);
+            check("поиски начались", Trial.isSearching(player.getUuid()));
+            faceEye(player, realSword(player));
+        });
+        pause(5);
+        act(c -> {
+            ThrownZangetsuEntity sword = nearestClient(c);
+            if (sword != null) {
+                lookAt(c, sword.getPos().add(0.0, 0.9, 0.0));
+            }
+        });
+        pause(5);
+        shot("trial_close_real");
+        onServer(s -> faceEye(player(s), nearestFake(player(s))));
+        pause(5);
+        act(c -> {
+            ThrownZangetsuEntity sword = nearestClient(c);
+            if (sword != null) {
+                lookAt(c, sword.getPos().add(0.0, 0.9, 0.0));
+            }
+        });
+        pause(5);
+        shot("trial_close_fake");
+        // Взял подделку: она рассыпается.
+        onServer(s -> {
+            ServerPlayerEntity player = player(s);
+            ThrownZangetsuEntity fake = nearestFake(player);
+            int before = fakes(player);
+            check("подделка найдена", fake != null);
+            if (fake != null) {
+                Trial.pull(player, fake);
+                check("взял подделку: она рассыпалась, игрок всё ещё во сне", Trial.fakesTaken(player.getUuid()) == 1 && !fake.isAlive() && fakes(player) == before - 1 && Dream.inDream(player));
+            }
+        });
+        pause(10);
+        shot("trial_fake_gone");
+        onServer(s -> Trial.hurry(player(s)));
+        pause(4);
+        onServer(s -> check("минута прошла: настоящий подмигивает", Trial.isWinking(player(s).getUuid()) && realSword(player(s)) != null && realSword(player(s)).isWinking()));
+        act(c -> {
+            ThrownZangetsuEntity sword = nearestWinking(c);
+            if (sword != null) {
+                lookAt(c, sword.getPos().add(0.0, 0.8, 0.0));
+            }
+        });
+        pause(14);
+        shot("trial_wink_open");
+        pause(16);
+        shot("trial_wink_shut");
+        onServer(s -> {
+            ServerPlayerEntity player = player(s);
+            ThrownZangetsuEntity real = realSword(player);
+            if (real != null) {
+                Trial.pull(player, real);
+            }
+        });
+        pause(30);
+        shot("trial_found");
+        waitFor("проснулся с мечом", c -> c.world != null && c.world.getRegistryKey() == World.OVERWORLD);
+        pause(20);
+        shot("trial_back");
+        onServer(s -> {
+            ServerPlayerEntity player = player(s);
+            ZangetsuData data = ModAttachments.data(player);
+            check("нашёл настоящего: проснулся с мечом, меч больше не сломан", !Trial.isActive(player.getUuid()) && !data.broken && !data.lost && data.dream == null && SwordStacks.isHolding(player));
+        });
+    }
+
+    /** Поставить игрока лицом к той стороне меча, где у него глаз: у настоящего это +z меча, у фальшивого −z. */
+    private static void faceEye(ServerPlayerEntity player, ThrownZangetsuEntity sword) {
+        if (sword != null) {
+            Vec3d normal = Vec3d.fromPolar(0.0F, sword.getYaw()).multiply(sword.getKind() == ThrownZangetsuEntity.FAKE ? -1.0 : 1.0);
+            Vec3d p = sword.getPos().add(normal.multiply(2.0));
+            player.networkHandler.requestTeleport(p.x, sword.getY() + 0.6, p.z, 0.0F, 10.0F);
+        }
+    }
+
+    private static int fakes(ServerPlayerEntity player) {
+        return player.getServerWorld().getEntitiesByClass(ThrownZangetsuEntity.class, new Box(player.getBlockPos()).expand(70.0), s -> s.getKind() == ThrownZangetsuEntity.FAKE).size();
+    }
+
+    private static ThrownZangetsuEntity realSword(ServerPlayerEntity player) {
+        return player.getServerWorld().getEntitiesByClass(ThrownZangetsuEntity.class, new Box(player.getBlockPos()).expand(90.0), s -> s.getKind() == ThrownZangetsuEntity.REAL).stream().findFirst().orElse(null);
+    }
+
+    private static ThrownZangetsuEntity nearestFake(ServerPlayerEntity player) {
+        return player.getServerWorld().getEntitiesByClass(ThrownZangetsuEntity.class, new Box(player.getBlockPos()).expand(60.0), s -> s.getKind() == ThrownZangetsuEntity.FAKE).stream()
+                .min(java.util.Comparator.comparingDouble(s -> s.squaredDistanceTo(player))).orElse(null);
+    }
+
+    private static ThrownZangetsuEntity nearestWinking(MinecraftClient client) {
+        if (client.world == null || client.player == null) {
+            return null;
+        }
+        return client.world.getEntitiesByClass(ThrownZangetsuEntity.class, client.player.getBoundingBox().expand(64.0), ThrownZangetsuEntity::isWinking).stream().findFirst().orElse(null);
     }
 
     private void sleep() {

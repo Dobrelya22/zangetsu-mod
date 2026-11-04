@@ -44,8 +44,8 @@ public final class Calling {
     /** Сколько тиков игрок должен пролежать, прежде чем сон начнётся: экран успевает потемнеть. */
     private static final int FALL_ASLEEP = 40;
     /** Где всё стоит относительно места появления (блоки вперёд и вверх). */
-    private static final double FIGURE_AHEAD = 24.0, FIGURE_UP = 22.0, SWORD_AHEAD = 3.8;
-    private static final float FIGURE_SCALE = 1.45F;
+    private static final double FIGURE_AHEAD = 30.0, FIGURE_UP = 25.0, SWORD_AHEAD = 3.8;
+    private static final float FIGURE_SCALE = 5.8F;
     private static final int BED_BEHIND = 5;
     /** Дальше этого сон не отпускает. */
     private static final double ROAM_LIMIT = 52.0;
@@ -119,7 +119,7 @@ public final class Calling {
         SESSIONS.put(player.getUuid(), session);
 
         // Смотрит туда, где сейчас проступит фигура.
-        player.teleport(world, session.home.x, session.home.y, session.home.z, 0.0F, -34.0F);
+        player.teleport(world, session.home.x, session.home.y, session.home.z, 0.0F, -38.0F);
         if (player.interactionManager.getGameMode() != GameMode.SPECTATOR) {
             player.changeGameMode(GameMode.ADVENTURE);
         }
@@ -138,7 +138,7 @@ public final class Calling {
     }
 
     /** Небольшая поляна посреди холмов: ровная земля под мечом и кроватью, края плавно уходят в рельеф. Возвращает высоту земли в середине. */
-    private static int clearing(ServerWorld world, Vec3d center) {
+    static int clearing(ServerWorld world, Vec3d center) {
         int cx = MathHelper.floor(center.x), cz = MathHelper.floor(center.z), radius = 24;
         int middle = surface(world, cx, cz);
         int flags = Block.NOTIFY_LISTENERS | Block.FORCE_STATE;
@@ -199,6 +199,11 @@ public final class Calling {
 
     private static void say(ServerPlayerEntity player, String line, int ticks) {
         send(player, CallingPayload.SPEECH, "zangetsu.calling." + line, ticks);
+        Session session = SESSIONS.get(player.getUuid());
+        ZangetsuSpiritEntity figure = session == null ? null : figure(player, session);
+        if (figure != null) {
+            figure.speak(ticks);
+        }
     }
 
     private static void lookAt(ServerPlayerEntity player, Vec3d at, int ticks) {
@@ -256,7 +261,8 @@ public final class Calling {
         if (t == FIGURE_AT) {
             Vec3d at = session.home.add(0.0, FIGURE_UP, FIGURE_AHEAD);
             ZangetsuSpiritEntity figure = ZangetsuSpiritEntity.summon(world, at, 180.0F, FIGURE_SCALE, player.getUuid());
-            figure.bindToCalling();
+            UUID uuid = player.getUuid();
+            figure.keepWhile(() -> SESSIONS.containsKey(uuid));
             session.figure = figure.getUuid();
         }
         if (t >= LINE_1 && t < SWORD_AT + HOLD && (t - LINE_1) % 44 == 0) {
@@ -368,7 +374,7 @@ public final class Calling {
         send(player, CallingPayload.BARS_ON, "", 0);
         ZangetsuSpiritEntity figure = figure(player, session);
         if (figure != null) {
-            lookAt(player, figure.getPos().add(0.0, -1.0, 0.0), 26);
+            lookAt(player, figure.getPos().add(0.0, 8.0, -6.0), 26);
             figure.setPhase(ZangetsuSpiritEntity.WRATH);
         }
         Fx.sound(player, SoundEvents.ENTITY_WARDEN_ANGRY, 1.0F, 0.5F);

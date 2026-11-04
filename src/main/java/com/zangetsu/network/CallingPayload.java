@@ -21,6 +21,8 @@ public record CallingPayload(int event, String key, int ticks, double x, double 
     public static final int FADE_OUT = 5;
     /** Сон кончился: если было темно, чернота расходится за {@code ticks}. */
     public static final int END = 6;
+    /** Мир тает в бледном небе за {@code ticks} и возвращается за {@code ticks}. */
+    public static final int VOID_ON = 7, VOID_OFF = 8;
 
     public static final CustomPayload.Id<CallingPayload> ID = new CustomPayload.Id<>(ZangetsuMod.id("calling"));
     public static final PacketCodec<ByteBuf, CallingPayload> CODEC = PacketCodec.tuple(

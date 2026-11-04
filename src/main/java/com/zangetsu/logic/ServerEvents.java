@@ -46,11 +46,13 @@ public final class ServerEvents {
             Scheduler.clear();
             Reaction.clear();
             Calling.clear();
+            SwordBreak.clear();
+            Trial.clear();
         });
 
         ServerLivingEntityEvents.ALLOW_DAMAGE.register(ServerEvents::allowDamage);
         // Удар, который убил бы врага, вместо этого начинает проверку реакции.
-        ServerLivingEntityEvents.ALLOW_DEATH.register((entity, source, amount) -> !Reaction.interceptDeath(entity, source));
+        ServerLivingEntityEvents.ALLOW_DEATH.register((entity, source, amount) -> !Reaction.interceptDeath(entity, source) && !SwordBreak.interceptDeath(entity, source));
         ServerEntityCombatEvents.AFTER_KILLED_OTHER_ENTITY.register((world, killer, killed) -> {
             if (killer instanceof ServerPlayerEntity player) {
                 onKill(player, killed);
@@ -84,6 +86,8 @@ public final class ServerEvents {
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
             ServerPlayerEntity player = handler.player;
             Calling.disconnect(player);
+            SwordBreak.disconnect(player);
+            Trial.disconnect(player);
             Awakening.cancel(player);
             Sync.forget(player);
             Eye.forget(player);
@@ -146,7 +150,7 @@ public final class ServerEvents {
             return true;
         }
         // Во сне ничто не ранит.
-        if ((Awakening.protects(player) || Calling.inCalling(player)) && !source.isIn(DamageTypeTags.BYPASSES_INVULNERABILITY)) {
+        if ((Awakening.protects(player) || Calling.inCalling(player) || SwordBreak.protects(player) || Trial.isActive(player.getUuid())) && !source.isIn(DamageTypeTags.BYPASSES_INVULNERABILITY)) {
             return false;
         }
         // Пока идёт сцена превращения, игрок не управляет собой: ранить его было бы нечестно. То же и в сцене за спиной врага.
@@ -176,6 +180,8 @@ public final class ServerEvents {
         ZangetsuData data = ModAttachments.data(player);
         Awakening.tick(player);
         Calling.tick(player, data);
+        SwordBreak.tick(player);
+        Trial.tick(player, data);
         if (!data.bonded) {
             List<ItemStack> swords = SwordStacks.find(player);
             if (!swords.isEmpty()) {
@@ -227,6 +233,7 @@ public final class ServerEvents {
         }
         data.bonded = true;
         data.lost = false;
+        data.broken = false;
         data.refused = false;
         Awakening.applyHealthBonus(player);
         SwordStacks.refreshAll(player);
@@ -246,11 +253,12 @@ public final class ServerEvents {
             kept = true;
             SwordStacks.apply(sword, player);
         }
-        if (!kept && !data.lost && data.dream == null && !Awakening.isActive(player.getUuid())) {
+        if (!kept && !data.lost && data.dream == null && !Awakening.isActive(player.getUuid()) && !SwordBreak.isActive(player.getUuid())) {
             data.lost = true;
             player.sendMessage(Text.translatable("zangetsu.lost").formatted(Formatting.GRAY, Formatting.ITALIC), false);
         } else if (kept && data.lost) {
             data.lost = false;
+            data.broken = false;
         }
     }
 }

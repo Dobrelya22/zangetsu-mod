@@ -24,21 +24,24 @@ public final class DreamSky {
     }
 
     public static void render(WorldRenderContext context) {
-        Matrix4f view = context.positionMatrix();
-        float[] fog = RenderSystem.getShaderFogColor();
         float time = context.world().getTime() + context.tickCounter().getTickDelta(false);
+        paint(context.positionMatrix(), RenderSystem.getShaderFogColor(), time, 1.0F);
+    }
 
+    /** Нарисовать небо вокруг камеры. {@code strength} меньше единицы: сквозь него ещё виден мир. */
+    public static void paint(Matrix4f view, float[] fog, float time, float strength) {
         RenderSystem.depthMask(false);
         RenderSystem.disableCull();
         RenderSystem.enableBlend();
         RenderSystem.defaultBlendFunc();
+        RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, strength);
         gradient(view, fog);
         RenderSystem.setShader(GameRenderer::getPositionTexColorProgram);
         RenderSystem.setShaderTexture(0, CLOUDS);
-        RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
         // Верхний слой большой и почти неподвижен, под ним плывут клочья поменьше и потемнее.
         clouds(view, 0.22F, time * 0.00007F, time * 0.00002F, 1.0F, 1.0F);
         clouds(view, 0.5F, time * 0.00017F, -time * 0.00006F, 0.86F, 0.72F);
+        RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
         RenderSystem.disableBlend();
         RenderSystem.enableCull();
         RenderSystem.depthMask(true);
@@ -48,7 +51,8 @@ public final class DreamSky {
         RenderSystem.setShader(GameRenderer::getPositionColorProgram);
         BufferBuilder buffer = Tessellator.getInstance().begin(VertexFormat.DrawMode.QUADS, VertexFormats.POSITION_COLOR);
         for (int i = 0; i < RINGS; i++) {
-            float e0 = elevation(i), e1 = elevation(i + 1);
+            // Вся сфера: от надира до зенита.
+            float e0 = -MathHelper.HALF_PI + MathHelper.PI * i / RINGS, e1 = -MathHelper.HALF_PI + MathHelper.PI * (i + 1) / RINGS;
             for (int j = 0; j < SEGMENTS; j++) {
                 float a0 = MathHelper.TAU * j / SEGMENTS, a1 = MathHelper.TAU * (j + 1) / SEGMENTS;
                 skyVertex(buffer, view, fog, e0, a0);
@@ -68,7 +72,7 @@ public final class DreamSky {
     private static void skyVertex(BufferBuilder buffer, Matrix4f view, float[] fog, float elevation, float angle) {
         float dy = MathHelper.sin(elevation), flat = MathHelper.cos(elevation);
         // Зенит чуть темнее и холоднее горизонта.
-        float k = MathHelper.clamp(dy * 1.4F, 0.0F, 1.0F);
+        float k = MathHelper.clamp(Math.abs(dy) * 1.4F, 0.0F, 1.0F);
         buffer.vertex(view, MathHelper.cos(angle) * flat * RADIUS, dy * RADIUS, MathHelper.sin(angle) * flat * RADIUS)
                 .color(fog[0] * (1.0F - k * 0.16F), fog[1] * (1.0F - k * 0.13F), fog[2] * (1.0F - k * 0.08F), 1.0F);
     }

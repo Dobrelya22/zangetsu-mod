@@ -55,6 +55,7 @@ public final class PlayerPoses {
             case AnimationPayload.HOLLOW_FINAL -> rite(model, player, t, animationProgress);
             case AnimationPayload.GETSUGA -> getsuga(model, t, animationProgress);
             case AnimationPayload.EXECUTE_BEHIND -> behind(model, t);
+            case AnimationPayload.SWORD_BROKEN -> broken(model, player, animationProgress - animation.startAge(), animationProgress);
             default -> {
             }
         }
@@ -246,6 +247,42 @@ public final class PlayerPoses {
             plantFoot(player, mainLeg, mainLegIndex, ground, hip - 5.1F * lunge, k);
             plantFoot(player, offLeg, offLegIndex, ground, hip + 8.0F * lunge, k);
         }
+    }
+
+    // ---------------------------------------------------------------- меч ломают
+
+    private static final float BROKEN_DIP = 7.6F;
+
+    /** Смертельный удар сбил его на колено: смотрит вверх на меч, тянет к нему руку, а когда клинок ломается, рука падает, голова опускается. Потом медленно встаёт. */
+    private static void broken(BipedEntityModel<?> m, LivingEntity player, float tick, float time) {
+        boolean lefty = player.getMainArm() == Arm.LEFT;
+        float side = lefty ? -1.0F : 1.0F;
+        ModelPart off = lefty ? m.rightArm : m.leftArm, main = lefty ? m.leftArm : m.rightArm;
+        ModelPart offLeg = lefty ? m.rightLeg : m.leftLeg, mainLeg = lefty ? m.leftLeg : m.rightLeg;
+        int offLegIndex = lefty ? RIGHT_LEG : LEFT_LEG, mainLegIndex = lefty ? LEFT_LEG : RIGHT_LEG;
+        float kneel = brokenKneel(tick);
+        float k = Math.min(1.0F, kneel * 5.0F);
+        float ground = LEG_GROUND - BROKEN_DIP * kneel;
+        float hip = offLeg.pivotZ;
+        plantFoot(player, offLeg, offLegIndex, ground, hip - 6.5F * kneel, k);
+        plantFoot(player, mainLeg, mainLegIndex, ground - SHIN_ON_GROUND * kneel, hip + 6.6F * kneel, k);
+        Vector3f knee = new Vector3f(offLeg.pivotX, offLeg.pivotY + 6.0F * MathHelper.cos(offLeg.pitch) - 1.6F, offLeg.pivotZ + 6.0F * MathHelper.sin(offLeg.pitch));
+        reach(player, off, lefty ? RIGHT_ARM : LEFT_ARM, side, knee, kneel);
+        // Тянется к мечу, пока тот цел; рука дрожит всё сильнее.
+        float raise = phase(tick, 26.0F, 46.0F) * (1.0F - phase(tick, com.zangetsu.logic.SwordBreak.SNAP, com.zangetsu.logic.SwordBreak.SNAP + 8.0F));
+        float tremble = MathHelper.sin(time * 3.3F) * 0.03F * phase(tick, com.zangetsu.logic.SwordBreak.GRIP, com.zangetsu.logic.SwordBreak.SNAP);
+        main.pitch = MathHelper.lerp(raise, MathHelper.lerp(kneel, main.pitch, -0.12F), -1.3F) + tremble;
+        main.yaw = MathHelper.lerp(raise, main.yaw, -side * 0.12F);
+        main.roll = MathHelper.lerp(kneel, main.roll, side * 0.06F);
+        // Смотрит вверх на меч и фигуру, после перелома голова падает.
+        float bow = phase(tick, com.zangetsu.logic.SwordBreak.SNAP + 4.0F, com.zangetsu.logic.SwordBreak.SNAP + 20.0F);
+        m.head.pitch = MathHelper.lerp(kneel, m.head.pitch, MathHelper.lerp(bow, -0.42F, 0.5F));
+        m.head.yaw = MathHelper.lerp(kneel, m.head.yaw, 0.0F);
+        leanBody(m, 0.2F * kneel + 0.14F * bow * kneel, 0.0F);
+    }
+
+    private static float brokenKneel(float tick) {
+        return phase(tick, 0.0F, 9.0F) * (1.0F - phase(tick, com.zangetsu.logic.SwordBreak.TOTAL - 30.0F, com.zangetsu.logic.SwordBreak.TOTAL - 6.0F));
     }
 
     // ---------------------------------------------------------------- за спиной врага
@@ -549,6 +586,9 @@ public final class PlayerPoses {
     /** Поворот всего тела в приёме (градусы) и присед (пиксели): {разворот, присед}. */
     public static float[] root(LivingEntity player, float time) {
         ClientState.Animation animation = ClientState.animation(player);
+        if (animation != null && animation.type() == AnimationPayload.SWORD_BROKEN) {
+            return new float[]{0.0F, BROKEN_DIP * brokenKneel(time - animation.startAge())};
+        }
         if (animation != null && animation.type() == AnimationPayload.HOLLOW_FINAL) {
             float t = MathHelper.clamp((time - animation.startAge()) / Math.max(1, animation.duration()), 0.0F, 1.0F);
             float[] v = SwordMoves.sample(SwordMoves.RITE.body(), t, ZERO);

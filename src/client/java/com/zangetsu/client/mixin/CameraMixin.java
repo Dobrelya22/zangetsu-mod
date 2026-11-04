@@ -53,6 +53,6 @@ public abstract class CameraMixin {
         this.setPos(MathHelper.lerp(tickDelta, focused.prevX, focused.getX()) - Math.sin(yawRad) * ahead,
                 MathHelper.lerp(tickDelta, focused.prevY, focused.getY()) + MathHelper.lerp(tickDelta, this.lastCameraY, this.cameraY) - 0.35 + frame[4],
                 MathHelper.lerp(tickDelta, focused.prevZ, focused.getZ()) + Math.cos(yawRad) * ahead);
-        this.moveBy(-this.clipToSpace(frame[2]), 0.0F, 0.0F);
+        this.moveBy(-(com.zangetsu.client.CallingScene.voidAmount() > 0.2F ? frame[2] : this.clipToSpace(frame[2])), 0.0F, 0.0F);
     }
 }

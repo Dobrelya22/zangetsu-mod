@@ -26,7 +26,29 @@ public abstract class WorldRendererMixin {
         CrescentMoon.render(positionMatrix, tickDelta);
     }
 
-    /** Третий вызов отрисовки в renderSky — луна (до неё: закатное сияние и солнце). */
+/** В бледной пустоте нет ни облаков, ни дождя, ни воды. */
+@Inject(method = "renderClouds", at = @At("HEAD"), cancellable = true)
+private void zangetsu$noClouds(CallbackInfo ci) {
+    if (com.zangetsu.client.CallingScene.voidFull()) {
+        ci.cancel();
+    }
+}
+
+@Inject(method = "renderWeather", at = @At("HEAD"), cancellable = true)
+private void zangetsu$noWeather(CallbackInfo ci) {
+    if (com.zangetsu.client.CallingScene.voidFull()) {
+        ci.cancel();
+    }
+}
+
+@Inject(method = "renderLayer", at = @At("HEAD"), cancellable = true)
+private void zangetsu$noWater(net.minecraft.client.render.RenderLayer layer, double x, double y, double z, Matrix4f a, Matrix4f b, CallbackInfo ci) {
+    if ((layer == net.minecraft.client.render.RenderLayer.getTranslucent() || layer == net.minecraft.client.render.RenderLayer.getTripwire()) && com.zangetsu.client.CallingScene.voidFull()) {
+        ci.cancel();
+    }
+}
+
+/** Третий вызов отрисовки в renderSky — луна (до неё: закатное сияние и солнце). */
     @WrapOperation(method = "renderSky(Lorg/joml/Matrix4f;Lorg/joml/Matrix4f;FLnet/minecraft/client/render/Camera;ZLjava/lang/Runnable;)V",
             at = @At(value = "INVOKE", target = "Lnet/minecraft/client/render/BufferRenderer;drawWithGlobalProgram(Lnet/minecraft/client/render/BuiltBuffer;)V",
                     ordinal = 2))

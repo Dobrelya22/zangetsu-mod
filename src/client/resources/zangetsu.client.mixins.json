@@ -6,10 +6,12 @@
   "client": [
     "BackgroundRendererMixin",
     "BipedEntityModelMixin",
+    "BlockEntityRenderDispatcherMixin",
     "CameraMixin",
     "ClientPlayerEntityMixin",
     "ClientWorldMixin",
     "EndermanEntityModelMixin",
+    "EntityRenderDispatcherMixin",
     "EntityLookMixin",
     "GameRendererMixin",
     "HeldItemFeatureRendererMixin",

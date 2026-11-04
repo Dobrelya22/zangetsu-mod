@@ -83,6 +83,10 @@ public class ZangetsuItemRenderer implements BuiltinItemRendererRegistry.Dynamic
     public static final float THIRD_PERSON_SCALE = 1.45F;
     /** След клинка: от середины клинка до острия (пиксели модели от точки хвата). */
     public static final float TRAIL_NEAR = 10.5F, TRAIL_FAR = 18.3F;
+    /** Глаз на другой стороне клинка, заданный на время рисования: у фальшивых мечей он снаружи (0 — как обычно). */
+    public static int eyeSideOverride;
+    /** Клинка нет, только рукоять: меч сломан. */
+    public static boolean hiltOnly;
     /** Поворот меча от первого лица, заданный приёмом на время рисования (null — обычный). */
     public static Quaternionf firstPersonRotation;
 
@@ -133,11 +137,13 @@ public class ZangetsuItemRenderer implements BuiltinItemRendererRegistry.Dynamic
         }
         hilt(mesh);
         collar(mesh);
-        blade(mesh, burning);
-        if (burning) {
-            burnCracks(mesh, matrices, consumers, overlay, mode);
+        if (!hiltOnly) {
+            blade(mesh, burning);
+            if (burning) {
+                burnCracks(mesh, matrices, consumers, overlay, mode);
+            }
+            renderEye(eye, mode, matrices, consumers, light, overlay);
         }
-        renderEye(eye, mode, matrices, consumers, light, overlay);
         matrices.pop();
     }
 
@@ -777,6 +783,9 @@ public class ZangetsuItemRenderer implements BuiltinItemRendererRegistry.Dynamic
      * — к телу. Это сторона +w, а у меча в левой руке, который держится так же, но тело с другой стороны, — −w.
      */
     private static int eyeSide(ModelTransformationMode mode) {
+        if (eyeSideOverride != 0) {
+            return eyeSideOverride;
+        }
         return mode == ModelTransformationMode.THIRD_PERSON_LEFT_HAND ? -1 : 1;
     }
 

@@ -69,6 +69,10 @@ public class ZangetsuClient implements ClientModInitializer {
         DimensionRenderingRegistry.registerSkyRenderer(Calling.WORLD, DreamSky::render);
         DimensionRenderingRegistry.registerCloudRenderer(Calling.WORLD, context -> {
         });
+        DimensionRenderingRegistry.registerSkyRenderer(com.zangetsu.logic.Dream.WORLD, DreamSky::render);
+        DimensionRenderingRegistry.registerCloudRenderer(com.zangetsu.logic.Dream.WORLD, context -> {
+        });
+        WorldRenderEvents.BEFORE_ENTITIES.register(com.zangetsu.client.render.DreamVoid::render);
 
         KeyBindings.register();
         HudRenderCallback.EVENT.register(ZangetsuHud::render);
@@ -152,6 +156,24 @@ public class ZangetsuClient implements ClientModInitializer {
                 CameraDirector.begin(payload.duration() + 8,
                         new CameraDirector.Cut(0, new CameraDirector.Shot(214.0F, 198.0F, 2.0F, 1.95F, 1.6F, 0.0F, 0.2F)),
                         new CameraDirector.Cut(HollowForm.MASK_WHIP, new CameraDirector.Shot(198.0F, 180.0F, -3.0F, 2.0F, 3.4F, 0.0F, 0.0F)));
+                return;
+            }
+            if (entity == client.player && payload.animation() == AnimationPayload.SWORD_BROKEN) {
+                // Одним дублем: от плеча игрока на всю фигуру, к руке на клинке, к лицу, пока он говорит, снова к руке в миг перелома, и назад.
+                float grip = com.zangetsu.logic.SwordBreak.GRIP, snap = com.zangetsu.logic.SwordBreak.SNAP, total = com.zangetsu.logic.SwordBreak.TOTAL;
+                CameraDirector.fly(payload.duration() + 4,
+                        new CameraDirector.Key(0.0F, 38.0F, 8.0F, 5.0F, 0.4F, -0.1F),
+                        new CameraDirector.Key(34.0F, 24.0F, -4.0F, 8.0F, 1.2F, 0.8F),
+                        new CameraDirector.Key(64.0F, 14.0F, -8.0F, 16.0F, 3.0F, 3.0F),
+                        new CameraDirector.Key(grip - 4.0F, 40.0F, -6.0F, 6.0F, 1.75F, 0.4F),
+                        new CameraDirector.Key(grip + 12.0F, 58.0F, -2.0F, 4.4F, 1.75F, 0.3F),
+                        new CameraDirector.Key(grip + 40.0F, 8.0F, -3.0F, 7.0F, 5.6F, 4.45F),
+                        new CameraDirector.Key(snap - 22.0F, -8.0F, -5.0F, 6.2F, 5.6F, 4.4F),
+                        new CameraDirector.Key(snap - 6.0F, -30.0F, 2.0F, 4.6F, 1.75F, 0.35F),
+                        new CameraDirector.Key(snap + 6.0F, -36.0F, 4.0F, 6.0F, 1.75F, 0.3F),
+                        new CameraDirector.Key(snap + 30.0F, -20.0F, -4.0F, 12.0F, 2.0F, 1.7F),
+                        new CameraDirector.Key(total - 30.0F, 10.0F, -2.0F, 12.0F, 1.0F, 1.2F),
+                        new CameraDirector.Key(total + 4.0F, 25.0F, 10.0F, 5.0F, 0.0F, 0.0F));
                 return;
             }
             if (entity == client.player && payload.animation() == AnimationPayload.TOUCH_HANDLE) {

@@ -109,10 +109,22 @@ public class ThrownZangetsuRenderer extends EntityRenderer<ThrownZangetsuEntity>
         // Картинка меча лежит по диагонали (остриё вверху справа) — поворот на −135° ставит его остриём вниз.
         matrices.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(-135.0F));
         matrices.scale(SCALE, SCALE, SCALE);
+        // У подделок глаз снаружи клинка. Настоящий, если его долго не находят, подмигивает.
+        int kind = entity.getKind();
+        boolean winks = kind == ThrownZangetsuEntity.REAL && state == ThrownZangetsuEntity.STUCK && entity.isWinking();
+        if (winks) {
+            stack = this.awake;
+            EyeTracker.forcedOpenness = ThrownZangetsuEntity.winkOpenness(entity.age + tickDelta);
+        }
+        ZangetsuItemRenderer.eyeSideOverride = kind == ThrownZangetsuEntity.FAKE ? -1 : 0;
         net.minecraft.entity.Entity previous = EyeTracker.push(entity);
         this.itemRenderer.renderItem(stack, ModelTransformationMode.NONE, light, OverlayTexture.DEFAULT_UV, matrices, consumers,
                 entity.getWorld(), entity.getId());
         EyeTracker.pop(previous);
+        ZangetsuItemRenderer.eyeSideOverride = 0;
+        if (winks) {
+            EyeTracker.forcedOpenness = -1.0F;
+        }
         matrices.pop();
         super.render(entity, yaw, tickDelta, matrices, consumers, light);
     }

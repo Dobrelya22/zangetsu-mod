@@ -4,7 +4,7 @@ using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
 
-public static class ZangetsuTextures
+public static partial class ZangetsuTextures
 {
     // ------------------------------------------------------------------ общее
 
@@ -91,8 +91,6 @@ public static class ZangetsuTextures
         Out(EyePartsHD(), assets, "textures/entity/zangetsu_eye.png", 2);
         Out(White(), assets, "textures/misc/white.png", 16);
         Out(Icon(), assets, "icon.png", 4);
-        Out(SpiritEye(), assets, "textures/entity/spirit_eye.png", 1);
-        Out(SpiritPupil(), assets, "textures/entity/spirit_pupil.png", 2);
         Out(DreamClouds(), assets, "textures/environment/dream_clouds.png", 1);
         Out(HollowMaskHD(false), assets, "textures/entity/hollow_mask.png", 3);
         Out(HollowMaskHD(true), assets, "textures/entity/hollow_final.png", 3);
@@ -553,51 +551,6 @@ public static class ZangetsuTextures
                     a = glow * 0.8 * edge;
                 }
                 c.Set(x, y, Color.FromArgb(Cl(a * 255), col.R, col.G, col.B));
-            }
-        }
-        return c;
-    }
-
-    /** Белок глаза фигуры: плоская проекция полусферы. Края темнее, у края тонкие жилки, сверху тень от века. */
-    static Canvas SpiritEye()
-    {
-        int size = 256;
-        Canvas c = new Canvas(size, size);
-        for (int y = 0; y < size; y++)
-        {
-            for (int x = 0; x < size; x++)
-            {
-                double u = (x + 0.5) / size * 2 - 1, v = (y + 0.5) / size * 2 - 1;
-                double r = Math.Sqrt(u * u + v * v);
-                double angle = Math.Atan2(v, u);
-                double edge = Smooth(0.55, 1.0, r);
-                double light = 1.0 - edge * edge * 0.38 - Smooth(-0.35, -0.95, v) * 0.22;
-                Color col = C(Cl(250 * light), Cl(247 * light), Cl(240 * light));
-                double vein = Math.Abs(Math.Sin(angle * 9.0 + 2.2 * Math.Sin(r * 11.0 + angle * 3.0)));
-                col = Mix(col, C(178, 52, 52), Smooth(0.10, 0.0, vein) * Smooth(0.45, 0.88, r) * 0.55);
-                c.Set(x, y, col);
-            }
-        }
-        return c;
-    }
-
-    /** Зрачок фигуры: тёмно-красная вертикальная щель и едва заметное красное вокруг неё. */
-    static Canvas SpiritPupil()
-    {
-        int w = 128, h = 192;
-        Canvas c = new Canvas(w, h);
-        for (int y = 0; y < h; y++)
-        {
-            for (int x = 0; x < w; x++)
-            {
-                double a = (x + 0.5) / w * 2 - 1, b = (y + 0.5) / h * 2 - 1;
-                double half = 0.27 * (1 - b * b);
-                double s = half <= 0.001 ? 99 : Math.Abs(a) / half;
-                double core = Smooth(1.1, 0.9, s);
-                double halo = Math.Exp(-Math.Max(0.0, s - 1.0) * 0.55) * Sat(1 - a * a) * Sat(1 - b * b) * 0.5;
-                Color inner = Mix(C(150, 8, 18), C(16, 0, 2), Smooth(0.95, 0.2, s));
-                Color col = Mix(C(150, 18, 24), inner, core);
-                c.Set(x, y, CA(Cl(Math.Max(core, halo) * 255), col.R, col.G, col.B));
             }
         }
         return c;

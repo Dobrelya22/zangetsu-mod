@@ -18,7 +18,8 @@ public final class ZangetsuData {
             Codec.BOOL.optionalFieldOf("hollow_active", false).forGetter(d -> d.hollowActive),
             Codec.BOOL.optionalFieldOf("lost", false).forGetter(d -> d.lost),
             DreamReturn.CODEC.optionalFieldOf("dream").forGetter(d -> Optional.ofNullable(d.dream)),
-            Codec.BOOL.optionalFieldOf("refused", false).forGetter(d -> d.refused)
+            Codec.BOOL.optionalFieldOf("refused", false).forGetter(d -> d.refused),
+            Codec.BOOL.optionalFieldOf("broken", false).forGetter(d -> d.broken)
     ).apply(instance, ZangetsuData::new));
 
     /** Меч уже пришёл к игроку. */
@@ -35,13 +36,15 @@ public final class ZangetsuData {
     public DreamReturn dream;
     /** Отказался от меча в первом сне: больше он не придёт. */
     public boolean refused;
+    /** Яхве сломал меч, спасая от смерти: вернуть его можно, только найдя настоящего среди фальшивых. */
+    public boolean broken;
 
     public ZangetsuData() {
-        this(false, 0, -1L, 0, false, false, Optional.empty(), false);
+        this(false, 0, -1L, 0, false, false, Optional.empty(), false, false);
     }
 
     private ZangetsuData(boolean bonded, int bond, long hollowDay, int hollowUsed, boolean hollowActive, boolean lost,
-            Optional<DreamReturn> dream, boolean refused) {
+            Optional<DreamReturn> dream, boolean refused, boolean broken) {
         this.bonded = bonded;
         this.bond = bond;
         this.hollowDay = hollowDay;
@@ -50,6 +53,7 @@ public final class ZangetsuData {
         this.lost = lost;
         this.dream = dream.orElse(null);
         this.refused = refused;
+        this.broken = broken;
     }
 
     public int level() {

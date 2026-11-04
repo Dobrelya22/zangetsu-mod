@@ -34,4 +34,13 @@ public abstract class BackgroundRendererMixin {
             RenderSystem.clearColor(red, green, blue, 0.0F);
         }
     }
+
+    /** В пустоте тумана нет, даже если удар настиг под водой. */
+    @Inject(method = "applyFog", at = @At("RETURN"))
+    private static void zangetsu$noVoidFog(Camera camera, BackgroundRenderer.FogType fogType, float viewDistance, boolean thickFog, float tickDelta, CallbackInfo ci) {
+        if (com.zangetsu.client.CallingScene.voidFull()) {
+            RenderSystem.setShaderFogStart(2000.0F);
+            RenderSystem.setShaderFogEnd(4000.0F);
+        }
+    }
 }

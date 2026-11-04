@@ -109,9 +109,18 @@ final class Flames {
     }
 
     /** Обычный слой игры, только текстура сглажена: стандартные слои при каждой отрисовке сбрасывают её на резкие пиксели, а огонь вблизи от этого становится мозаикой. */
+    /** Гладкая текстура без прозрачности: граница по порогу альфы, глубина пишется. */
+    static RenderLayer smoothCutout(String name, Identifier texture) {
+        return new SmoothLayer(name, RenderLayer.getEntityCutoutNoCull(texture), texture, false, false);
+    }
+
     private static final class SmoothLayer extends RenderLayer {
         SmoothLayer(String name, RenderLayer base, Identifier texture, boolean crumbling) {
-            super(name, VertexFormats.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL, VertexFormat.DrawMode.QUADS, 1536, crumbling, true, () -> {
+            this(name, base, texture, crumbling, true);
+        }
+
+        SmoothLayer(String name, RenderLayer base, Identifier texture, boolean crumbling, boolean translucent) {
+            super(name, VertexFormats.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL, VertexFormat.DrawMode.QUADS, 1536, crumbling, translucent, () -> {
                 base.startDrawing();
                 MinecraftClient.getInstance().getTextureManager().getTexture(texture).setFilter(true, false);
             }, () -> {

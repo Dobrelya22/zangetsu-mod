@@ -3,16 +3,12 @@
   "temperature": 0.5,
   "downfall": 0.0,
   "effects": {
-    "sky_color": 1384484,
-    "fog_color": 4473938,
+    "sky_color": 13159890,
+    "fog_color": 14212061,
     "water_color": 4159204,
     "water_fog_color": 329011,
-    "grass_color": 10994318,
-    "foliage_color": 10994318,
-    "particle": {
-      "options": {"type": "minecraft:white_ash"},
-      "probability": 0.03
-    }
+    "grass_color": 10465166,
+    "foliage_color": 10465166
   },
   "spawners": {
     "monster": [],

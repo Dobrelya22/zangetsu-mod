@@ -422,7 +422,7 @@ public static void callSword(ServerPlayerEntity player) {
     Vec3d spot = player.getPos().add(look.multiply(18.0)).add(0.0, 19.0, 0.0);
     Vec3d toPlayer = player.getPos().subtract(spot);
     float yaw = (float) Math.toDegrees(Math.atan2(toPlayer.z, toPlayer.x)) - 90.0F;
-    ZangetsuSpiritEntity spirit = ZangetsuSpiritEntity.summon(player.getServerWorld(), spot, yaw, 1.0F, player.getUuid());
+    ZangetsuSpiritEntity spirit = ZangetsuSpiritEntity.summon(player.getServerWorld(), spot, yaw, 4.0F, player.getUuid());
     spirit.holdSword(com.zangetsu.logic.Awakening.findLanding(player, look), ZangetsuSpiritEntity.RELEASE_TICK, ZangetsuSpiritEntity.FLIGHT_TICKS);
 }
 

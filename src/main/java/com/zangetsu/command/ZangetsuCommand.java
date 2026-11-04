@@ -8,7 +8,9 @@ import com.zangetsu.logic.Bond;
 import com.zangetsu.logic.Calling;
 import com.zangetsu.logic.Dream;
 import com.zangetsu.logic.HollowForm;
+import com.zangetsu.logic.SwordBreak;
 import com.zangetsu.logic.SwordStacks;
+import com.zangetsu.logic.Trial;
 import com.zangetsu.logic.Sync;
 import com.zangetsu.logic.ZangetsuData;
 import com.zangetsu.registry.ModAttachments;
@@ -41,6 +43,7 @@ public final class ZangetsuCommand {
                                         .executes(c -> setBond(c, Bond.THRESHOLDS[IntegerArgumentType.getInteger(c, "level") - 1]))))
                         .then(CommandManager.literal("hollow").executes(ZangetsuCommand::refillHollow))
                         .then(CommandManager.literal("dream").executes(ZangetsuCommand::dream))
+                        .then(CommandManager.literal("break").executes(ZangetsuCommand::breakSword))
                         .then(CommandManager.literal("reset").executes(ZangetsuCommand::reset))));
     }
 
@@ -64,6 +67,7 @@ public final class ZangetsuCommand {
         ZangetsuData data = ModAttachments.data(player);
         data.bonded = true;
         data.lost = false;
+        data.broken = false;
         data.refused = false;
         Awakening.applyHealthBonus(player);
         if (SwordStacks.find(player).isEmpty()) {
@@ -104,9 +108,24 @@ public final class ZangetsuCommand {
         return 1;
     }
 
+    /** Сразу показать, как Яхве ломает меч. */
+    private static int breakSword(CommandContext<ServerCommandSource> context) throws CommandSyntaxException {
+        ServerPlayerEntity player = context.getSource().getPlayerOrThrow();
+        ZangetsuData data = ModAttachments.data(player);
+        if (!data.bonded || SwordStacks.find(player).isEmpty()) {
+            context.getSource().sendError(Text.translatable("zangetsu.command.not_bonded"));
+            return 0;
+        }
+        SwordBreak.start(player);
+        return 1;
+    }
+
     private static int reset(CommandContext<ServerCommandSource> context) throws CommandSyntaxException {
         ServerPlayerEntity player = context.getSource().getPlayerOrThrow();
         Calling.abort(player);
+        if (Trial.isActive(player.getUuid())) {
+            Trial.abort(player, ModAttachments.data(player));
+        }
         HollowForm.end(player, false);
         for (ItemStack stack : SwordStacks.find(player)) {
             stack.setCount(0);

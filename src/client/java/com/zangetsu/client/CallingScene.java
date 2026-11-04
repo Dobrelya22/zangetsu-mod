@@ -23,6 +23,12 @@ public final class CallingScene {
     private static boolean barsOn;
     private static float barsAt = -100.0F;
     private static boolean hint;
+    private static String hintKey = "zangetsu.calling.hint";
+
+    /** Бледное небо вместо мира: насколько оно проступило. */
+    private static boolean voidOn;
+    private static float voidAt = -100.0F;
+    private static int voidTicks = 1;
     private static float hintAt;
 
     private static float fadeAt = -1.0F;
@@ -68,6 +74,7 @@ public final class CallingScene {
                 setBars(false, now);
                 line = null;
                 hint = payload.ticks() == 1;
+                hintKey = payload.key().isEmpty() ? "zangetsu.calling.hint" : payload.key();
                 hintAt = now;
             }
             case CallingPayload.BARS_ON -> {
@@ -87,6 +94,16 @@ public final class CallingScene {
                 }
             }
             case CallingPayload.FADE_OUT -> fade(true, payload.ticks(), now);
+            case CallingPayload.VOID_ON -> {
+                voidOn = true;
+                voidAt = now;
+                voidTicks = Math.max(1, payload.ticks());
+            }
+            case CallingPayload.VOID_OFF -> {
+                voidOn = false;
+                voidAt = now;
+                voidTicks = Math.max(1, payload.ticks());
+            }
             case CallingPayload.END -> {
                 setBars(false, now);
                 hint = false;
@@ -126,7 +143,19 @@ public final class CallingScene {
         }
     }
 
+    /** Насколько мир сейчас скрыт бледным небом. */
+    public static float voidAmount() {
+        float k = smooth(voidAt, voidAt + voidTicks, now());
+        return voidOn ? k : (voidAt < -50.0F ? 0.0F : 1.0F - k);
+    }
+
+    public static boolean voidFull() {
+        return voidAmount() >= 0.999F;
+    }
+
     public static void reset() {
+        voidOn = false;
+        voidAt = -100.0F;
         active = false;
         hint = false;
         line = null;
@@ -251,7 +280,7 @@ public final class CallingScene {
         float alpha = smooth(hintAt, hintAt + 12.0F, now);
         int a = Math.max(4, (int) (alpha * 255.0F)) << 24;
         TextRenderer font = MinecraftClient.getInstance().textRenderer;
-        Text take = Text.translatable("zangetsu.calling.hint.take"), refuse = Text.translatable("zangetsu.calling.hint.refuse");
+        Text take = Text.translatable(hintKey + ".take"), refuse = Text.translatable(hintKey + ".refuse");
         int half = Math.max(font.getWidth(take), font.getWidth(refuse)) / 2 + 8;
         context.fill(w / 2 - half, 9, w / 2 + half, 38, ((int) (alpha * 150.0F) << 24));
         context.drawCenteredTextWithShadow(font, take, w / 2, 14, a | 0xFFD24A);
