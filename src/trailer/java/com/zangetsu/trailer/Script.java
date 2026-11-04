@@ -105,7 +105,7 @@ final class Script {
         // Сбоку, у самой земли: раненый, опустив голову.
         cut(5.9, "kneel", shot(arc(3.0, 104, 0.45, 2.6, 88, 0.5), p(0, 1.0, 0), 38));
         // Одно сердце: в небе проступает фигура.
-        server(8.9, srv -> Awakening.start(Stage.player(srv)));
+        server(8.9, srv -> Stage.callSword(Stage.player(srv)));
         speed(8.9, 0.4F);
         cut(8.9, "sky", shot(arc(2.2, 16, 0.35, 2.0, 26, 0.3), spirit(0, 1.5, 0), 64, 54));
         boltAround(9.9, 90, 176);

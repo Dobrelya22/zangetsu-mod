@@ -2,6 +2,7 @@ package com.zangetsu.client;
 
 import com.zangetsu.ZangetsuMod;
 import com.zangetsu.client.render.ArrowHalfRenderer;
+import com.zangetsu.client.render.DreamSky;
 import com.zangetsu.client.render.GetsugaRenderer;
 import com.zangetsu.client.render.BentLimbFeatureRenderer;
 import com.zangetsu.client.render.FinalFormFeatureRenderer;
@@ -9,13 +10,14 @@ import com.zangetsu.client.render.HollowFeatureRenderer;
 import com.zangetsu.client.render.SeveredPartRenderer;
 import com.zangetsu.client.render.SlashTrails;
 import com.zangetsu.client.render.SwordMoves;
-import com.zangetsu.client.render.SpiritModel;
 import com.zangetsu.client.render.SpiritRenderer;
 import com.zangetsu.client.render.ThrownZangetsuRenderer;
 import com.zangetsu.logic.Eye;
 import com.zangetsu.logic.Awakening;
+import com.zangetsu.logic.Calling;
 import com.zangetsu.logic.HollowForm;
 import com.zangetsu.network.AnimationPayload;
+import com.zangetsu.network.CallingPayload;
 import com.zangetsu.network.ClientFxPayload;
 import com.zangetsu.network.HollowPayload;
 import com.zangetsu.network.LimbPayload;
@@ -29,7 +31,7 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientEntityEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
-import net.fabricmc.fabric.api.client.rendering.v1.EntityModelLayerRegistry;
+import net.fabricmc.fabric.api.client.rendering.v1.DimensionRenderingRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.EntityRendererRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 import net.fabricmc.fabric.api.client.rendering.v1.LivingEntityFeatureRendererRegistrationCallback;
@@ -46,7 +48,6 @@ import net.minecraft.util.math.MathHelper;
 public class ZangetsuClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
-        EntityModelLayerRegistry.registerModelLayer(SpiritModel.LAYER, SpiritModel::getTexturedModelData);
         EntityRendererRegistry.register(ModEntities.SPIRIT, SpiritRenderer::new);
         EntityRendererRegistry.register(ModEntities.THROWN_ZANGETSU, ThrownZangetsuRenderer::new);
         EntityRendererRegistry.register(ModEntities.SEVERED_PART, SeveredPartRenderer::new);
@@ -62,6 +63,11 @@ public class ZangetsuClient implements ClientModInitializer {
                 helper.register(new FinalFormFeatureRenderer(playerRenderer));
                 helper.register(new HollowFeatureRenderer(playerRenderer));
             }
+        });
+
+        // Над первым сном своё небо и никаких обычных облаков.
+        DimensionRenderingRegistry.registerSkyRenderer(Calling.WORLD, DreamSky::render);
+        DimensionRenderingRegistry.registerCloudRenderer(Calling.WORLD, context -> {
         });
 
         KeyBindings.register();
@@ -81,6 +87,7 @@ public class ZangetsuClient implements ClientModInitializer {
             CameraDirector.reset();
             ReactionCheck.reset();
             TooSlowScene.reset();
+            CallingScene.reset();
             SlashTrails.clear();
         });
 
@@ -90,6 +97,7 @@ public class ZangetsuClient implements ClientModInitializer {
     private static void registerReceivers() {
         ClientPlayNetworking.registerGlobalReceiver(PlayerStatePayload.ID, (payload, context) -> ClientState.state = payload);
         ClientPlayNetworking.registerGlobalReceiver(ReactionPayload.ID, (payload, context) -> ReactionCheck.receive(payload));
+        ClientPlayNetworking.registerGlobalReceiver(CallingPayload.ID, (payload, context) -> CallingScene.receive(payload));
         ClientPlayNetworking.registerGlobalReceiver(LimbPayload.ID, (payload, context) -> {
             if (payload.limbs() == 0) {
                 ClientState.LIMBS.remove(payload.entityId());

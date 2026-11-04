@@ -55,7 +55,7 @@ public final class Dream {
     }
 
     /** У каждого игрока своё поле, чтобы сны не пересекались. */
-    private static Vec3d center(UUID uuid) {
+    static Vec3d center(UUID uuid) {
         return new Vec3d(Math.floorMod(uuid.hashCode(), 64) * 4000 + 0.5, 0.0, 0.5);
     }
 
@@ -103,7 +103,7 @@ public final class Dream {
         Sync.player(player);
     }
 
-    private static void loadField(ServerWorld dream, Vec3d c) {
+    static void loadField(ServerWorld dream, Vec3d c) {
         int cx = MathHelper.floor(c.x) >> 4, cz = MathHelper.floor(c.z) >> 4;
         for (int dx = -3; dx <= 3; dx++) {
             for (int dz = -3; dz <= 3; dz++) {
@@ -197,27 +197,9 @@ public final class Dream {
             return;
         }
         ZangetsuData data = ModAttachments.data(player);
-        ZangetsuData.DreamReturn back = data.dream;
-        data.dream = null;
         clearSwords(player);
         LAST_POS.remove(player.getUuid());
-
-        ServerWorld target = null;
-        if (back != null) {
-            target = player.getServer().getWorld(RegistryKey.of(RegistryKeys.WORLD, back.dimension()));
-            player.changeGameMode(GameMode.byName(back.gameMode(), GameMode.SURVIVAL));
-        }
-        if (target == null) {
-            sendHome(player);
-            target = player.getServerWorld();
-        } else {
-            player.teleport(target, back.x(), back.y(), back.z(), back.yaw(), back.pitch());
-        }
-        // Проснулся — уже утро, как после обычного сна.
-        if (target == player.getServer().getOverworld() && target.isNight()) {
-            long time = target.getTimeOfDay();
-            target.setTimeOfDay(time + (24000L - time % 24000L));
-        }
+        bringBack(player, data, true);
 
         data.lost = false;
         ItemStack sword = SwordStacks.create(player);
@@ -231,7 +213,30 @@ public final class Dream {
         Sync.player(player);
     }
 
-    private static void clearSwords(ServerPlayerEntity player) {
+/** Вернуть игрока из сна туда, где он лёг: прежний режим игры и, если надо, уже утро, как после обычного сна. */
+static void bringBack(ServerPlayerEntity player, ZangetsuData data, boolean morning) {
+    ZangetsuData.DreamReturn back = data.dream;
+    data.dream = null;
+    ServerWorld target = null;
+    if (back != null) {
+        target = player.getServer().getWorld(RegistryKey.of(RegistryKeys.WORLD, back.dimension()));
+        player.changeGameMode(GameMode.byName(back.gameMode(), GameMode.SURVIVAL));
+    } else if (player.interactionManager.getGameMode() == GameMode.ADVENTURE) {
+        player.changeGameMode(GameMode.SURVIVAL);
+    }
+    if (target == null) {
+        sendHome(player);
+        target = player.getServerWorld();
+    } else {
+        player.teleport(target, back.x(), back.y(), back.z(), back.yaw(), back.pitch());
+    }
+    if (morning && target == player.getServer().getOverworld() && target.isNight()) {
+        long time = target.getTimeOfDay();
+        target.setTimeOfDay(time + (24000L - time % 24000L));
+    }
+}
+
+private static void clearSwords(ServerPlayerEntity player) {
         ServerWorld dream = player.getServer().getWorld(WORLD);
         if (dream == null) {
             return;

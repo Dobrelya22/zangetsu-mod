@@ -30,6 +30,7 @@ public final class ZangetsuHud {
         float tickDelta = counter.getTickDelta(false);
         renderFlash(context, tickDelta);
         TooSlowScene.render(context, tickDelta);
+        CallingScene.render(context, tickDelta);
         ReactionCheck.render(context, tickDelta);
         if (client.options.hudHidden) {
             return;

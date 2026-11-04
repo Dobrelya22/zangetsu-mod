@@ -10,6 +10,7 @@ import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
 import net.fabricmc.fabric.api.entity.event.v1.ServerPlayerEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
+import net.fabricmc.fabric.api.event.player.UseBlockCallback;
 import net.fabricmc.fabric.api.event.player.UseEntityCallback;
 import net.fabricmc.fabric.api.networking.v1.EntityTrackingEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
@@ -20,11 +21,13 @@ import net.minecraft.entity.decoration.ArmorStandEntity;
 import net.minecraft.entity.decoration.ItemFrameEntity;
 import net.minecraft.entity.passive.AllayEntity;
 import net.minecraft.item.ItemStack;
+import net.minecraft.registry.tag.BlockTags;
 import net.minecraft.registry.tag.DamageTypeTags;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Formatting;
+import net.minecraft.util.Hand;
 import net.minecraft.world.GameRules;
 
 /** Все серверные события мода и ежетиковая забота о каждом игроке. */
@@ -42,6 +45,7 @@ public final class ServerEvents {
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> {
             Scheduler.clear();
             Reaction.clear();
+            Calling.clear();
         });
 
         ServerLivingEntityEvents.ALLOW_DAMAGE.register(ServerEvents::allowDamage);
@@ -79,6 +83,7 @@ public final class ServerEvents {
         });
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
             ServerPlayerEntity player = handler.player;
+            Calling.disconnect(player);
             Awakening.cancel(player);
             Sync.forget(player);
             Eye.forget(player);
@@ -108,6 +113,17 @@ public final class ServerEvents {
             Sync.hollow(newPlayer, false);
         });
 
+        // Кровать во сне не для сна: лечь в неё — значит отказаться от меча.
+        UseBlockCallback.EVENT.register((player, world, hand, hit) -> {
+            if (world.getRegistryKey() != Calling.WORLD || !world.getBlockState(hit.getBlockPos()).isIn(BlockTags.BEDS)) {
+                return ActionResult.PASS;
+            }
+            if (player instanceof ServerPlayerEntity sleeper && hand == Hand.MAIN_HAND) {
+                Calling.refuse(sleeper);
+            }
+            return ActionResult.SUCCESS;
+        });
+
         // Меч нельзя повесить в рамку, отдать стойке или тихоне.
         UseEntityCallback.EVENT.register((player, world, hand, entity, hit) -> {
             if (SwordStacks.isSword(player.getStackInHand(hand))
@@ -129,7 +145,8 @@ public final class ServerEvents {
         if (!(entity instanceof ServerPlayerEntity player)) {
             return true;
         }
-        if (Awakening.protects(player) && !source.isIn(DamageTypeTags.BYPASSES_INVULNERABILITY)) {
+        // Во сне ничто не ранит.
+        if ((Awakening.protects(player) || Calling.inCalling(player)) && !source.isIn(DamageTypeTags.BYPASSES_INVULNERABILITY)) {
             return false;
         }
         // Пока идёт сцена превращения, игрок не управляет собой: ранить его было бы нечестно. То же и в сцене за спиной врага.
@@ -158,13 +175,14 @@ public final class ServerEvents {
     private static void tickPlayer(ServerPlayerEntity player) {
         ZangetsuData data = ModAttachments.data(player);
         Awakening.tick(player);
+        Calling.tick(player, data);
         if (!data.bonded) {
             List<ItemStack> swords = SwordStacks.find(player);
             if (!swords.isEmpty()) {
                 // Меч попал в руки другим путём (командой или из творческого) — значит, выбрал этого игрока.
                 bondByItem(player, data, swords);
-            } else if (Awakening.shouldTrigger(player, data)) {
-                Awakening.start(player);
+            } else if (Calling.shouldBegin(player, data)) {
+                Calling.begin(player);
             }
             Sync.playerIfChanged(player);
             return;
@@ -192,6 +210,14 @@ public final class ServerEvents {
     }
 
     private static void bondByItem(ServerPlayerEntity player, ZangetsuData data, List<ItemStack> swords) {
+        // Кто отказался, тому меч уже не служит. Выдать его заново может только творческий режим или команда.
+        if (data.refused && !player.isCreative()) {
+            for (ItemStack sword : swords) {
+                sword.setCount(0);
+            }
+            player.sendMessage(Text.translatable("zangetsu.refused").formatted(Formatting.DARK_RED), true);
+            return;
+        }
         for (ItemStack sword : swords) {
             if (!SwordStacks.ownedBy(sword, player)) {
                 sword.setCount(0);
@@ -201,6 +227,7 @@ public final class ServerEvents {
         }
         data.bonded = true;
         data.lost = false;
+        data.refused = false;
         Awakening.applyHealthBonus(player);
         SwordStacks.refreshAll(player);
         Sync.player(player);

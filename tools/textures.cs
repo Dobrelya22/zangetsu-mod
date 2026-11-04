@@ -91,8 +91,9 @@ public static class ZangetsuTextures
         Out(EyePartsHD(), assets, "textures/entity/zangetsu_eye.png", 2);
         Out(White(), assets, "textures/misc/white.png", 16);
         Out(Icon(), assets, "icon.png", 4);
-        Out(Spirit(), assets, "textures/entity/spirit.png", 4);
-        Out(SpiritEyes(), assets, "textures/entity/spirit_eyes.png", 4);
+        Out(SpiritEye(), assets, "textures/entity/spirit_eye.png", 1);
+        Out(SpiritPupil(), assets, "textures/entity/spirit_pupil.png", 2);
+        Out(DreamClouds(), assets, "textures/environment/dream_clouds.png", 1);
         Out(HollowMaskHD(false), assets, "textures/entity/hollow_mask.png", 3);
         Out(HollowMaskHD(true), assets, "textures/entity/hollow_final.png", 3);
         Out(MaskIcon(true, false), assets, "textures/gui/mask_full.png", 8);
@@ -348,56 +349,6 @@ public static class ZangetsuTextures
 
     // ------------------------------------------------------------------ фигура в небе
 
-    /**
-     * Текстура таинственной фигуры (128×128). Раскладка совпадает с ZangetsuSpiritModel:
-     * торс (0,0), голова (0,24), рога (40..64,0), руки (64,0), когти (82,0), ноги (88,0),
-     * плащ (0,42), кости крыльев (0,64), перепонки (0,68), хвост (64,32).
-     */
-    static Canvas Spirit()
-    {
-        var c = new Canvas(128, 128);
-        Color skin = C(24, 19, 30);
-        Paint(c, 0, 0, 36, 24, skin, 0.35, 1);
-        // Рёбра на груди (передняя грань торса: 6..18 × 6..24).
-        for (int y = 9; y < 20; y += 3) for (int x = 8; x < 16; x++) if (x != 11 && x != 12) c.Set(x, y, C(48, 38, 58));
-        Paint(c, 0, 24, 36, 42, skin, 0.3, 2);
-        // Лицо (9..18 × 33..42): провалы глаз и пасть с зубами.
-        Paint(c, 10, 35, 13, 37, C(6, 4, 8), 0, 0);
-        Paint(c, 14, 35, 17, 37, C(6, 4, 8), 0, 0);
-        for (int x = 10; x < 17; x++) { c.Set(x, 39, C(6, 4, 8)); c.Set(x, 40, x % 2 == 0 ? C(226, 220, 204) : C(6, 4, 8)); }
-        // Рога: от кости у основания к чёрным кончикам.
-        Gradient(c, 40, 0, 52, 9, C(196, 188, 168), C(226, 220, 202), 0.12, 3);
-        Gradient(c, 52, 0, 60, 8, C(120, 112, 100), C(200, 192, 172), 0.12, 4);
-        Paint(c, 60, 0, 64, 6, C(28, 24, 24), 0.2, 5);
-        // Руки и ноги: тёмные, к кистям — багровые.
-        Gradient(c, 64, 0, 82, 25, skin, C(46, 10, 16), 0.3, 6);
-        Paint(c, 82, 0, 86, 5, C(210, 204, 186), 0.15, 7);
-        Gradient(c, 88, 0, 108, 23, skin, C(12, 10, 14), 0.3, 8);
-        // Плащ: снаружи чёрный, изнутри — алая подкладка, низ рваный.
-        Paint(c, 0, 42, 42, 61, C(13, 13, 16), 0.3, 9);
-        Paint(c, 1, 43, 14, 61, C(104, 12, 20), 0.3, 10);
-        Paint(c, 36, 43, 42, 61, C(104, 12, 20), 0.3, 11);
-        Tatter(c, 0, 42, 61, 4, 12);
-        // Кости крыльев и перепонки с прожилками и дырами.
-        Paint(c, 0, 64, 67, 67, C(52, 44, 46), 0.25, 13);
-        Membrane(c, 0, 68, 32, 88, 14);
-        Membrane(c, 32, 68, 60, 92, 15);
-        // Хвост и его наконечник.
-        Gradient(c, 64, 32, 82, 50, skin, C(40, 10, 14), 0.3, 16);
-        for (int x = 70; x < 82; x += 3) c.Set(x, 32, C(200, 192, 172));
-        Paint(c, 84, 32, 102, 37, C(70, 8, 14), 0.25, 17);
-        return c;
-    }
-
-    static void Tatter(Canvas c, int x0, int x1, int bottom, int depth, int seed)
-    {
-        for (int x = x0; x < x1; x++)
-        {
-            int cut = (int)(Hash(x, 0, seed) * depth);
-            for (int k = 0; k < cut; k++) c.Set(x, bottom - 1 - k, Color.FromArgb(0, 0, 0, 0));
-        }
-    }
-
     static void Membrane(Canvas c, int x0, int y0, int x1, int y1, int seed)
     {
         int w = x1 - x0, h = y1 - y0;
@@ -419,24 +370,6 @@ public static class ZangetsuTextures
                 c.Set(x, y, Mul(col, 1.0 + (Hash(x, y, seed + 1) - 0.5) * 0.25));
             }
         }
-    }
-
-    /** Светящиеся глаза фигуры — отдельный слой, который рисуется без освещения. */
-    static Canvas SpiritEyes()
-    {
-        var c = new Canvas(128, 128);
-        Color iris = C(255, 214, 40), hot = C(255, 248, 170);
-        c.Set(10, 35, iris); c.Set(11, 35, hot); c.Set(12, 35, iris);
-        c.Set(10, 36, Mul(iris, 0.8)); c.Set(11, 36, C(40, 10, 0)); c.Set(12, 36, Mul(iris, 0.8));
-        c.Set(14, 35, iris); c.Set(15, 35, hot); c.Set(16, 35, iris);
-        c.Set(14, 36, Mul(iris, 0.8)); c.Set(15, 36, C(40, 10, 0)); c.Set(16, 36, Mul(iris, 0.8));
-        return c;
-    }
-
-    /** Закрасить точки, заданные парами x, y. */
-    static void Dots(Canvas c, Color col, params int[] xy)
-    {
-        for (int i = 0; i + 1 < xy.Length; i += 2) c.Set(xy[i], xy[i + 1], col);
     }
 
     // ------------------------------------------------------------------ маска в интерфейсе
@@ -624,6 +557,94 @@ public static class ZangetsuTextures
         }
         return c;
     }
+
+    /** Белок глаза фигуры: плоская проекция полусферы. Края темнее, у края тонкие жилки, сверху тень от века. */
+    static Canvas SpiritEye()
+    {
+        int size = 256;
+        Canvas c = new Canvas(size, size);
+        for (int y = 0; y < size; y++)
+        {
+            for (int x = 0; x < size; x++)
+            {
+                double u = (x + 0.5) / size * 2 - 1, v = (y + 0.5) / size * 2 - 1;
+                double r = Math.Sqrt(u * u + v * v);
+                double angle = Math.Atan2(v, u);
+                double edge = Smooth(0.55, 1.0, r);
+                double light = 1.0 - edge * edge * 0.38 - Smooth(-0.35, -0.95, v) * 0.22;
+                Color col = C(Cl(250 * light), Cl(247 * light), Cl(240 * light));
+                double vein = Math.Abs(Math.Sin(angle * 9.0 + 2.2 * Math.Sin(r * 11.0 + angle * 3.0)));
+                col = Mix(col, C(178, 52, 52), Smooth(0.10, 0.0, vein) * Smooth(0.45, 0.88, r) * 0.55);
+                c.Set(x, y, col);
+            }
+        }
+        return c;
+    }
+
+    /** Зрачок фигуры: тёмно-красная вертикальная щель и едва заметное красное вокруг неё. */
+    static Canvas SpiritPupil()
+    {
+        int w = 128, h = 192;
+        Canvas c = new Canvas(w, h);
+        for (int y = 0; y < h; y++)
+        {
+            for (int x = 0; x < w; x++)
+            {
+                double a = (x + 0.5) / w * 2 - 1, b = (y + 0.5) / h * 2 - 1;
+                double half = 0.27 * (1 - b * b);
+                double s = half <= 0.001 ? 99 : Math.Abs(a) / half;
+                double core = Smooth(1.1, 0.9, s);
+                double halo = Math.Exp(-Math.Max(0.0, s - 1.0) * 0.55) * Sat(1 - a * a) * Sat(1 - b * b) * 0.5;
+                Color inner = Mix(C(150, 8, 18), C(16, 0, 2), Smooth(0.95, 0.2, s));
+                Color col = Mix(C(150, 18, 24), inner, core);
+                c.Set(x, y, CA(Cl(Math.Max(core, halo) * 255), col.R, col.G, col.B));
+            }
+        }
+        return c;
+    }
+
+    /** Плавный шум, бесшовный с периодом period. */
+    static double TileNoise(double x, double y, int period, int seed)
+    {
+        int xi = (int)Math.Floor(x), yi = (int)Math.Floor(y);
+        double fx = x - xi, fy = y - yi;
+        fx = fx * fx * (3 - 2 * fx);
+        fy = fy * fy * (3 - 2 * fy);
+        int x0 = ((xi % period) + period) % period, y0 = ((yi % period) + period) % period;
+        int x1 = (x0 + 1) % period, y1 = (y0 + 1) % period;
+        double top = Hash(x0, y0, seed) + (Hash(x1, y0, seed) - Hash(x0, y0, seed)) * fx;
+        double bottom = Hash(x0, y1, seed) + (Hash(x1, y1, seed) - Hash(x0, y1, seed)) * fx;
+        return top + (bottom - top) * fy;
+    }
+
+    /** Облака неба первого сна: бесшовные, мягкие, с более тёмной серединой. */
+    static Canvas DreamClouds()
+    {
+        int size = 512;
+        Canvas c = new Canvas(size, size);
+        for (int y = 0; y < size; y++)
+        {
+            for (int x = 0; x < size; x++)
+            {
+                double u = (double)x / size, v = (double)y / size;
+                double n = 0, amp = 0.5, total = 0;
+                int period = 4;
+                for (int o = 0; o < 6; o++)
+                {
+                    n += amp * TileNoise(u * period, v * period, period, 900 + o);
+                    total += amp;
+                    amp *= 0.56;
+                    period *= 2;
+                }
+                n /= total;
+                double alpha = Smooth(0.40, 0.68, n);
+                Color col = Mix(C(252, 252, 250), C(168, 172, 182), Smooth(0.52, 0.80, n));
+                c.Set(x, y, CA(Cl(alpha * 235), col.R, col.G, col.B));
+            }
+        }
+        return c;
+    }
+
 
     static Canvas White()
     {

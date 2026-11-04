@@ -1,0 +1,7 @@
+{
+  "type": "zangetsu:calling",
+  "generator": {
+    "type": "zangetsu:dream",
+    "biome": "zangetsu:calling_field"
+  }
+}

@@ -45,6 +45,23 @@ public final class Reaction {
     /** Где на круге могут начинаться зоны: не сразу, чтобы успеть среагировать, и не в самом конце. */
     private static final float ZONE_FROM = 0.42F, ZONE_TO = 0.9F;
 
+    /** Запас попадания (доля круга): зона засчитывается чуть шире, чем нарисована, чтобы точное нажатие не срывалось из-за пары кадров. */
+    public static final float GREAT_MARGIN = 0.022F, GOOD_MARGIN = 0.015F;
+    public static final int MISS = 0, GOOD = 1, GREAT = 2;
+
+    /** Куда попала стрелка {@code t}: на сервере и на клиенте считается одинаково. */
+    public static int judge(float t, float from, float great, float good) {
+        float end = from + great + good;
+        if (great > 0.0F) {
+            float greatEnd = from + great + GREAT_MARGIN;
+            if (t >= from - GREAT_MARGIN && t < greatEnd) {
+                return GREAT;
+            }
+            return t >= greatEnd && t < end + GOOD_MARGIN ? GOOD : MISS;
+        }
+        return t >= from - GOOD_MARGIN && t < end + GOOD_MARGIN ? GOOD : MISS;
+    }
+
     private record Session(MobEntity mob, long start, int spin, float from, float great, float good) {
     }
 
@@ -183,13 +200,10 @@ public final class Reaction {
         if (!mob.isAlive()) {
             return;
         }
-        float greatEnd = session.from() + session.great();
-        if (session.great() > 0.0F && t >= session.from() && t < greatEnd) {
-            Execution.behind(player, mob);
-        } else if (t >= greatEnd && t < greatEnd + session.good()) {
-            Execution.fromReaction(player, mob);
-        } else {
-            refuse(player, mob);
+        switch (judge(t, session.from(), session.great(), session.good())) {
+            case GREAT -> Execution.behind(player, mob);
+            case GOOD -> Execution.fromReaction(player, mob);
+            default -> refuse(player, mob);
         }
     }
 

@@ -35,6 +35,8 @@ public final class ReactionCheck {
     private static float from, great, good, start;
     private static int answer = NONE;
     private static float answerAt, answerNeedle;
+    /** Где стрелка в последнем нарисованном кадре. */
+    private static float shown;
 
     private ReactionCheck() {
     }
@@ -53,6 +55,7 @@ public final class ReactionCheck {
         great = payload.great();
         good = payload.good();
         start = ClientState.ticks + MinecraftClient.getInstance().getRenderTickCounter().getTickDelta(false);
+        shown = needle(start);
         play(SoundEvents.BLOCK_NOTE_BLOCK_BELL.value(), 0.9F, 1.5F);
         play(SoundEvents.ENTITY_WARDEN_HEARTBEAT, 1.0F, 1.1F);
     }
@@ -76,7 +79,8 @@ public final class ReactionCheck {
         if (!isActive()) {
             return false;
         }
-        float t = needle();
+        // Клик считается там, где стрелка на экране: ввод обрабатывается в начале тика, и по часам она оказалась бы на целый тик раньше, а это как раз ширина белой зоны.
+        float t = shown;
         // Пока стрелка только тронулась, клик ещё относится к драке, а не к проверке.
         if (t >= Reaction.IGNORE_UNTIL) {
             answerAt(t);
@@ -86,8 +90,8 @@ public final class ReactionCheck {
 
     /** Ответить кликом на положении {@code t}. Открыто для игровых проверок. */
     public static void answerAt(float t) {
-        float greatEnd = from + great;
-        int result = great > 0.0F && t >= from && t < greatEnd ? GREAT : (t >= greatEnd && t < greatEnd + good ? GOOD : MISS);
+        int judged = Reaction.judge(t, from, great, good);
+        int result = judged == Reaction.GREAT ? GREAT : (judged == Reaction.GOOD ? GOOD : MISS);
         finish(result, t);
         ClientPlayNetworking.send(new ActionPayload(ActionPayload.REACTION, Math.round(t * 10000.0F)));
     }
@@ -139,6 +143,9 @@ public final class ReactionCheck {
             return;
         }
         float now = ClientState.ticks + tickDelta;
+        if (answer == NONE) {
+            shown = needle(now);
+        }
         float after = answer == NONE ? 0.0F : (now - answerAt) * (answer == GREAT ? 1.6F : 1.0F);
         if (after > ANSWER_TICKS) {
             active = false;

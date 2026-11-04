@@ -16,6 +16,7 @@ public final class ZangetsuNetworking {
         PayloadTypeRegistry.playS2C().register(HollowPayload.ID, HollowPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(ClientFxPayload.ID, ClientFxPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(ReactionPayload.ID, ReactionPayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(CallingPayload.ID, CallingPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(ActionPayload.ID, ActionPayload.CODEC);
 
         // Обработчик вызывается в потоке сервера, так что с миром можно работать напрямую.

@@ -43,6 +43,7 @@ loom {
             name 'Shots'
             source sourceSets.shots
             vmArg '-Dzangetsu.shots=true'
+            vmArg "-Dzangetsu.shots.only=${findProperty('shotsOnly') ?: ''}"
             programArgs '--width', '1280', '--height', '720'
             runDir 'run-shots'
         }

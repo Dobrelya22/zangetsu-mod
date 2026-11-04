@@ -1,5 +1,7 @@
 package com.zangetsu.client.render;
 
+import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.systems.VertexSorter;
 import com.zangetsu.ZangetsuMod;
 import com.zangetsu.client.ClientState;
 import com.zangetsu.logic.Eye;
@@ -672,17 +674,17 @@ public class ZangetsuItemRenderer implements BuiltinItemRendererRegistry.Dynamic
         }
         Matrix4f matrix = matrices.peek().getPositionMatrix();
         boolean firstPerson = mode == ModelTransformationMode.FIRST_PERSON_RIGHT_HAND || mode == ModelTransformationMode.FIRST_PERSON_LEFT_HAND;
-        Vector3f middle = toModel(BLADE_START + (BLADE_END - BLADE_START) * 0.6F, 0.0F, 0.0F);
-        Vector3f wind = new Vector3f();
-        boolean inWorld = firstPerson;
-        if (firstPerson) {
+        // В инвентаре (там интерфейсная проекция) вид другой, а в мире и от первого лица матрицы устроены одинаково: оси мира, камера в начале координат.
+        boolean onScreen = RenderSystem.getVertexSorting() == VertexSorter.BY_Z;
+        Vector3f hiltWind = new Vector3f(), tipWind = new Vector3f();
+        if (!onScreen) {
+            // Конец клинка на замахе несётся куда быстрее рукояти, поэтому и пламя у острия вытягивается сильнее: огонь идёт за самим клинком.
             physics.enterFirstPerson(holder);
-            wind = physics.spaceDirection(physics.flameWind("fp_blade", physics.simFromLocal(matrix).transformPosition(middle, new Vector3f()), now));
-        } else if (physics.enterWorld(matrix, holder, MinecraftClient.getInstance().getRenderTickCounter().getTickDelta(false))) {
-            inWorld = true;
-            wind = physics.spaceDirection(physics.flameWind("blade", physics.simFromLocal(matrix).transformPosition(middle, new Vector3f()), now));
+            Matrix4f sim = physics.simFromLocal(matrix);
+            hiltWind = physics.spaceDirection(physics.flameWind(firstPerson ? "fp_blade_hilt" : "blade_hilt", sim.transformPosition(toModel(BLADE_START, 0.0F, 0.0F), new Vector3f()), now));
+            tipWind = physics.spaceDirection(physics.flameWind(firstPerson ? "fp_blade_tip" : "blade_tip", sim.transformPosition(toModel(BLADE_END, 0.0F, 0.0F), new Vector3f()), now));
         }
-        Flames.Frame frame = inWorld ? Flames.Frame.world(matrices.peek(), wind, waves, blaze) : Flames.Frame.screen(matrices.peek(), wind, waves, blaze);
+        Flames.Frame frame = onScreen ? Flames.Frame.screen(matrices.peek(), new Vector3f(), waves, blaze) : Flames.Frame.world(matrices.peek(), new Vector3f(), waves, blaze);
         // Полотно перед толщей клинка, иначе он закрывает пламя собой.
         frame.towardCamera = (FLAT_T + 0.3F) / 16.0F;
         float px = grow / 16.0F;
@@ -694,11 +696,13 @@ public class ZangetsuItemRenderer implements BuiltinItemRendererRegistry.Dynamic
         VertexConsumer blend = consumers.getBuffer(Flames.bodyLayer());
         for (int i = 0; i < BLADE_FLAMES; i++) {
             float[] flame = flames[i];
+            frame.spaceWind.set(hiltWind).lerp(tipWind, (float) i / (BLADE_FLAMES - 1));
             Flames.flame(blend, frame, flame[0], flame[1], flame[2], flame[3], flame[4], i * 1.3F, 0.95F);
         }
         VertexConsumer light = consumers.getBuffer(Flames.coreLayer());
         for (int i = 0; i < BLADE_FLAMES; i++) {
             float[] flame = flames[i];
+            frame.spaceWind.set(hiltWind).lerp(tipWind, (float) i / (BLADE_FLAMES - 1));
             Flames.glow(light, frame, flame[0], flame[1], flame[2], flame[3], flame[4], i * 1.3F, 0.85F);
         }
     }

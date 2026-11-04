@@ -5,6 +5,7 @@ import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.zangetsu.logic.Awakening;
 import com.zangetsu.logic.Bond;
+import com.zangetsu.logic.Calling;
 import com.zangetsu.logic.Dream;
 import com.zangetsu.logic.HollowForm;
 import com.zangetsu.logic.SwordStacks;
@@ -19,7 +20,7 @@ import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
 
 /**
- * /zangetsu — команды для проверки (нужны читы): вызвать пробуждение, выдать меч,
+ * /zangetsu — команды для проверки (нужны читы): вызвать первый сон, выдать меч,
  * поставить дружбу или уровень, обнулить время Пустого, отправить в сон, сбросить всё.
  */
 public final class ZangetsuCommand {
@@ -49,8 +50,12 @@ public final class ZangetsuCommand {
             context.getSource().sendError(Text.translatable("zangetsu.command.already_bonded"));
             return 0;
         }
-        player.setHealth(Math.min(player.getHealth(), 2.0F));
-        Awakening.start(player);
+        if (Calling.isActive(player.getUuid())) {
+            return 0;
+        }
+        // Команда для проверки: сон приходит сразу, даже если игрок уже отказывался.
+        ModAttachments.data(player).refused = false;
+        Calling.begin(player);
         return 1;
     }
 
@@ -59,6 +64,7 @@ public final class ZangetsuCommand {
         ZangetsuData data = ModAttachments.data(player);
         data.bonded = true;
         data.lost = false;
+        data.refused = false;
         Awakening.applyHealthBonus(player);
         if (SwordStacks.find(player).isEmpty()) {
             SwordStacks.giveToHand(player, SwordStacks.create(player));
@@ -100,6 +106,7 @@ public final class ZangetsuCommand {
 
     private static int reset(CommandContext<ServerCommandSource> context) throws CommandSyntaxException {
         ServerPlayerEntity player = context.getSource().getPlayerOrThrow();
+        Calling.abort(player);
         HollowForm.end(player, false);
         for (ItemStack stack : SwordStacks.find(player)) {
             stack.setCount(0);

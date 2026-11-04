@@ -93,8 +93,9 @@ public final class Shots {
             ZangetsuSpiritEntity spirit = client.world == null ? null
                     : client.world.getEntitiesByClass(ZangetsuSpiritEntity.class, Box.of(Stage.center, 120, 120, 120), e -> true)
                             .stream().findFirst().orElse(null);
-            Vec3d base = spirit != null ? spirit.getLerpedPos(d) : Stage.at(0, 13, -18);
-            float scale = spirit != null ? spirit.getSpiritScale() : 4.0F;
+            // Смещения заданы в «ростах» от земли, а центр новой фигуры посреди неё.
+            Vec3d base = spirit != null ? spirit.getLerpedPos(d).add(0.0, -6.0, 0.0) : Stage.at(0, 13, -18);
+            float scale = 4.0F;
             return base.add(x * scale, y * scale, z * scale);
         };
     }

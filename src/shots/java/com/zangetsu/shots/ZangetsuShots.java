@@ -7,6 +7,7 @@ import com.zangetsu.entity.SeveredPartEntity;
 import com.zangetsu.entity.ThrownZangetsuEntity;
 import com.zangetsu.logic.Awakening;
 import com.zangetsu.logic.Bond;
+import com.zangetsu.logic.Calling;
 import com.zangetsu.logic.Cinematic;
 import com.zangetsu.logic.Dream;
 import com.zangetsu.logic.Execution;
@@ -14,6 +15,7 @@ import com.zangetsu.logic.HollowForm;
 import com.zangetsu.logic.Limbs;
 import com.zangetsu.logic.Reaction;
 import com.zangetsu.logic.SwordStacks;
+import com.zangetsu.logic.ZangetsuData;
 import com.zangetsu.registry.ModAttachments;
 import net.minecraft.inventory.SimpleInventory;
 import net.minecraft.screen.slot.Slot;
@@ -66,9 +68,11 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
+import net.minecraft.block.Blocks;
 import net.minecraft.world.Difficulty;
 import net.minecraft.world.GameMode;
 import net.minecraft.world.GameRules;
+import net.minecraft.world.World;
 import net.minecraft.world.gen.GeneratorOptions;
 import net.minecraft.world.gen.WorldPresets;
 import net.minecraft.world.level.LevelInfo;
@@ -192,29 +196,12 @@ public class ZangetsuShots implements ClientModInitializer {
     private void write() {
         // В основной части мобов убивают напрямую, проверка реакции идёт отдельным разделом.
         Reaction.enabled = false;
-        // ---- Пробуждение днём.
-        command("time set 6000", "weather clear", "gamerule doDaylightCycle false", "gamerule doMobSpawning false",
-                "tp @p 0.5 -60 0.5 180 0");
-        look(180.0F, 0.0F);
-        pause(20);
-        shot("start");
-        onServer(s -> {
-            ServerPlayerEntity player = player(s);
-            player.setHealth(2.0F);
-            Awakening.start(player);
-        });
-        pause(14);
-        shot("spirit_appears");
-        pause(30);
-        shot("spirit_hold");
-        pause(16);
-        shot("spirit_windup");
-        pause(6);
-        shot("spirit_throw");
-        pause(7);
-        shot("sword_flying_1");
-        pause(9);
-        shot("sword_flying_2");
+        // ---- Первый сон: сначала отказ, потом меч.
+        writeFirstDream();
+        if ("calling".equals(System.getProperty("zangetsu.shots.only"))) {
+            this.writeEnd();
+            return;
+        }
         waitFor("меч вонзился", c -> stuckSword(c) != null);
         act(c -> {
             ThrownZangetsuEntity sword = stuckSword(c);
@@ -251,7 +238,19 @@ public class ZangetsuShots implements ClientModInitializer {
         pause(30);
         shot("claim_proud");
         waitFor("сцена подбора кончилась", c -> ClientState.animation(c.player) == null);
+        pause(40);
+        shot("calling_wake_up");
+        waitFor("проснулся с мечом", c -> c.world != null && c.world.getRegistryKey() == World.OVERWORLD);
         pause(12);
+        shot("calling_morning");
+        onServer(s -> {
+            ServerPlayerEntity player = player(s);
+            check("взял меч: проснулся с ним там, где лёг", !Calling.inCalling(player) && !Calling.isActive(player.getUuid()) && ModAttachments.data(player).bonded
+                    && ModAttachments.data(player).dream == null && SwordStacks.isHolding(player) && player.getWorld().isDay());
+            check("взял меч: режим игры прежний", player.interactionManager.getGameMode() != GameMode.ADVENTURE);
+        });
+        command("time set 6000", "setblock 3 -60 0 air", "setblock 2 -60 0 air", "tp @p 0.5 -60 0.5 180 0");
+        pause(6);
         onServer(s -> check("сцена подбора кончилась, игрок свободен", !Cinematic.isLocked(player(s)) && !Awakening.isActive(player(s).getUuid())));
         look(180.0F, 10.0F);
         pause(4);
@@ -715,6 +714,10 @@ public class ZangetsuShots implements ClientModInitializer {
         pause(6);
         shot("woke_up_third_person");
         onServer(s -> check("после сна меч снова в руке", SwordStacks.isHolding(player(s))));
+        this.writeEnd();
+    }
+
+    private void writeEnd() {
         pause(5);
         act(c -> {
             ZangetsuMod.LOGGER.info("Съёмка: готово, {} кадров", this.shotIndex);
@@ -722,6 +725,128 @@ public class ZangetsuShots implements ClientModInitializer {
                     this.failed.isEmpty() ? "" : ", провалены: " + String.join("; ", this.failed));
             c.scheduleStop();
         });
+    }
+
+    private void sleep() {
+        onServer(s -> player(s).trySleep(new BlockPos(2, -60, 0)));
+    }
+
+    /** Первый сон целиком: кровать, фигура, речь, меч; отказ и что он навсегда; затем сон снова и меч (сцену подбора проверяет основной сценарий). */
+    private void writeFirstDream() {
+        command("time set 18000", "weather clear", "gamerule doDaylightCycle false", "gamerule doMobSpawning false", "tp @p 0.5 -60 0.5 180 0",
+                "setblock 3 -60 0 minecraft:red_bed[facing=east,part=head]", "setblock 2 -60 0 minecraft:red_bed[facing=east,part=foot]");
+        look(180.0F, 0.0F);
+        pause(20);
+        shot("start");
+        sleep();
+        pause(10);
+        onServer(s -> check("первый сон: игрок лёг и ещё не во сне", player(s).isSleeping() && !Calling.isActive(player(s).getUuid())));
+        waitFor("снится сон", c -> c.world != null && c.world.getRegistryKey() == Calling.WORLD);
+        onServer(s -> {
+            ServerPlayerEntity player = player(s);
+            check("первый сон: игрок там, в режиме приключения", Calling.inCalling(player) && player.interactionManager.getGameMode() == GameMode.ADVENTURE);
+            BlockPos bed = Calling.bed(player);
+            check("первый сон: его кровать у него за спиной", bed != null && player.getWorld().getBlockState(bed).isOf(Blocks.RED_BED) && bed.getZ() < player.getZ());
+        });
+        pause(50);
+        shot("calling_emerge_1");
+        pause(30);
+        shot("calling_emerge_2");
+        pause(40);
+        shot("calling_eyes");
+        pause(30);
+        shot("calling_speech_1");
+        pause(30);
+        shot("calling_eyes_later");
+        pause(60);
+        shot("calling_speech_2");
+        pause(40);
+        onServer(s -> check("первый сон: меча ещё нет", Calling.swordOf(player(s)) == null));
+        pause(46);
+        shot("calling_worthy");
+        pause(30);
+        shot("calling_sword_comes_out");
+        waitFor("меч летит", c -> nearestClient(c) != null);
+        pause(8);
+        shot("calling_sword_flies");
+        waitFor("меч вонзился", c -> stuckSword(c) != null);
+        pause(8);
+        shot("calling_sword_stuck");
+        onServer(s -> check("первый сон: меч воткнут, выбор за игроком", Calling.isOffering(player(s)) && Calling.swordOf(player(s)) != null && !ModAttachments.data(player(s)).bonded));
+        pause(100);
+        shot("calling_choice");
+        look(180.0F, 12.0F);
+        pause(4);
+        shot("calling_bed");
+        look(0.0F, -28.0F);
+        pause(4);
+        shot("calling_figure_again");
+        pause(40);
+        shot("calling_figure_later");
+
+        // Отказ.
+        onServer(s -> Calling.refuse(player(s)));
+        pause(30);
+        onServer(s -> check("отказ: записан сразу", ModAttachments.data(player(s)).refused));
+        shot("calling_wrath");
+        pause(50);
+        shot("calling_refuse_1");
+        pause(70);
+        onServer(s -> check("отказ: меч рассыпался", Calling.swordOf(player(s)) == null));
+        shot("calling_refuse_dust");
+        pause(120);
+        shot("calling_refuse_3");
+        pause(40);
+        shot("calling_farewell");
+        pause(50);
+        shot("calling_eyes_closing");
+        waitFor("глаза закрылись", c -> c.world != null && c.world.getEntitiesByClass(com.zangetsu.entity.ZangetsuSpiritEntity.class, c.player.getBoundingBox().expand(64.0), e -> e.getPhase() == com.zangetsu.entity.ZangetsuSpiritEntity.DISSOLVING).size() > 0);
+        pause(16);
+        shot("calling_dissolving");
+        waitFor("проснулся без меча", c -> c.world != null && c.world.getRegistryKey() == World.OVERWORLD);
+        pause(16);
+        shot("calling_refused_morning");
+        onServer(s -> {
+            ServerPlayerEntity player = player(s);
+            ZangetsuData data = ModAttachments.data(player);
+            check("отказ: проснулся без меча", !Calling.isActive(player.getUuid()) && !data.bonded && data.refused && data.dream == null && SwordStacks.find(player).isEmpty());
+            check("отказ: режим игры прежний, уже утро", player.interactionManager.getGameMode() != GameMode.ADVENTURE && player.getWorld().isDay());
+            ServerWorld dream = s.getWorld(Calling.WORLD);
+            int beds = 0;
+            for (int x = -2; x <= 2; x++) {
+                for (int z = -8; z <= 8; z++) {
+                    for (int y = 30; y < 70; y++) {
+                        if (dream.getBlockState(new BlockPos(Math.floorMod(player.getUuid().hashCode(), 64) * 4000 + x, y, z)).isIn(net.minecraft.registry.tag.BlockTags.BEDS)) {
+                            beds++;
+                        }
+                    }
+                }
+            }
+            check("отказ: кровати во сне больше нет", beds == 0);
+        });
+
+        // Отказ навсегда: снова лёг, но сон не приходит.
+        command("time set 18000");
+        pause(6);
+        sleep();
+        pause(70);
+        onServer(s -> {
+            ServerPlayerEntity player = player(s);
+            check("отказ навсегда: сна больше нет", !Calling.isActive(player.getUuid()) && !Calling.inCalling(player));
+            player.wakeUp(true, true);
+        });
+        // Подбросить меч нельзя.
+        onServer(s -> player(s).giveItemStack(new net.minecraft.item.ItemStack(com.zangetsu.registry.ModItems.ZANGETSU)));
+        pause(4);
+        onServer(s -> check("отказ навсегда: чужой меч не остаётся", SwordStacks.find(player(s)).isEmpty() && !ModAttachments.data(player(s)).bonded));
+
+        // Команда сброса снимает отказ, и сон приходит снова: теперь меч берут.
+        command("execute as @p run zangetsu reset", "time set 18000", "tp @p 0.5 -60 0.5 180 0");
+        pause(6);
+        onServer(s -> check("сброс снимает отказ", !ModAttachments.data(player(s)).refused));
+        sleep();
+        waitFor("снова снится сон", c -> c.world != null && c.world.getRegistryKey() == Calling.WORLD);
+        pause(320);
     }
 
     /**
@@ -795,6 +920,13 @@ public class ZangetsuShots implements ClientModInitializer {
     /** Круг вместо кнопки казни: отличная зона, хорошая, промах, время вышло и удар, который должен был убить. */
     private void writeReaction() {
         onServer(s -> Reaction.enabled = true);
+        onServer(s -> {
+            float from = 0.5F, great = 0.05F, good = 0.17F;
+            check("белая зона засчитывается чуть шире нарисованной", Reaction.judge(from - 0.012F, from, great, good) == Reaction.GREAT && Reaction.judge(from + great + 0.012F, from, great, good) == Reaction.GREAT);
+            check("за белой идёт хорошая", Reaction.judge(from + great + 0.06F, from, great, good) == Reaction.GOOD);
+            check("мимо зоны всё ещё промах", Reaction.judge(from - 0.1F, from, great, good) == Reaction.MISS && Reaction.judge(from + great + good + 0.05F, from, great, good) == Reaction.MISS);
+            check("хорошая зона без белой тоже с запасом", Reaction.judge(from - 0.01F, from, 0.0F, good) == Reaction.GOOD && Reaction.judge(from + good + 0.01F, from, 0.0F, good) == Reaction.GOOD);
+        });
         look(180.0F, 2.0F);
         // Враг, с которым игрок дерётся и которому остался один удар: круг появляется сам.
         onServer(s -> {

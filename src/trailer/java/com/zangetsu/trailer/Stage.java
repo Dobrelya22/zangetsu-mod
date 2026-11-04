@@ -415,7 +415,18 @@ public final class Stage {
         }
     }
 
-    public static ZangetsuSpiritEntity spirit(MinecraftServer server) {
+/** Показательный бросок: фигура появляется перед героем и бросает ему меч, без сна. */
+public static void callSword(ServerPlayerEntity player) {
+    com.zangetsu.logic.Awakening.open(player);
+    Vec3d look = com.zangetsu.logic.Awakening.horizontalLook(player);
+    Vec3d spot = player.getPos().add(look.multiply(18.0)).add(0.0, 19.0, 0.0);
+    Vec3d toPlayer = player.getPos().subtract(spot);
+    float yaw = (float) Math.toDegrees(Math.atan2(toPlayer.z, toPlayer.x)) - 90.0F;
+    ZangetsuSpiritEntity spirit = ZangetsuSpiritEntity.summon(player.getServerWorld(), spot, yaw, 1.0F, player.getUuid());
+    spirit.holdSword(com.zangetsu.logic.Awakening.findLanding(player, look), ZangetsuSpiritEntity.RELEASE_TICK, ZangetsuSpiritEntity.FLIGHT_TICKS);
+}
+
+public static ZangetsuSpiritEntity spirit(MinecraftServer server) {
         List<ZangetsuSpiritEntity> list = player(server).getServerWorld().getEntitiesByClass(ZangetsuSpiritEntity.class,
                 Box.of(center, 120, 120, 120), e -> true);
         return list.isEmpty() ? null : list.get(0);

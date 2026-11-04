@@ -2,7 +2,6 @@ package com.zangetsu.logic;
 
 import com.zangetsu.ZangetsuMod;
 import com.zangetsu.entity.ThrownZangetsuEntity;
-import com.zangetsu.entity.ZangetsuSpiritEntity;
 import com.zangetsu.network.AnimationPayload;
 import com.zangetsu.network.ClientFxPayload;
 import com.zangetsu.registry.ModAttachments;
@@ -15,9 +14,6 @@ import net.minecraft.entity.Entity;
 import net.minecraft.entity.attribute.EntityAttributeInstance;
 import net.minecraft.entity.attribute.EntityAttributeModifier;
 import net.minecraft.entity.attribute.EntityAttributes;
-import net.minecraft.entity.effect.StatusEffectInstance;
-import net.minecraft.entity.effect.StatusEffects;
-import net.minecraft.entity.mob.HostileEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.network.packet.s2c.play.SubtitleS2CPacket;
@@ -33,17 +29,13 @@ import net.minecraft.text.Text;
 import net.minecraft.util.Arm;
 import net.minecraft.util.Formatting;
 import net.minecraft.util.Identifier;
-import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
-import net.minecraft.world.RaycastContext;
 import net.minecraft.world.World;
 
 /**
- * Пробуждение: у игрока осталось одно сердце — в небе появляется фигура, замахивается и бросает
- * ему Зангецу. Меч, вращаясь, вонзается лезвием в землю перед игроком; игрок касается рукояти —
- * сердца восстанавливаются, добавляется ещё 5 сердец (10 здоровья), меч навсегда остаётся с ним.
+ * Меч в земле и сцена подбора: игрок берёт рукоять, сердца восстанавливаются, добавляется ещё 5 сердец (10 здоровья), меч навсегда остаётся с ним. Откуда меч взялся и что будет после,
+ * решает {@link Calling}.
  */
 public final class Awakening {
     public static final Identifier HEALTH_BONUS = ZangetsuMod.id("bond_health");
@@ -87,61 +79,21 @@ public final class Awakening {
         return session != null && (session.landedAt < 0 || session.picking || session.tick - session.landedAt < PROTECTION_AFTER_LANDING);
     }
 
-    public static boolean shouldTrigger(ServerPlayerEntity player, ZangetsuData data) {
-        return !data.bonded && !SESSIONS.containsKey(player.getUuid()) && player.isAlive() && !player.isSpectator()
-                && player.getHealth() <= 2.0F && data.dream == null;
-    }
-
-    public static void start(ServerPlayerEntity player) {
-        ServerWorld world = player.getServerWorld();
+    /** Меч вот-вот появится: с этого момента он связан с игроком. */
+    public static void open(ServerPlayerEntity player) {
         Session session = new Session();
-        session.world = world.getRegistryKey();
+        session.world = player.getServerWorld().getRegistryKey();
         SESSIONS.put(player.getUuid(), session);
-
-        Vec3d look = horizontalLook(player);
-        Vec3d landing = findLanding(player, look);
-
-        // Фигура — впереди и выше игрока; в пещере ближе и меньше, чтобы её было видно.
-        double[][] candidates = {{18, 13}, {14, 10}, {10, 7}, {7, 4.5}, {5, 3}};
-        Vec3d spot = null;
-        float scale = 1.2F;
-        for (double[] c : candidates) {
-            float s = (float) MathHelper.clamp(c[0] / 4.5, 1.2, 4.0);
-            Vec3d pos = player.getPos().add(look.multiply(c[0])).add(0.0, c[1], 0.0);
-            HitResult hit = world.raycast(new RaycastContext(player.getEyePos(), pos.add(0.0, 1.6 * s, 0.0),
-                    RaycastContext.ShapeType.COLLIDER, RaycastContext.FluidHandling.NONE, player));
-            spot = pos;
-            scale = s;
-            if (hit.getType() == HitResult.Type.MISS) {
-                break;
-            }
-        }
-        Vec3d toPlayer = player.getPos().subtract(spot);
-        float yaw = (float) Math.toDegrees(Math.atan2(toPlayer.z, toPlayer.x)) - 90.0F;
-        ZangetsuSpiritEntity.summon(world, spot, yaw, scale, player.getUuid(), landing);
-
-        // Смотрим чуть ниже ног фигуры — тогда она целиком над заголовком.
-        Cinematic.face(player, spot.add(0.0, -1.5, 0.0));
-        player.networkHandler.sendPacket(new TitleFadeS2CPacket(10, 40, 15));
-        player.networkHandler.sendPacket(new SubtitleS2CPacket(Text.translatable("zangetsu.awaken.subtitle").formatted(Formatting.GRAY)));
-        player.networkHandler.sendPacket(new TitleS2CPacket(Text.translatable("zangetsu.awaken.title").formatted(Formatting.DARK_RED)));
-        Fx.sound(player, SoundEvents.AMBIENT_CAVE.value(), 1.0F, 0.6F);
-
-        // Время будто замирает: мобы вокруг вязнут.
-        for (HostileEntity mob : world.getEntitiesByClass(HostileEntity.class, player.getBoundingBox().expand(24.0), Entity::isAlive)) {
-            mob.addStatusEffect(new StatusEffectInstance(StatusEffects.SLOWNESS, 200, 4));
-            mob.addStatusEffect(new StatusEffectInstance(StatusEffects.WEAKNESS, 200, 4));
-        }
     }
 
-    private static Vec3d horizontalLook(ServerPlayerEntity player) {
+    public static Vec3d horizontalLook(ServerPlayerEntity player) {
         Vec3d look = player.getRotationVector();
         Vec3d flat = new Vec3d(look.x, 0.0, look.z);
         return flat.lengthSquared() < 1.0E-4 ? new Vec3d(0, 0, 1) : flat.normalize();
     }
 
     /** Куда вонзится меч: на землю в паре шагов перед игроком. */
-    private static Vec3d findLanding(ServerPlayerEntity player, Vec3d look) {
+    public static Vec3d findLanding(ServerPlayerEntity player, Vec3d look) {
         World world = player.getWorld();
         for (double d : new double[]{2.3, 1.9, 1.5, 1.1}) {
             Vec3d p = player.getPos().add(look.multiply(d));
@@ -172,7 +124,7 @@ public final class Awakening {
         ServerPlayerEntity player = sword.getServer().getPlayerManager().getPlayer(owner);
         if (player != null) {
             Sync.fx(player, ClientFxPayload.SHAKE, 12);
-            player.sendMessage(Text.translatable("zangetsu.awaken.touch").formatted(Formatting.GOLD), true);
+            Calling.onSwordLanded(player);
         }
     }
 
@@ -182,6 +134,7 @@ public final class Awakening {
             return;
         }
         session.picking = true;
+        Calling.onPickUp(player);
         if (HollowForm.skipRite) {
             Scheduler.later(CLAIM_GRIP, () -> bond(player, sword));
             Scheduler.later(CLAIM_TICKS, () -> SESSIONS.remove(player.getUuid()));
@@ -255,7 +208,10 @@ public final class Awakening {
             player.networkHandler.sendPacket(new SubtitleS2CPacket(Text.translatable("zangetsu.bonded.subtitle").formatted(Formatting.GRAY)));
             player.networkHandler.sendPacket(new TitleS2CPacket(Text.translatable("zangetsu.bonded.title").formatted(Formatting.DARK_RED, Formatting.BOLD)));
         });
-        Scheduler.later(total, () -> SESSIONS.remove(player.getUuid()));
+        Scheduler.later(total, () -> {
+            SESSIONS.remove(player.getUuid());
+            Calling.onClaimed(player);
+        });
     }
 
     private static void at(ServerPlayerEntity player, int tick, Runnable action) {

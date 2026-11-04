@@ -263,7 +263,7 @@ final class Showcase {
         scene("claim", 300.0, 322.0);
         s.settle = 20;
         s.setup = srv -> Script.base(srv, 0, false);
-        server(300.1, srv -> Awakening.start(Stage.player(srv)));
+        server(300.1, srv -> Stage.callSword(Stage.player(srv)));
         server(308.0, srv -> {
             HollowForm.skipRite = false;
             ServerPlayerEntity p = Stage.player(srv);
