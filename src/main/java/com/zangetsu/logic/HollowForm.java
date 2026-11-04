@@ -8,9 +8,14 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
 import net.minecraft.block.Blocks;
+import net.minecraft.entity.EntityType;
+import net.minecraft.entity.LightningEntity;
+import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.effect.StatusEffect;
 import net.minecraft.entity.effect.StatusEffectInstance;
 import net.minecraft.entity.effect.StatusEffects;
+import net.minecraft.entity.mob.Monster;
+import net.minecraft.item.ItemStack;
 import net.minecraft.particle.BlockStateParticleEffect;
 import net.minecraft.particle.ParticleTypes;
 import net.minecraft.registry.entry.RegistryEntry;
@@ -28,7 +33,18 @@ import net.minecraft.util.math.Vec3d;
  */
 public final class HollowForm {
     public static final int BUDGET = 2 * 60 * 20;
-    public static final int TRANSFORM_TICKS = 30;
+    /** Превращение на уровне IV: рука по лицу и маска. Сколько длится и когда он поднимает голову с ревом. */
+    public static final int MASK_TICKS = 72, MASK_ROAR = 53;
+    /**
+     * Превращение на уровне V: сколько длится весь обряд и его мгновения — молния, конец стояния на колене, глаза загораются, он выпрямился,
+     * меч лёг на плечо, выпад.
+     */
+    public static final int RITE_TICKS = 176, RITE_STRIKE = 40, RITE_KNEEL_END = 86, RITE_IGNITE = 112, RITE_STAND = 118, RITE_SHOULDER = 134, RITE_LUNGE = 155;
+    /** Сколько ранит выпад в конце обряда. */
+    private static final float LUNGE_DAMAGE = 14.0F;
+    /** Форма включается сразу, без сцены: для постановочных съёмок, где важно не превращение. */
+    public static boolean skipRite;
+    private static final Set<UUID> TRANSFORMING = new HashSet<>();
     public static final int GETSUGA_COOLDOWN = 24;
     /** Замах Гецуги: через столько тиков волна срывается с клинка; вся анимация — дольше. */
     public static final int GETSUGA_WINDUP = 7;
@@ -95,28 +111,179 @@ public final class HollowForm {
     }
 
     private static void start(ServerPlayerEntity player, ZangetsuData data) {
-        ServerWorld world = player.getServerWorld();
         data.hollowActive = true;
-        Cinematic.play(player, AnimationPayload.HOLLOW, TRANSFORM_TICKS);
+        boolean finalForm = isFinal(data);
+        if (!skipRite) {
+            int ticks = finalForm ? RITE_TICKS : MASK_TICKS;
+            TRANSFORMING.add(player.getUuid());
+            Scheduler.later(ticks, () -> TRANSFORMING.remove(player.getUuid()));
+            if (finalForm && !SwordStacks.isHolding(player)) {
+                // Меч нужен в руке: вся сцена с ним.
+                ItemStack sword = SwordStacks.find(player).get(0);
+                ItemStack moved = sword.copy();
+                sword.setCount(0);
+                SwordStacks.giveToHand(player, moved);
+            }
+            Cinematic.play(player, finalForm ? AnimationPayload.HOLLOW_FINAL : AnimationPayload.HOLLOW, ticks);
+        }
         Sync.hollow(player, true);
-        Sync.fx(player, ClientFxPayload.RED_FLASH, TRANSFORM_TICKS);
-        Vec3d chest = player.getPos().add(0.0, 1.2, 0.0);
-        Fx.sound(player, SoundEvents.ENTITY_WARDEN_ROAR, 1.0F, 0.9F);
-        Fx.sound(player, SoundEvents.ENTITY_WITHER_SPAWN, 0.5F, 1.4F);
-        Fx.particles(world, Fx.REIATSU_BLACK, chest, 30, 0.7, 0.05);
-        Fx.particles(world, Fx.REIATSU_RED, chest, 30, 0.9, 0.05);
-        Fx.particles(world, ParticleTypes.SONIC_BOOM, chest, 1, 0.0, 0.0);
-        Fx.ring(world, ParticleTypes.LARGE_SMOKE, player.getPos().add(0, 0.2, 0), 2.5, 30);
-        player.sendMessage(Text.translatable(isFinal(data) ? "zangetsu.hollow.on.final" : "zangetsu.hollow.on")
+        player.sendMessage(Text.translatable(finalForm ? "zangetsu.hollow.on.final" : "zangetsu.hollow.on")
                 .formatted(Formatting.DARK_RED, Formatting.BOLD), true);
         applyBuffs(player);
         SwordStacks.refreshAll(player);
         Sync.player(player);
+        if (!skipRite) {
+            if (finalForm) {
+                finalRite(player);
+            } else {
+                maskRite(player);
+            }
+        }
+    }
+
+    /** Идёт ли превращение: урон не проходит, а время формы не тратится. */
+    public static boolean isTransforming(ServerPlayerEntity player) {
+        return TRANSFORMING.contains(player.getUuid());
+    }
+
+    /** Звук и частицы превращения в свой миг, если игрок ещё в форме. */
+    private static void at(int tick, ServerPlayerEntity player, Runnable action) {
+        Scheduler.later(tick, () -> {
+            if (player.isAlive() && !player.isRemoved() && ModAttachments.data(player).hollowActive) {
+                action.run();
+            }
+        });
+    }
+
+    /** Уровень IV: хруст кости под ладонью, с которой проступает маска, и рёв, когда он поднимает голову. */
+    private static void maskRite(ServerPlayerEntity player) {
+        ServerWorld world = player.getServerWorld();
+        Fx.sound(player, SoundEvents.ENTITY_WARDEN_HEARTBEAT, 1.0F, 0.9F);
+        at(14, player, () -> Fx.sound(player, SoundEvents.ENTITY_WARDEN_HEARTBEAT, 1.0F, 1.0F));
+
+        for (int tick = 18; tick <= 44; tick += 4) {
+            float pitch = 0.7F + (tick - 18) * 0.015F;
+            at(tick, player, () -> {
+                Fx.sound(player, SoundEvents.BLOCK_BONE_BLOCK_HIT, 0.7F, pitch);
+                Vec3d face = player.getEyePos().add(player.getRotationVector().multiply(0.4));
+                Fx.particles(world, ParticleTypes.WHITE_ASH, face, 8, 0.16, 0.01);
+            });
+        }
+        at(MASK_ROAR, player, () -> {
+            Vec3d chest = player.getPos().add(0.0, 1.2, 0.0);
+            Sync.fx(player, ClientFxPayload.RED_FLASH, 22);
+            Fx.sound(player, SoundEvents.ENTITY_WARDEN_ROAR, 1.0F, 0.9F);
+            Fx.sound(player, SoundEvents.ENTITY_WITHER_SPAWN, 0.5F, 1.4F);
+            Fx.particles(world, Fx.REIATSU_BLACK, chest, 10, 1.1, 0.04);
+            Fx.particles(world, Fx.REIATSU_RED, chest, 10, 1.3, 0.04);
+            Fx.ring(world, ParticleTypes.SMOKE, player.getPos().add(0, 0.2, 0), 2.5, 30);
+        });
+    }
+
+    /**
+     * Уровень V: сердце бьётся всё чаще, реяцу стягивается к ногам, он кричит; молния не ранит, но вбивает его на колено и приносит огонь, плащ и цепи.
+     * Дым рассеивается, он поднимается, глаза загораются, меч со звоном ложится на плечо, а выпад рвёт воздух и отбрасывает всех, кто рядом.
+     */
+    private static void finalRite(ServerPlayerEntity player) {
+        ServerWorld world = player.getServerWorld();
+        for (int tick : new int[]{0, 12, 22, 29, 34, 37}) {
+            at(tick, player, () -> Fx.sound(player, SoundEvents.ENTITY_WARDEN_HEARTBEAT, 1.0F, 1.0F));
+        }
+        for (int tick = 0; tick < RITE_STRIKE; tick += 4) {
+            double radius = 3.4 - tick * 0.07;
+            at(tick, player, () -> {
+                Fx.ring(world, Fx.REIATSU_BLACK, player.getPos().add(0.0, 0.15, 0.0), radius, 8);
+                Fx.ring(world, Fx.REIATSU_RED, player.getPos().add(0.0, 0.5, 0.0), radius * 0.7, 6);
+            });
+        }
+        at(26, player, () -> {
+            Fx.sound(player, SoundEvents.ENTITY_WARDEN_ROAR, 1.0F, 0.75F);
+            Sync.fx(player, ClientFxPayload.SHAKE, 0);
+        });
+        at(RITE_STRIKE - 2, player, () -> strike(world, player));
+        at(RITE_STRIKE + 6, player, () -> Fx.sound(player, SoundEvents.BLOCK_CHAIN_FALL, 1.0F, 0.7F));
+        for (int tick = RITE_STRIKE + 4; tick < RITE_KNEEL_END; tick += 6) {
+            at(tick, player, () -> {
+                Fx.particles(world, ParticleTypes.SMOKE, player.getPos().add(0.0, 0.3, 0.0), 5, 0.5, 0.01);
+                Fx.sound(player, SoundEvents.BLOCK_FIRE_AMBIENT, 0.5F, 0.7F);
+            });
+        }
+        at(RITE_KNEEL_END + 4, player, () -> Fx.sound(player, SoundEvents.ENTITY_WARDEN_SONIC_CHARGE, 0.8F, 0.7F));
+        at(RITE_IGNITE, player, () -> {
+            Sync.fx(player, ClientFxPayload.RED_FLASH, 10);
+            Fx.sound(player, SoundEvents.ENTITY_BLAZE_SHOOT, 0.9F, 0.6F);
+            Fx.sound(player, SoundEvents.ENTITY_WITHER_SPAWN, 0.35F, 1.5F);
+            Fx.ring(world, Fx.REIATSU_RED, player.getPos().add(0.0, 0.2, 0.0), 2.0, 26);
+        });
+        at(RITE_STAND + 4, player, () -> Fx.sound(player, SoundEvents.ENTITY_PLAYER_ATTACK_SWEEP, 0.8F, 0.7F));
+        at(RITE_SHOULDER, player, () -> {
+            Fx.sound(player, SoundEvents.ITEM_ARMOR_EQUIP_NETHERITE.value(), 1.0F, 0.8F);
+            Fx.sound(player, SoundEvents.BLOCK_CHAIN_PLACE, 1.0F, 0.8F);
+            Fx.sound(player, SoundEvents.BLOCK_ANVIL_LAND, 0.25F, 1.6F);
+        });
+        at(RITE_LUNGE, player, () -> lunge(world, player));
+    }
+
+    /** Молния вокруг игрока: настоящая, но косметическая (ни урона, ни пожара), и ударная волна. */
+    private static void strike(ServerWorld world, ServerPlayerEntity player) {
+        Vec3d at = player.getPos();
+        bolt(world, at);
+        at(2, player, () -> bolt(world, at.add(2.6, 0.0, 1.4)));
+        at(4, player, () -> bolt(world, at.add(-2.2, 0.0, -2.0)));
+        Sync.fx(player, ClientFxPayload.WHITE_FLASH, 10);
+        Sync.fx(player, ClientFxPayload.SHAKE, 0);
+        Fx.sound(player, SoundEvents.ENTITY_GENERIC_EXPLODE.value(), 1.0F, 0.8F);
+        Fx.particles(world, ParticleTypes.EXPLOSION, at.add(0.0, 0.4, 0.0), 6, 0.8, 0.0);
+        Fx.particles(world, ParticleTypes.LARGE_SMOKE, at.add(0.0, 0.2, 0.0), 8, 0.7, 0.03);
+        Fx.particles(world, Fx.REIATSU_BLACK, at.add(0.0, 1.0, 0.0), 12, 1.2, 0.06);
+        Fx.ring(world, ParticleTypes.SMOKE, at.add(0.0, 0.1, 0.0), 2.6, 30);
+        shove(world, player, 7.0, 1.3, 0.0F);
+    }
+
+    private static void bolt(ServerWorld world, Vec3d at) {
+        LightningEntity bolt = EntityType.LIGHTNING_BOLT.create(world);
+        if (bolt != null) {
+            bolt.setCosmetic(true);
+            bolt.refreshPositionAfterTeleport(at.x, at.y, at.z);
+            world.spawnEntity(bolt);
+        }
+    }
+
+    /** Выпад рвёт воздух: волна вперёд, злых мобов перед ним бьёт, всех рядом отбрасывает. */
+    private static void lunge(ServerWorld world, ServerPlayerEntity player) {
+        Vec3d look = player.getRotationVector().multiply(1.0, 0.0, 1.0).normalize();
+        Vec3d chest = player.getPos().add(0.0, 1.1, 0.0);
+        Fx.particles(world, ParticleTypes.SWEEP_ATTACK, chest.add(look.multiply(2.2)), 3, 0.5, 0.0);
+        Fx.particles(world, Fx.REIATSU_RED, chest.add(look.multiply(2.0)), 18, 0.7, 0.08);
+        Fx.ring(world, Fx.REIATSU_RED, player.getPos().add(0.0, 0.2, 0.0), 2.8, 30);
+        Fx.sound(player, SoundEvents.ENTITY_WARDEN_SONIC_BOOM, 1.0F, 1.1F);
+        Fx.sound(player, SoundEvents.BLOCK_CHAIN_FALL, 1.0F, 0.9F);
+        Fx.sound(player, SoundEvents.ENTITY_PLAYER_ATTACK_SWEEP, 1.0F, 0.6F);
+        shove(world, player, 7.0, 1.0, LUNGE_DAMAGE);
+    }
+
+    /** Ударная волна: всех живых вокруг отбрасывает; злых прямо перед игроком ещё и ранит, если задан урон. */
+    private static void shove(ServerWorld world, ServerPlayerEntity player, double radius, double strength, float damage) {
+        Vec3d look = player.getRotationVector().multiply(1.0, 0.0, 1.0).normalize();
+        for (LivingEntity entity : world.getEntitiesByClass(LivingEntity.class, player.getBoundingBox().expand(radius), e -> e != player && e.isAlive())) {
+            Vec3d away = entity.getPos().subtract(player.getPos()).multiply(1.0, 0.0, 1.0);
+            if (away.lengthSquared() > radius * radius || away.lengthSquared() < 1.0E-4) {
+                continue;
+            }
+            away = away.normalize();
+            entity.takeKnockback(strength, -away.x, -away.z);
+            if (damage > 0.0F && entity instanceof Monster && away.dotProduct(look) > 0.2) {
+                entity.damage(world.getDamageSources().playerAttack(player), damage);
+            }
+        }
     }
 
     static void tick(ServerPlayerEntity player, ZangetsuData data) {
         rollDay(player, data);
         if (!data.hollowActive) {
+            return;
+        }
+        if (isTransforming(player)) {
             return;
         }
         data.hollowUsed++;
@@ -185,6 +352,7 @@ public final class HollowForm {
             return;
         }
         data.hollowActive = false;
+        TRANSFORMING.remove(player.getUuid());
         for (RegistryEntry<StatusEffect> buff : BUFFS) {
             player.removeStatusEffect(buff);
         }

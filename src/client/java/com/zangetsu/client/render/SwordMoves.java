@@ -1,5 +1,6 @@
 package com.zangetsu.client.render;
 
+import com.zangetsu.logic.HollowForm;
 import net.minecraft.util.math.MathHelper;
 
 /**
@@ -115,7 +116,33 @@ public final class SwordMoves {
             k(0.70F, false, -0.10F, -0.60F, -0.64F, -0.20F, 0.30F, -0.93F, 0.90F, 0.35F, -0.10F, -0.30F, 0.05F, -0.10F, 0.10F, 0.0F, 345.0F, 0.2F),
             rest(1.0F, 360.0F));
 
-    public static final Move[] ALL = {KESA, RISING, SWEEP, OVERHEAD, BACKHAND, THRUST, UPSWING, WHIRL};
+    /** Доля времени обряда финальной формы по его тику. */
+    private static float rite(float tick) {
+        return tick / HollowForm.RITE_TICKS;
+    }
+
+    /**
+     * Обряд финальной формы, весь меч и тело: сжался от злости, молния вбивает его на колено с клинком в землю, он поднимается, большим кругом через сторону
+     * забрасывает меч на плечо, держит, сжимается и бьёт выпадом двумя руками. Руки и голову поверх дополняет {@link PlayerPoses}.
+     */
+    public static final Move RITE = move(HollowForm.RITE_TICKS, rite(HollowForm.RITE_LUNGE),
+            rest(0.0F, 0.0F),
+            k(rite(18.0F), true, 0.50F, -0.92F, -0.30F, 0.12F, -0.35F, -0.93F, 0.0F, -0.93F, 0.35F, 0.05F, 0.22F, -0.10F, 0.10F, 0.0F, 0.0F, 1.0F),
+            k(rite(38.0F), true, 0.56F, -0.86F, -0.22F, 0.20F, -0.62F, -0.76F, 0.0F, -0.77F, 0.63F, -0.06F, -0.10F, -0.12F, 0.12F, 0.0F, 0.0F, 0.6F),
+            k(rite(HollowForm.RITE_STRIKE + 4.0F), true, 0.46F, -0.34F, -0.52F, 0.02F, -1.0F, -0.02F, 0.0F, 0.0F, -1.0F, 0.18F, 0.50F, 0.0F, 0.0F, 0.0F, 0.0F, 5.0F),
+            k(rite(HollowForm.RITE_KNEEL_END), true, 0.46F, -0.36F, -0.52F, 0.02F, -1.0F, -0.02F, 0.0F, 0.0F, -1.0F, 0.16F, 0.48F, 0.0F, 0.0F, 0.0F, 0.0F, 4.8F),
+            k(rite(104.0F), false, 0.52F, -0.62F, -0.48F, 0.20F, -0.96F, -0.20F, 0.0F, -0.2F, -0.98F, 0.10F, 0.25F, 0.0F, 0.0F, 0.0F, 0.0F, 2.4F),
+            k(rite(HollowForm.RITE_STAND), true, 0.62F, -0.70F, -0.30F, 0.62F, -0.78F, -0.10F, 0.0F, -0.10F, -0.99F, -0.10F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F),
+            k(rite(127.0F), false, 0.50F, -0.12F, -0.30F, 0.42F, 0.90F, 0.10F, -0.10F, -0.05F, -0.99F, -0.20F, -0.12F, 0.05F, -0.05F, 0.0F, 0.0F, -0.3F),
+            k(rite(HollowForm.RITE_SHOULDER), true, 0.50F, -0.31F, -0.42F, 0.12F, 0.42F, 0.90F, -0.05F, 0.82F, -0.38F, -0.22F, -0.06F, 0.10F, -0.10F, 0.0F, 0.0F, 0.3F),
+            k(rite(146.0F), true, 0.50F, -0.30F, -0.40F, 0.12F, 0.40F, 0.91F, -0.05F, 0.83F, -0.37F, -0.25F, -0.05F, 0.10F, -0.10F, 0.0F, 0.0F, 0.2F),
+            k(rite(151.0F), true, 0.28F, -0.42F, -0.46F, -0.16F, 0.30F, -0.94F, -0.90F, -0.38F, 0.03F, 0.50F, -0.08F, 0.28F, -0.22F, 1.0F, 0.0F, 0.5F),
+            k(rite(HollowForm.RITE_LUNGE), false, 0.10F, -0.36F, -0.92F, -0.06F, 0.18F, -0.98F, -0.93F, -0.33F, 0.0F, -0.15F, 0.20F, -0.60F, 0.45F, 1.0F, 0.0F, 1.0F),
+            k(rite(160.0F), true, 0.06F, -0.34F, -1.02F, -0.06F, 0.16F, -0.98F, -0.96F, -0.26F, 0.02F, -0.25F, 0.26F, -0.70F, 0.50F, 1.0F, 0.0F, 1.6F),
+            k(rite(167.0F), true, 0.08F, -0.36F, -0.98F, -0.08F, 0.14F, -0.98F, -0.94F, -0.30F, 0.03F, -0.22F, 0.24F, -0.68F, 0.48F, 1.0F, 0.0F, 1.5F),
+            rest(1.0F, 0.0F));
+
+    public static final Move[] ALL = {KESA, RISING, SWEEP, OVERHEAD, BACKHAND, THRUST, UPSWING, WHIRL, RITE};
     /** Порядок серии: двуручные чередуются с быстрыми, разворот завершает. */
     private static final int[] COMBO = {0, 2, 1, 3, 4, 6, 5, 7};
     /** Какими приёмами меч бьёт сам. */

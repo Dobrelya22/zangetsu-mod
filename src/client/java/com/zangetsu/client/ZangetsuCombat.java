@@ -1,8 +1,11 @@
 package com.zangetsu.client;
 
+import com.zangetsu.client.render.FormPhysics;
+import com.zangetsu.client.render.HollowRite;
 import com.zangetsu.client.render.SlashTrails;
 import com.zangetsu.client.render.SwordMoves;
 import com.zangetsu.logic.Fx;
+import com.zangetsu.network.AnimationPayload;
 import com.zangetsu.registry.ModItems;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayerEntity;
@@ -36,7 +39,15 @@ public final class ZangetsuCombat {
     /** Нажата атака. true — обработано здесь, обычная атака не нужна. */
     public static boolean onAttackKey(MinecraftClient client) {
         ClientPlayerEntity player = client.player;
-        if (player == null || player.isSpectator() || !player.getMainHandStack().isOf(ModItems.ZANGETSU) || ClientState.animation(player) != null) {
+        if (player == null || player.isSpectator()) {
+            return false;
+        }
+        // Пока идёт превращение, бить нельзя ничем.
+        ClientState.Animation animation = ClientState.animation(player);
+        if (animation != null && (animation.type() == AnimationPayload.HOLLOW || animation.type() == AnimationPayload.HOLLOW_FINAL)) {
+            return true;
+        }
+        if (!player.getMainHandStack().isOf(ModItems.ZANGETSU) || animation != null) {
             return false;
         }
         // Блоки ломаются как обычно.
@@ -71,13 +82,26 @@ public final class ZangetsuCombat {
         SwordMoves.Move definition = SwordMoves.ALL[move];
         ClientState.Swing swing = new ClientState.Swing(move, player.age, definition.duration() * speed, aim, color, ClientState.ticks);
         ClientState.SWINGS.put(player.getId(), swing);
+        flare(player, 0.3F, 0.0F);
         return swing;
     }
 
     /** Казнь: приём {@code move}, растянутый или сжатый до {@code duration} тиков. */
     public static void execution(PlayerEntity player, int move, int duration) {
         start(player, 0.0F, move, duration / SwordMoves.ALL[move].duration(), trailColor(player)).execution = true;
+        flare(player, 0.8F, 0.15F);
         queued = false;
+    }
+
+    /** Огонь вспыхивает, а плащ и цепи получают толчок назад, против удара. Только у тех, на ком есть огонь. */
+    public static void flare(PlayerEntity player, float heat, float push) {
+        if (!ClientState.isHollow(player)) {
+            return;
+        }
+        FormPhysics physics = FormPhysics.of(player);
+        physics.kick(heat);
+        Vec3d look = player.getRotationVector();
+        physics.impulse((float) -look.x * push, 0.03F, (float) -look.z * push);
     }
 
     private static int trailColor(PlayerEntity player) {
@@ -90,6 +114,7 @@ public final class ZangetsuCombat {
             return;
         }
         for (PlayerEntity player : client.world.getPlayers()) {
+            HollowRite.tick(player);
             noticeSwing(client, player);
             ClientState.Swing swing = ClientState.swing(player, player.age);
             if (swing == null) {
@@ -161,6 +186,7 @@ public final class ZangetsuCombat {
 
     private static void impact(MinecraftClient client, PlayerEntity player, ClientState.Swing swing, Entity target) {
         swing.freeze(player.age, HIT_STOP);
+        flare(player, 0.7F, 0.1F);
         kickAt = ClientState.ticks;
         Vec3d at = target.getBoundingBox().getCenter();
         client.world.playSound(client.player, at.x, at.y, at.z, SoundEvents.ENTITY_PLAYER_ATTACK_STRONG, SoundCategory.PLAYERS, 0.9F, 0.65F);

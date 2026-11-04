@@ -93,8 +93,8 @@ public final class Abilities {
 
     /** Уровень III+: меч сам рубит ближайшего злого моба. */
     public static void autoAttack(ServerPlayerEntity player) {
-        // Пока идёт казнь, меч занят только ею.
-        if (Execution.isBusy(player)) {
+        // Пока идёт казнь или превращение, меч занят только этим.
+        if (Execution.isBusy(player) || HollowForm.isTransforming(player)) {
             return;
         }
         long now = player.getServer().getTicks();

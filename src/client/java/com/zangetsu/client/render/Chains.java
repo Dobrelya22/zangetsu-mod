@@ -14,7 +14,7 @@ final class Chains {
     private static final int RING = 8, WIRE = 4;
     private static final float LINK_LENGTH = 1.7F, LINK_WIDTH = 1.08F, WIRE_RADIUS = 0.24F;
     /** Шаг звеньев: каждое следующее входит в предыдущее. */
-    private static final float STEP = LINK_LENGTH - WIRE_RADIUS * 2.0F - 0.12F;
+    static final float LINK_STEP = LINK_LENGTH - WIRE_RADIUS * 2.0F - 0.12F;
     private static final int IRON = 0x4A4A52, DARK_IRON = 0x2C2C32;
 
     private Chains() {
@@ -62,7 +62,7 @@ final class Chains {
             Vector3f axis = new Vector3f(to).sub(from).normalize();
             Vector3f across = new Vector3f(bulge).sub(new Vector3f(axis).mul(bulge.dot(axis))).normalize();
             Vector3f flat = new Vector3f(axis).cross(across).normalize();
-            int count = Math.max(1, (int) (length / STEP));
+            int count = Math.max(1, (int) (length / LINK_STEP));
             for (int k = 0; k < count; k++) {
                 Vector3f center = new Vector3f(from).add(new Vector3f(axis).mul((k + 0.5F) * length / count));
                 link(out, entry, center, axis, turned ? flat : across, turned ? DARK_IRON : IRON, light);
@@ -71,25 +71,26 @@ final class Chains {
         }
     }
 
-    /**
-     * Свободно висящая цепь от точки (пиксели) по силе тяжести, с качанием и ветром. {@code down} и {@code wind} — в координатах матрицы,
-     * ветер тем сильнее, чем дальше звено от крепления.
-     */
-    static void hanging(VertexConsumer out, MatrixStack.Entry entry, Vector3f start, Vector3f down, Vector3f wind, int count, float time, float seed, int light) {
-        Vector3f side = new Vector3f(down).cross(Math.abs(down.x) < 0.8F ? new Vector3f(1.0F, 0.0F, 0.0F) : new Vector3f(0.0F, 0.0F, 1.0F)).normalize();
-        Vector3f other = new Vector3f(down).cross(side).normalize();
-        Vector3f at = new Vector3f(start);
+    /** Свободная цепь по узлам (пиксели), которые посчитала физика: звено между каждыми двумя соседними. */
+    static void rope(VertexConsumer out, MatrixStack.Entry entry, Vector3f[] nodes, int light) {
+        Vector3f across = new Vector3f(1.0F, 0.0F, 0.0F);
         boolean turned = false;
-        for (int i = 0; i < count; i++) {
-            float k = (i + 1.0F) / count;
-            float swing = MathHelper.sin(time * 0.13F + seed - k * 1.6F) * 0.28F * k;
-            float swing2 = MathHelper.cos(time * 0.09F + seed * 2.0F - k) * 0.16F * k;
-            Vector3f axis = new Vector3f(down).add(new Vector3f(side).mul(swing)).add(new Vector3f(other).mul(swing2)).add(new Vector3f(wind).mul(k * 1.4F)).normalize();
-            Vector3f across = new Vector3f(side).sub(new Vector3f(axis).mul(side.dot(axis))).normalize();
+        for (int i = 0; i + 1 < nodes.length; i++) {
+            Vector3f axis = new Vector3f(nodes[i + 1]).sub(nodes[i]);
+            if (axis.lengthSquared() < 1.0E-6F) {
+                continue;
+            }
+            axis.normalize();
+            // Поперечная ось идёт за цепью без рывков, а не считается заново: иначе звенья дёргались бы вокруг оси.
+            across.sub(new Vector3f(axis).mul(across.dot(axis)));
+            if (across.lengthSquared() < 1.0E-4F) {
+                across.set(Math.abs(axis.x) < 0.8F ? new Vector3f(1.0F, 0.0F, 0.0F) : new Vector3f(0.0F, 0.0F, 1.0F));
+                across.sub(new Vector3f(axis).mul(across.dot(axis)));
+            }
+            across.normalize();
             Vector3f flat = new Vector3f(axis).cross(across).normalize();
-            Vector3f center = new Vector3f(at).add(new Vector3f(axis).mul(STEP * 0.5F));
+            Vector3f center = new Vector3f(nodes[i]).add(nodes[i + 1]).mul(0.5F);
             link(out, entry, center, axis, turned ? flat : across, turned ? DARK_IRON : IRON, light);
-            at.add(new Vector3f(axis).mul(STEP));
             turned = !turned;
         }
     }

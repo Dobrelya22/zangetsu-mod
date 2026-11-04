@@ -23,7 +23,7 @@ public abstract class LivingEntityRendererMixin {
     @Inject(method = "setupTransforms", at = @At("TAIL"))
     private void zangetsu$swingRoot(LivingEntity entity, MatrixStack matrices, float animationProgress, float bodyYaw, float tickDelta, float scale,
             CallbackInfo ci) {
-        if (entity instanceof PlayerEntity && ClientState.SWINGS.containsKey(entity.getId())) {
+        if (entity instanceof PlayerEntity) {
             float[] root = PlayerPoses.root(entity, animationProgress);
             if (root != null) {
                 matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(root[0]));

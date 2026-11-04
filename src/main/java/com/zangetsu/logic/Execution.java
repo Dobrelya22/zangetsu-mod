@@ -133,7 +133,7 @@ public final class Execution {
     /** Казнить моба; {@code forced} — каким приёмом (null — выбрать самому). */
     public static void request(ServerPlayerEntity player, int targetId, Variant forced) {
         ZangetsuData data = ModAttachments.data(player);
-        if (!data.bonded || !SwordStacks.isHolding(player) || BUSY.contains(player.getUuid())) {
+        if (!data.bonded || !SwordStacks.isHolding(player) || BUSY.contains(player.getUuid()) || HollowForm.isTransforming(player)) {
             return;
         }
         boolean flash = data.hollowActive && HollowForm.isFinal(data);

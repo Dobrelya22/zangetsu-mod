@@ -52,6 +52,8 @@ final class Showcase {
         finalGetsuga();
         execute();
         finalForm();
+        transformations();
+        reactions();
         moves("moves_side", 50.0, 270.0F, false);
         moves("moves_front", 75.0, 205.0F, false);
         moves("moves_fp", 100.0, 0.0F, true);
@@ -195,6 +197,54 @@ final class Showcase {
         server(251.0, srv -> Execution.request(Stage.player(srv), Stage.id("B")));
         server(253.5, srv -> Execution.request(Stage.player(srv), Stage.id("C")));
         cut(248.0, "flash", shot(heroAt(4.8, 1.8, 4.0), heroAt(0, 1.0, -1.0), 54));
+    }
+
+    /** Превращения: рука по лицу на уровне IV и весь обряд на уровне V, сбоку и спереди. */
+    private void transformations() {
+        scene("rite_mask", 260.0, 267.5);
+        s.settle = 20;
+        s.setup = srv -> Script.base(srv, 4, false);
+        server(260.1, srv -> {
+            HollowForm.skipRite = false;
+            HollowForm.toggle(Stage.player(srv));
+        });
+        speed(260.0, 0.5F);
+        cut(260.0, "mask_face", shot(arc(1.9, 208, 1.6), p(0, 1.5, 0), 42));
+        cut(264.5, "mask_side", shot(arc(2.8, 190, 1.55), p(0, 1.2, 0), 46));
+
+        scene("rite_final", 268.0, 280.0);
+        s.settle = 20;
+        s.setup = srv -> Script.base(srv, 5, false);
+        server(268.1, srv -> {
+            HollowForm.skipRite = false;
+            HollowForm.toggle(Stage.player(srv));
+        });
+        speed(268.0, 0.8F);
+        cut(268.0, "rage", shot(arc(3.0, 200, 1.4), p(0, 1.1, 0), 46));
+        cut(270.5, "strike", shot(arc(8.0, 190, 2.2), p(0, 2.0, 0), 56));
+        cut(271.3, "kneel", shot(arc(3.6, 200, 0.8), p(0, 0.6, 0), 46));
+        cut(273.5, "rise", shot(arc(3.2, 180, 0.6), p(0, 1.2, 0), 50));
+        cut(275.5, "shoulder", shot(arc(2.8, 212, 1.5), p(0, 1.2, 0), 46));
+        cut(277.3, "lunge", shot(arc(5.0, 268, 1.2), p(0, 1.0, -1.0), 50));
+    }
+
+    /** Бег, удары и Гецуга: как плащ, цепи и огонь отвечают на движение. */
+    private void reactions() {
+        scene("react_run", 280.0, 286.0);
+        s.settle = 70;
+        s.setup = srv -> Script.base(srv, 5, true);
+        client(280.1, () -> Director.walkTo = Stage.at(0, 0, -60));
+        client(283.0, () -> MinecraftClient.getInstance().options.sprintKey.setPressed(true));
+        cut(280.0, "run_side", shot(heroAt(4.0, 1.2, 1.4), heroAt(0, 1.0, 0), 48));
+
+        scene("react_swing", 286.0, 292.0);
+        s.settle = 70;
+        s.setup = srv -> Script.base(srv, 5, true);
+        speed(286.0, 0.5F);
+        for (int i = 0; i < 4; i++) {
+            client(286.3 + i * 1.3, () -> MinecraftClient.getInstance().player.swingHand(Hand.MAIN_HAND));
+        }
+        cut(286.0, "swing_all", shot(arc(4.2, 240, 1.3), p(0, 1.0, 0), 50));
     }
 
     /** Точка рядом с героем, куда бы он ни убежал. */

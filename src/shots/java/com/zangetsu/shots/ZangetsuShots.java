@@ -7,6 +7,7 @@ import com.zangetsu.entity.SeveredPartEntity;
 import com.zangetsu.entity.ThrownZangetsuEntity;
 import com.zangetsu.logic.Awakening;
 import com.zangetsu.logic.Bond;
+import com.zangetsu.logic.Cinematic;
 import com.zangetsu.logic.Dream;
 import com.zangetsu.logic.Execution;
 import com.zangetsu.logic.HollowForm;
@@ -421,11 +422,15 @@ public class ZangetsuShots implements ClientModInitializer {
         pause(40);
         shot("hud_ready");
         onServer(s -> HollowForm.toggle(player(s)));
-        pause(8);
-        shot("hollow_transform");
-        pause(12);
-        shot("hollow_roar");
-        pause(20);
+        pause(16);
+        shot("mask_hand_rises");
+        pause(16);
+        shot("mask_swipe_forehead");
+        pause(10);
+        shot("mask_swipe_chin");
+        pause(14);
+        shot("mask_roar");
+        pause(28);
         view(Perspective.THIRD_PERSON_FRONT);
         pause(6);
         shot("hollow_mask");
@@ -578,6 +583,48 @@ public class ZangetsuShots implements ClientModInitializer {
         pause(10);
         onServer(s -> HollowForm.toggle(player(s)));
         view(Perspective.FIRST_PERSON);
+        pause(30);
+
+        // ---- Превращение на уровне V целиком: злость, молния, колено, подъём, меч на плечо, выпад.
+        look(180.0F, 2.0F);
+        onServer(s -> {
+            ServerPlayerEntity player = player(s);
+            ModAttachments.data(player).hollowUsed = 0;
+            HollowForm.toggle(player);
+        });
+        pause(16);
+        shot("rite_rage");
+        pause(16);
+        shot("rite_scream");
+        pause(8);
+        shot("rite_strike");
+        pause(18);
+        shot("rite_kneel");
+        onServer(s -> {
+            ServerPlayerEntity player = player(s);
+            this.healthBefore = player.getHealth();
+            player.damage(player.getServerWorld().getDamageSources().generic(), 4.0F);
+            check("в обряде урон не проходит", player.getHealth() >= this.healthBefore);
+            check("в обряде время формы не тратится", ModAttachments.data(player).hollowUsed == 0);
+            check("в обряде игрок не может ходить", Cinematic.isLocked(player));
+        });
+        pause(40);
+        shot("rite_rise");
+        pause(20);
+        shot("rite_stand");
+        pause(14);
+        shot("rite_shoulder");
+        pause(23);
+        shot("rite_lunge");
+        pause(30);
+        onServer(s -> {
+            ServerPlayerEntity player = player(s);
+            check("обряд кончился, игрок снова свободен", !HollowForm.isTransforming(player) && !Cinematic.isLocked(player));
+            check("после обряда форма финальная и включена", ModAttachments.data(player).hollowActive);
+            check("после обряда время формы снова идёт", ModAttachments.data(player).hollowUsed > 0);
+        });
+        act(c -> check("камера вернулась после обряда", c.options.getPerspective() == Perspective.FIRST_PERSON));
+        onServer(s -> HollowForm.toggle(player(s)));
         pause(10);
 
         // ---- Сон с мечами.

@@ -724,6 +724,7 @@ final class Script {
 
     /** Подготовка площадки: герой с мечом нужного уровня, в форме Пустого или без. */
     static ServerPlayerEntity base(MinecraftServer srv, int level, boolean hollow) {
+        HollowForm.skipRite = true;
         Stage.arena(srv);
         ServerPlayerEntity p = Stage.player(srv);
         ZangetsuData data = ModAttachments.data(p);

@@ -122,6 +122,10 @@ public final class ServerEvents {
         if (Awakening.protects(player) && !source.isIn(DamageTypeTags.BYPASSES_INVULNERABILITY)) {
             return false;
         }
+        // Пока идёт сцена превращения, игрок не управляет собой: ранить его было бы нечестно.
+        if (HollowForm.isTransforming(player) && !source.isIn(DamageTypeTags.BYPASSES_INVULNERABILITY)) {
+            return false;
+        }
         ZangetsuData data = ModAttachments.data(player);
         if (data.bonded && (data.level() >= 2 || data.hollowActive) && Eye.awake(player)) {
             return !Abilities.tryParryMelee(player, source, data);

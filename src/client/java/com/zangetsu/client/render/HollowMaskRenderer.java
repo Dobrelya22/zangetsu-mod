@@ -43,6 +43,8 @@ public final class HollowMaskRenderer {
     private static final float MOUTH_FLOOR = -0.7F;
     /** Кость не темнеет вместе с миром: маска должна оставаться белой и ночью. */
     private static final int MIN_BLOCK_LIGHT = 11;
+    /** Ширина раскалённого края растущей кости (пиксели). */
+    private static final float GROWTH_EDGE = 0.9F;
     private static final int NU = 72, NV = 72;
     private static final float THICKNESS = 0.4F;
     /** Готовая поверхность (пиксели), нормали, тени в складках (RGB) и фронтальный x; форма одна на всех — считаем один раз. */
@@ -84,25 +86,36 @@ public final class HollowMaskRenderer {
     }
 
     /**
-     * Нарисовать маску в координатах головы (матрица уже повёрнута как голова модели). {@code grow} — 0..1, маска
-     * нарастает при превращении; {@code glow} — яркость глаз 0..255; {@code finalForm} — финальная маска с рогом.
+     * Нарисовать маску в координатах головы (матрица уже повёрнута как голова модели). {@code mask} — какая её часть уже проступила: при
+     * превращении кость обрезается настоящей плоскостью, а по самому краю светится; {@code glow} — яркость глаз 0..255; {@code finalForm} —
+     * финальная маска с рогом.
      */
-    public static void render(MatrixStack matrices, VertexConsumerProvider consumers, int light, int crack, float grow, int glow,
+    public static void render(MatrixStack matrices, VertexConsumerProvider consumers, int light, int crack, HollowRite.Mask mask, int glow,
             boolean finalForm) {
         crack = MathHelper.clamp(crack, 0, 3);
         matrices.push();
         matrices.scale(1.0F / 16.0F, 1.0F / 16.0F, 1.0F / 16.0F);
-        // Нарастает от середины лица.
-        float scale = MathHelper.lerp(grow, 0.82F, 1.0F);
-        matrices.translate(0.0F, -3.0F, -4.0F);
-        matrices.scale(scale, scale, scale);
-        matrices.translate(0.0F, 3.0F, 4.0F);
-        int alpha = (int) (MathHelper.clamp(grow, 0.0F, 1.0F) * 255.0F);
         Identifier texture = finalForm ? FINAL : MASK;
         Damage damage = DAMAGE[crack];
         int boneLight = LightmapTextureManager.pack(Math.max(LightmapTextureManager.getBlockLightCoordinates(light), MIN_BLOCK_LIGHT),
                 LightmapTextureManager.getSkyLightCoordinates(light));
-        Emitter bone = new Emitter(matrices.peek(), consumers.getBuffer(RenderLayer.getEntityTranslucent(texture)), boneLight, alpha << 24);
+        VertexConsumer boneBuffer = consumers.getBuffer(RenderLayer.getEntityTranslucent(texture));
+        Emitter bone = new Emitter(matrices.peek(), mask.clipped() ? new SliceConsumer(boneBuffer, matrices.peek(), clip(mask.top(), mask.bottom())) : boneBuffer, boneLight, 255 << 24);
+        bones(bone, damage, crack, finalForm);
+        if (mask.clipped()) {
+            // Растущий край кости раскалён: тот же кусок поверхности, только светом и в узкой полосе у края.
+            float top = mask.top() > -1000.0F ? mask.top() : mask.bottom() - GROWTH_EDGE, bottom = mask.bottom() < 1000.0F ? mask.bottom() : mask.top() + GROWTH_EDGE;
+            VertexConsumer edgeBuffer = consumers.getBuffer(RenderLayer.getEyes(texture));
+            bones(new Emitter(matrices.peek(), new SliceConsumer(edgeBuffer, matrices.peek(), clip(top, bottom)), LightmapTextureManager.MAX_LIGHT_COORDINATE, 255 << 24), damage, crack, finalForm);
+        }
+        if (glow > 0) {
+            Emitter eyes = new Emitter(matrices.peek(), consumers.getBuffer(RenderLayer.getEyes(EYES)), LightmapTextureManager.MAX_LIGHT_COORDINATE, 255 << 24);
+            eyeCells(eyes, (glow << 16) | (glow << 8) | glow);
+        }
+        matrices.pop();
+    }
+
+    private static void bones(Emitter bone, Damage damage, int crack, boolean finalForm) {
         face(bone, damage);
         for (Vertex v : damage.vertices()) {
             bone.vertex(v.p(), v.u(), v.v(), v.n(), v.rgb());
@@ -114,11 +127,11 @@ public final class HollowMaskRenderer {
         if (finalForm) {
             horn(bone, 1, crack >= 3 ? 0.45F : (crack >= 2 ? 0.8F : 1.0F));
         }
-        if (glow > 0) {
-            Emitter eyes = new Emitter(matrices.peek(), consumers.getBuffer(RenderLayer.getEyes(EYES)), LightmapTextureManager.MAX_LIGHT_COORDINATE, 255 << 24);
-            eyeCells(eyes, (glow << 16) | (glow << 8) | glow);
-        }
-        matrices.pop();
+    }
+
+    /** Плоскости, оставляющие полосу по высоте (пиксели головы). Координаты матрицы уже в пикселях, а разрез ждёт блоки модели: отсюда 16. */
+    private static float[][] clip(float top, float bottom) {
+        return new float[][]{{0.0F, 1.0F, 0.0F, top * 16.0F}, {0.0F, -1.0F, 0.0F, -bottom * 16.0F}};
     }
 
     // ---------------------------------------------------------------- форма
@@ -712,8 +725,10 @@ public final class HollowMaskRenderer {
 
     private record Emitter(MatrixStack.Entry entry, VertexConsumer vertices, int light, int alpha) {
         void vertex(Vector3f p, float u, float v, Vector3f n, int rgb) {
-            this.vertices.vertex(this.entry.getPositionMatrix(), p.x, p.y, p.z).color(this.alpha | rgb).texture(u, v)
-                    .overlay(OverlayTexture.DEFAULT_UV).light(this.light).normal(this.entry, n.x, n.y, n.z);
+            // Вершина целиком, одним вызовом: так её может принять и обрезка.
+            Vector3f at = this.entry.getPositionMatrix().transformPosition(p, new Vector3f());
+            Vector3f normal = this.entry.transformNormal(n, new Vector3f());
+            this.vertices.vertex(at.x, at.y, at.z, this.alpha | rgb, u, v, OverlayTexture.DEFAULT_UV, this.light, normal.x, normal.y, normal.z);
         }
     }
 }

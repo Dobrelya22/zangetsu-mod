@@ -30,9 +30,11 @@ final class Flames {
         final Matrix4f matrix;
         final Vector3f up, wind, a, b;
         final float time;
+        /** От жара языки длиннее, бьются сильнее и чуть толще. */
+        final float scale, sway;
 
         /** {@code spaceUp} и {@code spaceWind} — вверх по миру и ветер в пространстве, где стоит матрица (мир без поворота камеры либо вид от первого лица). */
-        Frame(MatrixStack.Entry entry, Vector3f spaceUp, Vector3f spaceWind, float time) {
+        Frame(MatrixStack.Entry entry, Vector3f spaceUp, Vector3f spaceWind, float time, float heat) {
             this.entry = entry;
             this.matrix = entry.getPositionMatrix();
             Matrix4f inverse = new Matrix4f(this.matrix).invert();
@@ -41,6 +43,8 @@ final class Flames {
             this.a = new Vector3f(this.up).cross(Math.abs(this.up.x) < 0.8F ? new Vector3f(1.0F, 0.0F, 0.0F) : new Vector3f(0.0F, 0.0F, 1.0F)).normalize();
             this.b = new Vector3f(this.up).cross(this.a).normalize();
             this.time = time;
+            this.scale = 1.0F + 0.4F * heat;
+            this.sway = 1.0F + 0.8F * heat;
         }
     }
 
@@ -107,12 +111,12 @@ final class Flames {
     /** Кольца языка в координатах вида: {x, y, z, цвет×яркость (3), нормаль (3), яркость}. */
     private static float[][][] rings(Frame f, float x, float y, float z, float length, float radius, float seed, float[][] palette, float power) {
         float t = f.time;
-        float height = length * (0.58F + 0.42F * noise(t * 0.21F + seed * 11.0F));
+        float height = length * f.scale * (0.58F + 0.42F * noise(t * 0.21F + seed * 11.0F));
         float[][][] rings = new float[RINGS + 1][SIDES][];
         for (int i = 0; i <= RINGS; i++) {
             float s = (float) i / RINGS;
-            float swayA = 0.24F * MathHelper.sin(t * 0.37F + seed * 7.0F + s * 3.4F) + 0.1F * MathHelper.sin(t * 0.71F + seed * 3.0F - s * 6.1F);
-            float swayB = 0.24F * MathHelper.cos(t * 0.31F + seed * 5.0F + s * 2.8F) + 0.1F * MathHelper.cos(t * 0.63F + seed * 9.0F - s * 5.3F);
+            float swayA = f.sway * (0.24F * MathHelper.sin(t * 0.37F + seed * 7.0F + s * 3.4F) + 0.1F * MathHelper.sin(t * 0.71F + seed * 3.0F - s * 6.1F));
+            float swayB = f.sway * (0.24F * MathHelper.cos(t * 0.31F + seed * 5.0F + s * 2.8F) + 0.1F * MathHelper.cos(t * 0.63F + seed * 9.0F - s * 5.3F));
             float along = height * s;
             float cx = x + f.up.x * along + (f.a.x * swayA + f.b.x * swayB + f.wind.x * s) * along;
             float cy = y + f.up.y * along + (f.a.y * swayA + f.b.y * swayB + f.wind.y * s) * along;
@@ -148,13 +152,13 @@ final class Flames {
     /** Тёмное сердце пламени: непрозрачная чернота внутри языка. Рисуется в полупрозрачный слой до света. */
     static void heart(VertexConsumer out, Frame f, float x, float y, float z, float length, float radius, float seed) {
         float t = f.time;
-        float height = length * (0.58F + 0.42F * noise(t * 0.21F + seed * 11.0F));
+        float height = length * f.scale * (0.58F + 0.42F * noise(t * 0.21F + seed * 11.0F));
         Vector3f previous = null;
         float previousRadius = 0.0F;
         for (int i = 0; i <= 3; i++) {
             float s = i / 3.0F;
             float along = height * s;
-            float swayA = 0.24F * MathHelper.sin(t * 0.37F + seed * 7.0F + s * 3.4F), swayB = 0.24F * MathHelper.cos(t * 0.31F + seed * 5.0F + s * 2.8F);
+            float swayA = f.sway * 0.24F * MathHelper.sin(t * 0.37F + seed * 7.0F + s * 3.4F), swayB = f.sway * 0.24F * MathHelper.cos(t * 0.31F + seed * 5.0F + s * 2.8F);
             Vector3f c = new Vector3f(x, y, z).add(new Vector3f(f.up).mul(along)).add(new Vector3f(f.a).mul(swayA * along))
                     .add(new Vector3f(f.b).mul(swayB * along)).add(new Vector3f(f.wind).mul(s * along));
             float r = radius * (1.0F - s) * Math.min(1.0F, 0.6F + s * 3.5F);

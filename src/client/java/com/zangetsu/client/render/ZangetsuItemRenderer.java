@@ -581,12 +581,17 @@ public class ZangetsuItemRenderer implements BuiltinItemRendererRegistry.Dynamic
         boolean finalForm = holder != null && ClientState.isFinal(holder);
         float[] heat = finalForm ? BURN_HEAT_FINAL : BURN_HEAT;
         int[] ramp = finalForm ? BURN_RAMP_FINAL : BURN_RAMP;
-        float breath = 0.62F + 0.1F * MathHelper.sin(time * 0.17F);
+        // От удара и бега жилы разгораются, а волны по ним бегут быстрее.
+        float now = holder == null ? time : holder.age + MinecraftClient.getInstance().getRenderTickCounter().getTickDelta(false);
+        FormPhysics physics = holder == null ? null : FormPhysics.of(holder);
+        float blaze = physics == null ? 0.0F : physics.heat(now, holderSpeed(holder));
+        float waves = physics == null ? time : physics.flameTime(now);
+        float breath = 0.62F + 0.1F * MathHelper.sin(time * 0.17F) + 0.2F * Math.min(1.0F, blaze);
         float[] flow = new float[FLOW_STEPS];
         for (int i = 0; i < FLOW_STEPS; i++) {
             float u = BLADE_START + (BLADE_END - BLADE_START) * i / (FLOW_STEPS - 1.0F);
-            float first = Math.max(0.0F, MathHelper.sin(u * 0.82F - time * 0.34F));
-            float second = Math.max(0.0F, MathHelper.sin(u * 0.47F - time * 0.21F + 1.7F));
+            float first = Math.max(0.0F, MathHelper.sin(u * 0.82F - waves * 0.34F));
+            float second = Math.max(0.0F, MathHelper.sin(u * 0.47F - waves * 0.21F + 1.7F));
             first *= first * first;
             second = second * second * second * second;
             flow[i] = breath + 0.75F * first * first + 0.5F * second;
@@ -629,21 +634,39 @@ public class ZangetsuItemRenderer implements BuiltinItemRendererRegistry.Dynamic
             Flames.spark(light, matrix, at.x, at.y, at.z, 0.016F * (1.0F - p * p), (255 << 16) | (green << 8) | (int) (34.0F * (1.0F - p)));
         }
         if (finalForm) {
-            bladeFire(consumers, matrices, holder, mode, time);
+            bladeFire(consumers, matrices, holder, physics, mode, now, blaze, waves);
         }
     }
 
-    /** Огонь финальной формы вдоль обуха и у острия: те же языки, что на руках, только мельче. */
-    private static void bladeFire(VertexConsumerProvider consumers, MatrixStack matrices, Entity holder, ModelTransformationMode mode, float time) {
-        Vector3f up = new Vector3f(0.0F, 1.0F, 0.0F);
-        Vector3f wind = new Vector3f((float) (holder.prevX - holder.getX()), 0.0F, (float) (holder.prevZ - holder.getZ())).mul(1.3F);
-        if (mode == ModelTransformationMode.FIRST_PERSON_RIGHT_HAND || mode == ModelTransformationMode.FIRST_PERSON_LEFT_HAND) {
-            Quaternionf toView = new Quaternionf(MinecraftClient.getInstance().gameRenderer.getCamera().getRotation()).conjugate();
-            toView.transform(up);
-            toView.transform(wind);
+    private static float holderSpeed(Entity holder) {
+        double dx = holder.getX() - holder.prevX, dz = holder.getZ() - holder.prevZ;
+        return (float) Math.sqrt(dx * dx + dz * dz);
+    }
+
+    /**
+     * Огонь финальной формы вдоль обуха и у острия: те же языки, что на руках, только мельче. Снос считается от самого клинка:
+     * в ударе меч несётся быстро, и пламя вытягивается за ним, как хвост.
+     */
+    private static void bladeFire(VertexConsumerProvider consumers, MatrixStack matrices, Entity holder, FormPhysics physics, ModelTransformationMode mode, float now, float blaze, float waves) {
+        // В обряде огонь приходит только с молнией.
+        float grow = HollowRite.bodyGrow(holder, MinecraftClient.getInstance().getRenderTickCounter().getTickDelta(false));
+        if (grow <= 0.0F) {
+            return;
         }
-        Flames.Frame frame = new Flames.Frame(matrices.peek(), up, wind, time);
-        float px = 1.0F / 16.0F;
+        Vector3f up = new Vector3f(0.0F, 1.0F, 0.0F);
+        Matrix4f matrix = matrices.peek().getPositionMatrix();
+        boolean firstPerson = mode == ModelTransformationMode.FIRST_PERSON_RIGHT_HAND || mode == ModelTransformationMode.FIRST_PERSON_LEFT_HAND;
+        Vector3f middle = toModel(BLADE_START + (BLADE_END - BLADE_START) * 0.6F, 0.0F, 0.0F);
+        Vector3f wind = new Vector3f();
+        if (firstPerson) {
+            new Quaternionf(MinecraftClient.getInstance().gameRenderer.getCamera().getRotation()).conjugate().transform(up);
+            physics.enterFirstPerson(holder);
+            wind = physics.spaceDirection(physics.flameWind("fp_blade", physics.simFromLocal(matrix).transformPosition(middle, new Vector3f()), now));
+        } else if (physics.enterWorld(matrix, holder, MinecraftClient.getInstance().getRenderTickCounter().getTickDelta(false))) {
+            wind = physics.spaceDirection(physics.flameWind("blade", physics.simFromLocal(matrix).transformPosition(middle, new Vector3f()), now));
+        }
+        Flames.Frame frame = new Flames.Frame(matrices.peek(), up, wind, waves, blaze);
+        float px = grow / 16.0F;
         VertexConsumer blend = consumers.getBuffer(RenderLayer.getEntityTranslucentEmissive(GLOW_TEXTURE));
         for (int i = 0; i < 13; i++) {
             float u = BLADE_START + 0.6F + i * 1.2F;

@@ -22,6 +22,8 @@ public record AnimationPayload(int entityId, int animation, int duration, int pa
     public static final int GETSUGA = 7;
     /** Казнь в финальной форме: тот же приём, но быстрый и без смены камеры. */
     public static final int EXECUTE_FLASH = 8;
+    /** Превращение на уровне V: злость, молния, колено, подъём, меч на плечо и выпад. */
+    public static final int HOLLOW_FINAL = 9;
 
     public static final CustomPayload.Id<AnimationPayload> ID = new CustomPayload.Id<>(ZangetsuMod.id("animation"));
     public static final PacketCodec<ByteBuf, AnimationPayload> CODEC = PacketCodec.tuple(

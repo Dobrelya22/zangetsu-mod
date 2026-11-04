@@ -1,5 +1,6 @@
 package com.zangetsu.client;
 
+import com.zangetsu.client.render.FormPhysics;
 import com.zangetsu.network.PlayerStatePayload;
 import it.unimi.dsi.fastutil.ints.Int2IntOpenHashMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
@@ -132,6 +133,7 @@ public final class ClientState {
         FINAL.remove(entityId);
         SWING_VARIANT.remove(entityId);
         SWINGS.remove(entityId);
+        FormPhysics.forget(entityId);
     }
 
     public static void reset() {
@@ -142,6 +144,7 @@ public final class ClientState {
         FINAL.clear();
         SWING_VARIANT.clear();
         SWINGS.clear();
+        FormPhysics.reset();
         flashStart = -1;
     }
 }
