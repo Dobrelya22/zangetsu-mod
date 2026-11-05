@@ -12,12 +12,12 @@ import net.minecraft.text.Text;
 import net.minecraft.util.math.MathHelper;
 
 /**
- * Сцена отличного попадания. Время будто встало: камера бросается к лицу врага, который ещё смотрит туда, где только что стоял игрок. За его спиной вспыхивает чёрно-алый след,
- * и появляется игрок: большим планом его маска за плечом врага, на экране «ты слишком медлителен» и имя врага. Камера разворачивается в сторону, и приходит удар.
+ * Сцена отличного попадания. Всё быстро: камера бросается к лицу врага, и за его спиной уже стоит игрок, маска за плечом врага, на экране «ты слишком медлителен». Он замирает в замахе,
+ * мир темнеет, на короткий миг всё стоит, и удар приходит резко: камера срывается в сторону, встряска, вспышка.
  */
 public final class TooSlowScene {
-    /** Сколько тиков целиком: стойка и удар (сама длина удара зависит от приёма). */
-    private static final int TOTAL = Execution.BEHIND_HOLD + 40;
+    /** Сколько тиков целиком: стойка, пауза и удар (сама длина удара зависит от приёма). */
+    private static final int TOTAL = Execution.BEHIND_STRIKE + 28;
     private static final float BARS = 0.115F;
 
     private static float start = -1.0F;
@@ -36,7 +36,7 @@ public final class TooSlowScene {
     /** Телепорт разворачивает только взгляд, тело догнало бы его нескоро: он стоял бы спиной к врагу и с вывернутой головой. Пока идёт стойка, тело смотрит туда же, куда голова. */
     static void holdStance(LivingEntity player) {
         ClientState.Animation animation = ClientState.animation(player);
-        if (animation != null && animation.type() == AnimationPayload.EXECUTE_BEHIND) {
+        if ((animation != null && animation.type() == AnimationPayload.EXECUTE_BEHIND) || ClientState.RAMPAGE.containsKey(player.getId())) {
             float yaw = player.getYaw();
             player.setBodyYaw(yaw);
             player.prevBodyYaw = yaw;
@@ -53,17 +53,18 @@ public final class TooSlowScene {
         float d = (float) Execution.behindDistance(target);
         float head = (float) (target.getEyeY() - target.getY()) - 1.27F;
         float mask = 0.36F;
-        int appear = Execution.BEHIND_APPEAR, hold = Execution.BEHIND_HOLD;
+        int appear = Execution.BEHIND_APPEAR, strike = Execution.BEHIND_STRIKE;
         CameraDirector.fly(TOTAL,
                 // Рывок к лицу врага: он ещё ничего не понял.
                 new CameraDirector.Key(0.0F, 208.0F, 3.0F, 5.6F, d, head),
-                new CameraDirector.Key(appear - 1.0F, 206.0F, 2.0F, 3.0F, d, head),
-                // Взгляд уходит ему за плечо: крупно маска, сам враг стоит сбоку на переднем плане и не видит, кто за спиной. Камера медленно наезжает.
-                new CameraDirector.Key(appear + 6.0F, 224.0F, 0.0F, 2.5F, d * 0.1F, mask),
-                new CameraDirector.Key(hold - 2.0F, 216.0F, -1.0F, 2.05F, d * 0.05F, mask),
-                // Камера уходит в сторону: удар виден целиком.
-                new CameraDirector.Key(hold + 7.0F, 262.0F, 7.0F, 4.6F, d * 0.55F, -0.15F),
+                new CameraDirector.Key(appear - 1.0F, 206.0F, 2.0F, 3.4F, d, head),
+                // Взгляд уходит ему за плечо: крупно маска, сам враг стоит сбоку на переднем плане и не видит, кто за спиной. Пока длится пауза, камера чуть наезжает.
+                new CameraDirector.Key(appear + 4.0F, 224.0F, 0.0F, 2.5F, d * 0.1F, mask),
+                new CameraDirector.Key(strike - 1.0F, 218.0F, -1.0F, 2.1F, d * 0.05F, mask),
+                // Удар: камера срывается в сторону, и он виден целиком.
+                new CameraDirector.Key(strike + 3.0F, 262.0F, 7.0F, 4.2F, d * 0.55F, -0.15F),
                 new CameraDirector.Key(TOTAL, 280.0F, 9.0F, 5.2F, d * 0.55F, -0.2F));
+        CameraDirector.impacts(strike, 0.9F);
         // Интерфейс мешал бы кадру.
         MinecraftClient client = MinecraftClient.getInstance();
         hudWas = client.options.hudHidden;
@@ -99,6 +100,11 @@ public final class TooSlowScene {
         if (dark > 0.0F) {
             context.fill(0, 0, w, h, ((int) (dark * 110.0F) << 24) | 0x100006);
         }
+        // Перед ударом мир темнеет: вся сила собирается в замахе.
+        float charge = smooth(Execution.BEHIND_STRIKE - Execution.CHARGE_PAUSE, Execution.BEHIND_STRIKE - 2.0F, now) * (1.0F - smooth(Execution.BEHIND_STRIKE, Execution.BEHIND_STRIKE + 1.0F, now));
+        if (charge > 0.0F) {
+            context.fill(0, 0, w, h, ((int) (charge * 120.0F) << 24) | 0x0A0004);
+        }
         float flash = 1.0F - smooth(Execution.BEHIND_APPEAR, Execution.BEHIND_APPEAR + 4.0F, now);
         if (now >= Execution.BEHIND_APPEAR && flash > 0.0F) {
             context.fill(0, 0, w, h, ((int) (flash * 200.0F) << 24) | 0xFFF2F2);
@@ -112,13 +118,13 @@ public final class TooSlowScene {
 
     /** Фраза вбивается в кадр рывком, под ней алая черта и имя врага. */
     private static void caption(DrawContext context, float now, int w, int h) {
-        float from = Execution.BEHIND_APPEAR + 3.0F, to = Execution.BEHIND_HOLD + 2.0F;
-        if (now < from || now > to + 5.0F) {
+        float from = Execution.BEHIND_APPEAR, to = Execution.BEHIND_STRIKE - 1.0F;
+        if (now < from || now > to + 3.0F) {
             return;
         }
         TextRenderer font = MinecraftClient.getInstance().textRenderer;
-        float slam = smooth(from, from + 3.0F, now);
-        float fade = 1.0F - smooth(to, to + 5.0F, now);
+        float slam = smooth(from, from + 2.0F, now);
+        float fade = 1.0F - smooth(to, to + 3.0F, now);
         int alpha = Math.max(4, (int) (slam * fade * 255.0F)) << 24;
         // Слово большое, но помещается в экран при любом размере интерфейса.
         Text phrase = Text.translatable("zangetsu.reaction.too_slow");

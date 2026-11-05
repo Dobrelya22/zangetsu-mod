@@ -102,6 +102,16 @@ public final class ZangetsuCombat {
         queued = false;
     }
 
+    /** Отличная казнь: тот же приём, но в верхней точке замаха он замирает на {@code pause} тиков. */
+    public static void charged(PlayerEntity player, int move, int duration, float pause) {
+        SwordMoves.Move definition = SwordMoves.ALL[move];
+        ClientState.Swing swing = start(player, 0.0F, move, duration / definition.duration(), trailColor(player));
+        swing.execution = true;
+        swing.freeze(swing.start + swing.duration * definition.trailFrom(), pause);
+        flare(player, 0.8F, 0.15F);
+        queued = false;
+    }
+
     /** Огонь вспыхивает, а плащ и цепи получают толчок назад, против удара. Только у тех, на ком есть огонь. */
     public static void flare(PlayerEntity player, float heat, float push) {
         if (!ClientState.isHollow(player)) {
@@ -151,6 +161,7 @@ public final class ZangetsuCombat {
         if (player != null) {
             walkToSword(client, player);
             TooSlowScene.holdStance(player);
+            RampageScene.tick(client);
         }
         if (queued && player != null) {
             ClientState.Swing swing = ClientState.swing(player, player.age);

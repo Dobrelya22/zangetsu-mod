@@ -47,12 +47,13 @@ public final class ServerEvents {
             Reaction.clear();
             Calling.clear();
             SwordBreak.clear();
+            HollowRampage.clear();
             Trial.clear();
         });
 
         ServerLivingEntityEvents.ALLOW_DAMAGE.register(ServerEvents::allowDamage);
         // Удар, который убил бы врага, вместо этого начинает проверку реакции.
-        ServerLivingEntityEvents.ALLOW_DEATH.register((entity, source, amount) -> !Reaction.interceptDeath(entity, source) && !SwordBreak.interceptDeath(entity, source));
+        ServerLivingEntityEvents.ALLOW_DEATH.register((entity, source, amount) -> !Reaction.interceptDeath(entity, source) && !HollowRampage.interceptDeath(entity, source) && !SwordBreak.interceptDeath(entity, source));
         ServerEntityCombatEvents.AFTER_KILLED_OTHER_ENTITY.register((world, killer, killed) -> {
             if (killer instanceof ServerPlayerEntity player) {
                 onKill(player, killed);
@@ -87,6 +88,7 @@ public final class ServerEvents {
             ServerPlayerEntity player = handler.player;
             Calling.disconnect(player);
             SwordBreak.disconnect(player);
+            HollowRampage.disconnect(player);
             Trial.disconnect(player);
             Awakening.cancel(player);
             Sync.forget(player);
@@ -154,7 +156,7 @@ public final class ServerEvents {
             return false;
         }
         // Пока идёт сцена превращения, игрок не управляет собой: ранить его было бы нечестно. То же и в сцене за спиной врага.
-        if ((HollowForm.isTransforming(player) || Execution.inBehindScene(player)) && !source.isIn(DamageTypeTags.BYPASSES_INVULNERABILITY)) {
+        if ((HollowForm.isTransforming(player) || Execution.inBehindScene(player) || HollowRampage.protects(player)) && !source.isIn(DamageTypeTags.BYPASSES_INVULNERABILITY)) {
             return false;
         }
         ZangetsuData data = ModAttachments.data(player);
@@ -171,6 +173,7 @@ public final class ServerEvents {
         }
         if (Bond.isEvil(killed)) {
             Bond.change(player, Bond.rewardFor(killed));
+            HollowForm.onEvilKill(player, data, killed);
         } else if (Bond.isGood(killed)) {
             Bond.change(player, -Bond.penaltyFor(killed));
         }
@@ -181,6 +184,7 @@ public final class ServerEvents {
         Awakening.tick(player);
         Calling.tick(player, data);
         SwordBreak.tick(player);
+        HollowRampage.tick(player);
         Trial.tick(player, data);
         if (!data.bonded) {
             List<ItemStack> swords = SwordStacks.find(player);

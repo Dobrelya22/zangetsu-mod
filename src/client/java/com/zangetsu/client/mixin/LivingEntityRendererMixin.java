@@ -41,4 +41,10 @@ public abstract class LivingEntityRendererMixin {
             ci.cancel();
         }
     }
+
+    /** След разреза рисуется поверх моба, пока тот ещё стоит. */
+    @Inject(method = "render(Lnet/minecraft/entity/LivingEntity;FFLnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/VertexConsumerProvider;I)V", at = @At("TAIL"))
+    private void zangetsu$cutMark(LivingEntity entity, float yaw, float tickDelta, MatrixStack matrices, VertexConsumerProvider consumers, int light, CallbackInfo ci) {
+        com.zangetsu.client.render.CutMarks.render(entity, matrices, consumers, tickDelta);
+    }
 }

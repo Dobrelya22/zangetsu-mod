@@ -22,6 +22,8 @@ public final class Overlay {
     public static final int HOLD = 3;
     /** Высота чёрной полосы сверху и снизу при 1080 строках (2.39:1). */
     private static final float BAR = 138.0F / 1080.0F;
+    /** Чёрные полосы в кадре. Клип снимается без них: их ставит монтаж, поверх зума и тряски. */
+    static boolean bars = true;
 
     /** Эффект: начало, длительность (секунды ролика), цвет RGB, вид и сила. */
     public record Fx(double start, double duration, int rgb, int kind, float strength) {
@@ -75,9 +77,11 @@ public final class Overlay {
                 context.fill(0, 0, w, h, ((int) (a * 255.0F) << 24) | (fx.rgb() & 0xFFFFFF));
             }
         }
-        int bar = Math.round(h * BAR);
-        context.fill(0, 0, w, bar, 0xFF000000);
-        context.fill(0, h - bar, w, h, 0xFF000000);
+        if (bars) {
+            int bar = Math.round(h * BAR);
+            context.fill(0, 0, w, bar, 0xFF000000);
+            context.fill(0, h - bar, w, h, 0xFF000000);
+        }
         context.getMatrices().pop();
         context.draw();
         view.popMatrix();

@@ -35,7 +35,10 @@ import net.minecraft.world.level.LevelInfo;
  * — папка стоп-кадров, {@code zangetsu.trailer.stillStep} — каждый какой кадр сохранять.
  */
 public final class Director {
-    public static final int FPS = 60;
+    /** Кадров на секунду ролика. Клип снимается с запасом: лишние кадры в монтаже становятся настоящим размытием движения и замедлением. */
+    public static final int FPS = Integer.getInteger("zangetsu.trailer.fps", 60);
+    /** Папка дублей: каждая сцена пишется в свой файл (иначе всё в один). */
+    private static final String TAKES = System.getProperty("zangetsu.trailer.takes", "");
     private static final long SEED = 20261027L;
     /** Первой сцене после загрузки мира — время на генерацию кусков вокруг площадки. */
     private static final int FIRST_SETTLE = 300;
@@ -54,7 +57,7 @@ public final class Director {
     private static volatile double video;
     private static double gameTicks;
     private static float tickDelta;
-    private static float frameTicks = 1.0F / 3.0F;
+    private static float frameTicks = 20.0F / FPS;
     private static int nextEvent;
     private static Scene.Cut activeCut;
     private static boolean frameOpen;
@@ -76,6 +79,11 @@ public final class Director {
 
     public static boolean running() {
         return phase != Phase.BOOT && phase != Phase.DONE;
+    }
+
+    /** Рисовать руку с мечом, хотя интерфейс спрятан. */
+    public static boolean keepsHand() {
+        return scene != null && scene.firstPerson && scene.hideHud && !scene.noHand;
     }
 
     public static boolean rolling() {
@@ -173,6 +181,13 @@ public final class Director {
                     gameTicks = 0.0;
                     nextEvent = 0;
                     Lockstep.enable(true);
+                    if (!TAKES.isBlank()) {
+                        try {
+                            Recorder.startVideo(Path.of(TAKES, scene.name + ".mkv"), client.getFramebuffer().textureWidth, client.getFramebuffer().textureHeight);
+                        } catch (IOException e) {
+                            ZangetsuMod.LOGGER.error("Трейлер: не начать дубль {}", scene.name, e);
+                        }
+                    }
                     phase = Phase.ROLLING;
                     LOG.add(String.format(Locale.ROOT, "scene %s %.3f %.3f real %d", scene.name, scene.start, scene.end,
                             System.currentTimeMillis() - started));
@@ -227,7 +242,7 @@ public final class Director {
         }
         float speed = scene.speedAt(video);
         double before = gameTicks;
-        gameTicks += speed / 3.0;
+        gameTicks += speed * 20.0 / FPS;
         int ticks = (int) (Math.floor(gameTicks + 1.0E-6) - Math.floor(before + 1.0E-6));
         for (int i = 0; i < ticks; i++) {
             Lockstep.tickServer();
@@ -241,7 +256,7 @@ public final class Director {
             }
         }
         tickDelta = (float) Math.min(0.9999, Math.max(0.0, gameTicks + 1.0E-6 - Math.floor(gameTicks + 1.0E-6)));
-        frameTicks = speed / 3.0F;
+        frameTicks = speed * 20.0F / FPS;
         frameOpen = true;
         return ticks;
     }
@@ -262,7 +277,7 @@ public final class Director {
                 Recorder.captureStill(client.getFramebuffer(), String.format(Locale.ROOT, "%05d_%s_%s", frame, scene.name, activeCut.name()));
             }
         }
-        if (frame % 300 == 0) {
+        if (frame % (FPS * 5) == 0) {
             ZangetsuMod.LOGGER.info("Трейлер: кадр {} ({} с), прошло {} с", frame, String.format(Locale.ROOT, "%.2f", video),
                     (System.currentTimeMillis() - started) / 1000);
         }
@@ -270,12 +285,17 @@ public final class Director {
         if (frame >= scene.endFrame()) {
             Lockstep.enable(false);
             Insert.show(null);
+            if (!TAKES.isBlank()) {
+                Recorder.finishVideo();
+            }
             nextScene(client);
         }
     }
 
     /** Что должно держаться каждый кадр: никакого интерфейса, вид «со стороны», нажатые клавиши. */
     private static void hold(MinecraftClient client) {
+        // Всплывающих «новое достижение» и прочего в кадре быть не должно.
+        client.getToastManager().clear();
         if (client.currentScreen != null && client.world != null) {
             // Ни экрана смерти, ни меню в кадре: герой бессмертен, а меню закрываем.
             if (client.player != null && client.player.isDead()) {
@@ -286,7 +306,7 @@ public final class Director {
         // Вид от первого лица — только в витрине (руки и меч, как их видит игрок); тогда и интерфейс не прячем,
         // иначе игра не рисует руки.
         boolean firstPerson = scene != null && scene.firstPerson;
-        client.options.hudHidden = !firstPerson;
+        client.options.hudHidden = !firstPerson || scene.hideHud;
         Perspective perspective = firstPerson ? Perspective.FIRST_PERSON : Perspective.THIRD_PERSON_BACK;
         if (client.options.getPerspective() != perspective && !(scene != null && scene.gameCamera && com.zangetsu.client.CameraDirector.isActive())) {
             client.options.setPerspective(perspective);
@@ -347,13 +367,18 @@ public final class Director {
         o.getEntityDistanceScaling().setValue(5.0);
         o.getSoundVolumeOption(SoundCategory.MASTER).setValue(0.0);
         o.pauseOnLostFocus = false;
+        if (client.getWindow().getFramebufferWidth() >= 3840) {
+            // Кадр вдвое крупнее обычного: и интерфейс вдвое, как при обычном размере.
+            o.getGuiScale().setValue(8);
+            client.onResolutionChanged();
+        }
         client.chunkCullingEnabled = false;
         client.getToastManager().clear();
     }
 
     private static void startRecording(MinecraftClient client) throws IOException {
         String videoFile = System.getProperty("zangetsu.trailer.video");
-        if (videoFile != null && !videoFile.isBlank()) {
+        if (TAKES.isBlank() && videoFile != null && !videoFile.isBlank()) {
             Recorder.startVideo(Path.of(videoFile), client.getFramebuffer().textureWidth, client.getFramebuffer().textureHeight);
         }
         String stills = System.getProperty("zangetsu.trailer.stills");

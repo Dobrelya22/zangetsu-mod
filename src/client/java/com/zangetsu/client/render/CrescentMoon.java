@@ -36,9 +36,9 @@ public final class CrescentMoon {
         return blood;
     }
 
-    /** Обычную луну прячем, пока видна кровавая. */
-    public static boolean hidesVanillaMoon() {
-        return shown > 0.05F;
+    /** Насколько проступила кровавая луна на небе (0..1): солнце и обычная луна настолько же гаснут. */
+    public static float shown() {
+        return shown;
     }
 
     private static boolean wanted() {

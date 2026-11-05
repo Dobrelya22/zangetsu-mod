@@ -28,6 +28,17 @@ public record AnimationPayload(int entityId, int animation, int duration, int pa
     public static final int EXECUTE_BEHIND = 10;
     /** Яхве ломает меч: игрок на колене смотрит, как это происходит. */
     public static final int SWORD_BROKEN = 11;
+    /** Отличная казнь: быстрый приём, который замирает в верхней точке замаха и бьёт резко. */
+    public static final int EXECUTE_CHARGED = 12;
+    /** Смерть в финальной форме: сцена началась, {@code param} — куда он смотрел. */
+    public static final int RAMPAGE_BEGIN = 13;
+    /** Падает на колени, вбивает меч, Пустой выходит, встаёт. */
+    public static final int RAMPAGE_DEATH = 14;
+    /** Стоит на месте: {@code param} — какая поза. */
+    public static final int RAMPAGE_STANCE = 15;
+    public static final int RAMPAGE_END = 16;
+    /** На этом мобе остался светящийся след разреза (сущность — сам моб). */
+    public static final int CUT_MARK = 17;
 
     public static final CustomPayload.Id<AnimationPayload> ID = new CustomPayload.Id<>(ZangetsuMod.id("animation"));
     public static final PacketCodec<ByteBuf, AnimationPayload> CODEC = PacketCodec.tuple(

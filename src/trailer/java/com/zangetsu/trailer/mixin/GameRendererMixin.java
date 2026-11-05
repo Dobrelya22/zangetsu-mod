@@ -2,6 +2,7 @@ package com.zangetsu.trailer.mixin;
 
 import com.zangetsu.trailer.Director;
 import com.zangetsu.trailer.TrailerCamera;
+import net.minecraft.client.option.GameOptions;
 import net.minecraft.client.render.Camera;
 import net.minecraft.client.render.GameRenderer;
 import net.minecraft.client.render.RenderTickCounter;
@@ -9,10 +10,12 @@ import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.math.RotationAxis;
 import org.spongepowered.asm.mixin.Final;
+import org.objectweb.asm.Opcodes;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
@@ -31,6 +34,12 @@ public abstract class GameRendererMixin {
             shift = At.Shift.AFTER))
     private void trailer$camera(RenderTickCounter tickCounter, CallbackInfo ci) {
         TrailerCamera.apply(this.camera, tickCounter.getTickDelta(true));
+    }
+
+    /** В клипе от первого лица интерфейс спрятан, а рука с мечом нужна. Игра прячет их одним флагом. */
+    @Redirect(method = "renderHand", at = @At(value = "FIELD", target = "Lnet/minecraft/client/option/GameOptions;hudHidden:Z", opcode = Opcodes.GETFIELD))
+    private boolean trailer$handWithoutHud(GameOptions options) {
+        return options.hudHidden && !Director.keepsHand();
     }
 
     @Inject(method = "getFov", at = @At("RETURN"), cancellable = true)

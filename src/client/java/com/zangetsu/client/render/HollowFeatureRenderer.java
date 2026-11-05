@@ -2,6 +2,7 @@ package com.zangetsu.client.render;
 
 import com.zangetsu.client.ClientState;
 import net.minecraft.client.network.AbstractClientPlayerEntity;
+import net.minecraft.client.render.VertexConsumer;
 import net.minecraft.client.render.VertexConsumerProvider;
 import net.minecraft.client.render.entity.feature.FeatureRenderer;
 import net.minecraft.client.render.entity.feature.FeatureRendererContext;
@@ -18,6 +19,19 @@ public class HollowFeatureRenderer extends FeatureRenderer<AbstractClientPlayerE
         super(context);
     }
 
+    /** Глаз маски горит: огонь срывается вверх и назад, сердцевина светится. */
+    private static void eyeFire(MatrixStack matrices, VertexConsumerProvider consumers, float fire, float time) {
+        MatrixStack.Entry entry = matrices.peek();
+        float x = 2.05F / 16.0F, y = -2.9F / 16.0F, z = -4.75F / 16.0F;
+        Flames.Frame frame = Flames.Frame.world(entry, new org.joml.Vector3f(0.0F, 0.02F, 0.0F), time * 0.6F, 1.0F);
+        VertexConsumer body = consumers.getBuffer(Flames.bodyLayer());
+        Flames.flame(body, frame, x, y, z, 0.42F * fire, 0.2F * fire, 3.1F, 1.0F);
+        Flames.flame(body, frame, x + 0.03F, y - 0.01F, z, 0.3F * fire, 0.16F * fire, 7.7F, 1.0F);
+        VertexConsumer core = consumers.getBuffer(Flames.coreLayer());
+        Flames.glow(core, frame, x, y, z, 0.42F * fire, 0.2F * fire, 3.1F, 1.0F);
+        Flames.glow(core, frame, x + 0.03F, y - 0.01F, z, 0.3F * fire, 0.16F * fire, 7.7F, 1.0F);
+    }
+
     @Override
     public void render(MatrixStack matrices, VertexConsumerProvider consumers, int light, AbstractClientPlayerEntity player,
             float limbAngle, float limbDistance, float tickDelta, float animationProgress, float headYaw, float headPitch) {
@@ -32,6 +46,10 @@ public class HollowFeatureRenderer extends FeatureRenderer<AbstractClientPlayerE
         matrices.push();
         this.getContextModel().head.rotate(matrices);
         HollowMaskRenderer.render(matrices, consumers, light, crack, mask, glow, ClientState.isFinal(player));
+        float fire = com.zangetsu.client.RampageScene.eyeFire(player, animationProgress);
+        if (fire > 0.0F) {
+            eyeFire(matrices, consumers, fire, animationProgress);
+        }
         matrices.pop();
     }
 }

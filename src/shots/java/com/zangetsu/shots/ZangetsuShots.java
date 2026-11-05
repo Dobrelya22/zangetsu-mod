@@ -213,6 +213,27 @@ public class ZangetsuShots implements ClientModInitializer {
             this.writeEnd();
             return;
         }
+        // Только сцена, где Пустой забирает тело. В тесноте (под крышей) она должна уйти на отдельное поле и вернуться обратно.
+        if ("rampage".equals(System.getProperty("zangetsu.shots.only")) || "rampage_cave".equals(System.getProperty("zangetsu.shots.only"))) {
+            command("time set 6000", "weather clear", "gamerule doDaylightCycle false", "gamerule doMobSpawning false", "tp @p 0.5 -60 0.5 180 0");
+            if ("rampage_cave".equals(System.getProperty("zangetsu.shots.only"))) {
+                command("fill -3 -57 -3 3 -57 3 minecraft:stone");
+                this.expectArena = true;
+            }
+            pause(20);
+            writeRampage();
+            this.writeEnd();
+            return;
+        }
+        // Только разрубы: каждый новый приём покадрово.
+        if ("cuts".equals(System.getProperty("zangetsu.shots.only"))) {
+            command("time set 6000", "weather clear", "gamerule doDaylightCycle false", "gamerule doMobSpawning false", "tp @p 0.5 -60 0.5 180 0");
+            pause(20);
+            writeCuts();
+            writeGauge();
+            this.writeEnd();
+            return;
+        }
         // ---- Первый сон: сначала отказ, потом меч.
         writeFirstDream();
         if ("calling".equals(System.getProperty("zangetsu.shots.only"))) {
@@ -746,6 +767,170 @@ public class ZangetsuShots implements ClientModInitializer {
     }
 
     /** Смертельный удар: Яхве ломает меч, игрок жив. Следующий сон — поиск настоящего среди фальшивых, настоящий подмигивает, потом меч снова с игроком. */
+    /** Шкала формы заполняется за убитых монстров, и маску снова можно надеть. Небо при красной луне. */
+    private void writeGauge() {
+        look(180.0F, 2.0F);
+        onServer(s -> {
+            ServerPlayerEntity player = player(s);
+            s.getCommandManager().executeWithPrefix(player.getCommandSource(), "zangetsu level 4");
+            ZangetsuData data = ModAttachments.data(player);
+            data.hollowUsed = HollowForm.BUDGET;
+            HollowForm.toggle(player);
+            check("шкала пуста: маску не надеть", !data.hollowActive);
+            this.attacker = summon(player, EntityType.HUSK, 3.0);
+            this.attacker.damage(player.getDamageSources().playerAttack(player), 1000.0F);
+        });
+        pause(4);
+        onServer(s -> {
+            ServerPlayerEntity player = player(s);
+            ZangetsuData data = ModAttachments.data(player);
+            check("убит монстр: шкала заполнилась на 5 секунд", data.hollowUsed == HollowForm.BUDGET - 100);
+            HollowForm.skipRite = true;
+            HollowForm.toggle(player);
+            HollowForm.skipRite = false;
+            check("после убийства маску снова можно надеть", data.hollowActive);
+            this.healthBefore = data.hollowUsed;
+            this.attacker = summon(player, EntityType.HUSK, 3.0);
+            this.attacker.damage(player.getDamageSources().playerAttack(player), 1000.0F);
+        });
+        pause(2);
+        onServer(s -> {
+            ZangetsuData data = ModAttachments.data(player(s));
+            check("в самой форме заполняется слабее", data.hollowUsed > this.healthBefore - 100 && data.hollowUsed < this.healthBefore);
+            data.hollowLock = player(s).getServer().getOverworld().getTimeOfDay() + 24000L;
+            int used = data.hollowUsed;
+            this.attacker = summon(player(s), EntityType.HUSK, 3.0);
+            this.attacker.damage(player(s).getDamageSources().playerAttack(player(s)), 1000.0F);
+            check("разбитую маску убийства не чинят", data.hollowUsed == used && HollowForm.ticksLeft(player(s), data) == 0);
+            data.hollowLock = 0L;
+            data.hollowUsed = 0;
+        });
+        command("time set 6000");
+        view(Perspective.FIRST_PERSON);
+        pause(70);
+        look(0.0F, -89.0F);
+        pause(4);
+        shot("sky_no_sun");
+        look(-150.0F, -50.0F);
+        pause(4);
+        shot("sky_red_moon");
+        command("time set 18000");
+        look(0.0F, -89.0F);
+        pause(6);
+        shot("sky_no_moon");
+        look(-150.0F, -50.0F);
+        pause(4);
+        shot("sky_red_moon_night");
+        onServer(s -> HollowForm.end(player(s), false));
+        command("time set 6000");
+        pause(90);
+        look(0.0F, -89.0F);
+        pause(4);
+        shot("sky_sun_back");
+    }
+
+    private boolean expectArena;
+
+    /** Смерть в финальной форме от начала до разбитой маски. */
+    private void writeRampage() {
+        onServer(s -> {
+            s.getCommandManager().executeWithPrefix(player(s).getCommandSource(), "zangetsu give");
+            s.getCommandManager().executeWithPrefix(player(s).getCommandSource(), "zangetsu level 5");
+            HollowForm.skipRite = true;
+            HollowForm.toggle(player(s));
+            HollowForm.skipRite = false;
+        });
+        view(Perspective.FIRST_PERSON);
+        pause(30);
+        onServer(s -> {
+            ServerPlayerEntity player = player(s);
+            check("форма включена", ModAttachments.data(player).hollowActive && HollowForm.isFinal(ModAttachments.data(player)));
+            player.setHealth(3.0F);
+            player.damage(player.getDamageSources().generic(), 1000.0F);
+        });
+        pause(2);
+        onServer(s -> check("смерть в форме: сцена началась, игрок жив", player(s).isAlive() && com.zangetsu.logic.HollowRampage.isActive(player(s).getUuid())));
+        if (this.expectArena) {
+            onServer(s -> check("в тесноте: перенесён на отдельное поле", player(s).getWorld().getRegistryKey() == com.zangetsu.logic.HollowRampage.WORLD));
+        }
+        int[] frames = {10, 20, 40, 70, 96, 106, 125, 146, 162, 184, 204, 224, 244, 266, 300, 340, 380, 420, 440, 480, 524, 540, 560, 568, 584, 600, 610, 618, 636, 655, 668, 684, 696, 708, 713, 717, 720, 726, 738, 752, 766, 780, 806};
+        int at = 2;
+        for (int frame : frames) {
+            pause(Math.max(1, frame - at));
+            at = frame;
+            shot("rampage_" + frame);
+        }
+        pause(com.zangetsu.logic.HollowRampage.END + 30 - at);
+        onServer(s -> {
+            ServerPlayerEntity player = player(s);
+            ZangetsuData data = ModAttachments.data(player);
+            check("сцена кончилась, игрок жив и свободен", player.isAlive() && !com.zangetsu.logic.HollowRampage.isActive(player.getUuid()) && !Cinematic.isLocked(player));
+            if (this.expectArena) {
+                check("в тесноте: вернулся туда, где умер", player.getWorld().getRegistryKey() == net.minecraft.world.World.OVERWORLD && player.getPos().squaredDistanceTo(0.5, -60.0, 0.5) < 4.0);
+            }
+            check("маска разбита, форма снята", !data.hollowActive);
+            check("форма недоступна сутки", HollowForm.locked(player, data) && HollowForm.ticksLeft(player, data) == 0);
+            HollowForm.toggle(player);
+            check("снова надеть маску нельзя", !ModAttachments.data(player).hollowActive);
+            check("от толпы ничего не осталось", player.getServerWorld().getEntitiesByClass(MobEntity.class, player.getBoundingBox().expand(40.0), m -> m.isAlive()).isEmpty());
+        });
+    }
+
+    /** Все новые разрубы: обычной казнью и со спины, с паузой в замахе. */
+    private void writeCuts() {
+        // Эти команды работают от имени игрока, а не сервера.
+        onServer(s -> {
+            s.getCommandManager().executeWithPrefix(player(s).getCommandSource(), "zangetsu give");
+            s.getCommandManager().executeWithPrefix(player(s).getCommandSource(), "zangetsu level 2");
+        });
+        pause(10);
+        for (Execution.Variant variant : List.of(Execution.Variant.GYAKU, Execution.Variant.CHEST, Execution.Variant.SPLIT_UP, Execution.Variant.SLICES)) {
+            String name = variant.name().toLowerCase(Locale.ROOT);
+            look(180.0F, 2.0F);
+            onServer(s -> {
+                this.attacker = summon(player(s), EntityType.HUSK, 3.2);
+                this.attacker.setHealth(1.0F);
+                check("есть меч в руке", com.zangetsu.logic.SwordStacks.isHolding(player(s)));
+                Execution.request(player(s), this.attacker.getId(), variant);
+            });
+            pause(14);
+            shot("cut_" + name + "_1");
+            pause(5);
+            shot("cut_" + name + "_2");
+            pause(9);
+            shot("cut_" + name + "_3");
+            pause(26);
+            onServer(s -> check("разруб убивает: " + name, !this.attacker.isAlive()));
+            pause(10);
+        }
+        for (Execution.Variant variant : List.of(Execution.Variant.QUARTER, Execution.Variant.TRIPLE, Execution.Variant.IAI, Execution.Variant.SLICES)) {
+            String name = variant.name().toLowerCase(Locale.ROOT);
+            look(180.0F, 2.0F);
+            onServer(s -> {
+                this.attacker = summon(player(s), EntityType.HUSK, 3.2);
+                this.attacker.setHealth(1.0F);
+                Execution.nextBehind = variant;
+                Execution.behind(player(s), (net.minecraft.entity.LivingEntity) this.attacker);
+            });
+            pause(8);
+            shot("behind_" + name + "_1");
+            pause(7);
+            shot("behind_" + name + "_2");
+            pause(5);
+            shot("behind_" + name + "_3");
+            pause(6);
+            shot("behind_" + name + "_4");
+            pause(7);
+            shot("behind_" + name + "_5");
+            pause(40);
+            onServer(s -> {
+                check("со спины убивает: " + name, !this.attacker.isAlive());
+                check("сцена кончилась: " + name, !Cinematic.isLocked(player(s)) && !Execution.inBehindScene(player(s)));
+            });
+            pause(10);
+        }
+    }
+
     private void writeBreak() {
         command("gamemode survival @p", "time set 6000", "tp @p 0.5 -60 0.5 180 0", "setblock 3 -60 0 minecraft:red_bed[facing=east,part=head]", "setblock 2 -60 0 minecraft:red_bed[facing=east,part=foot]");
         view(Perspective.FIRST_PERSON);
@@ -1229,15 +1414,15 @@ public class ZangetsuShots implements ClientModInitializer {
             check("отличная: игрок стоит за спиной врага", toEnemy.dotProduct(this.attacker.getRotationVector().multiply(1.0, 0.0, 1.0).normalize()) > 0.5);
         });
         shot("qte_zoom");
-        pause(Execution.BEHIND_APPEAR + 3);
+        pause(2);
         shot("qte_mask");
-        pause(14);
+        pause(5);
         shot("qte_phrase");
-        pause(Execution.BEHIND_HOLD - Execution.BEHIND_APPEAR - 16);
+        pause(6);
         shot("qte_turn");
-        pause(10);
+        pause(4);
         shot("qte_strike");
-        pause(30);
+        pause(40);
         onServer(s -> {
             check("отличная: враг казнён", !this.attacker.isAlive());
             check("отличная: дружба выросла", ModAttachments.data(player(s)).bond > this.bondBefore);

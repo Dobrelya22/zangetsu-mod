@@ -14,7 +14,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * Небо в форме Пустого: обычная луна исчезает, а высоко проступает кровавая серповидная
+ * Небо в форме Пустого: солнце, заря и обычная луна гаснут, а высоко проступает кровавая серповидная
  * (рисуется после солнца и луны, перед звёздами).
  */
 @Mixin(WorldRenderer.class)
@@ -48,15 +48,27 @@ private void zangetsu$noWater(net.minecraft.client.render.RenderLayer layer, dou
     }
 }
 
-/** Третий вызов отрисовки в renderSky — луна (до неё: закатное сияние и солнце). */
+/** Первые три вызова отрисовки в renderSky: закатное сияние, солнце и луна. */
     @WrapOperation(method = "renderSky(Lorg/joml/Matrix4f;Lorg/joml/Matrix4f;FLnet/minecraft/client/render/Camera;ZLjava/lang/Runnable;)V",
-            at = @At(value = "INVOKE", target = "Lnet/minecraft/client/render/BufferRenderer;drawWithGlobalProgram(Lnet/minecraft/client/render/BuiltBuffer;)V",
-                    ordinal = 2))
-    private void zangetsu$hideMoon(BuiltBuffer buffer, Operation<Void> original) {
-        if (CrescentMoon.hidesVanillaMoon()) {
+            at = {
+                    @At(value = "INVOKE", target = "Lnet/minecraft/client/render/BufferRenderer;drawWithGlobalProgram(Lnet/minecraft/client/render/BuiltBuffer;)V", ordinal = 0),
+                    @At(value = "INVOKE", target = "Lnet/minecraft/client/render/BufferRenderer;drawWithGlobalProgram(Lnet/minecraft/client/render/BuiltBuffer;)V", ordinal = 1),
+                    @At(value = "INVOKE", target = "Lnet/minecraft/client/render/BufferRenderer;drawWithGlobalProgram(Lnet/minecraft/client/render/BuiltBuffer;)V", ordinal = 2)
+            })
+    private void zangetsu$hideSunAndMoon(BuiltBuffer buffer, Operation<Void> original) {
+        float shown = CrescentMoon.shown();
+        if (shown <= 0.0F) {
+            original.call(buffer);
+            return;
+        }
+        if (shown >= 0.97F) {
             buffer.close();
             return;
         }
+        float[] color = com.mojang.blaze3d.systems.RenderSystem.getShaderColor();
+        float r = color[0], g = color[1], b = color[2], a = color[3];
+        com.mojang.blaze3d.systems.RenderSystem.setShaderColor(r, g, b, a * (1.0F - shown));
         original.call(buffer);
+        com.mojang.blaze3d.systems.RenderSystem.setShaderColor(r, g, b, a);
     }
 }

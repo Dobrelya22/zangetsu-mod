@@ -54,6 +54,8 @@ jobs:
             awk -v v="$version" '/^## /{p = ($2 == v); next} p' CHANGELOG.md
             echo
             echo "**Установка:** положите \`zangetsu-$version.jar\` и [Fabric API](https://modrinth.com/mod/fabric-api/versions?g=1.21.1) в папку \`.minecraft/mods\` и запустите Minecraft 1.21.1 с [Fabric Loader](https://fabricmc.net/use/) 0.16+."
+            echo
+            echo "**Install:** put \`zangetsu-$version.jar\` and [Fabric API](https://modrinth.com/mod/fabric-api/versions?g=1.21.1) into \`.minecraft/mods\` and launch Minecraft 1.21.1 with Fabric. [Guide](https://github.com/Dobrelya22/zangetsu-mod/blob/main/docs/GUIDE.en.md)"
           } > notes.md
           rm -f dist/*-sources.jar
           if gh release view "v$version" >/dev/null 2>&1; then
@@ -61,5 +63,5 @@ jobs:
             gh release edit "v$version" --notes-file notes.md
           else
             gh release create "v$version" dist/*.jar --target "$GITHUB_SHA" \
-              --title "Зангецу $version" --notes-file notes.md
+              --title "Zangetsu $version" --notes-file notes.md
           fi

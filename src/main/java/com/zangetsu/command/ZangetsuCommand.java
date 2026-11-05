@@ -44,6 +44,7 @@ public final class ZangetsuCommand {
                         .then(CommandManager.literal("hollow").executes(ZangetsuCommand::refillHollow))
                         .then(CommandManager.literal("dream").executes(ZangetsuCommand::dream))
                         .then(CommandManager.literal("break").executes(ZangetsuCommand::breakSword))
+                        .then(CommandManager.literal("rampage").executes(ZangetsuCommand::rampage))
                         .then(CommandManager.literal("reset").executes(ZangetsuCommand::reset))));
     }
 
@@ -93,6 +94,7 @@ public final class ZangetsuCommand {
     private static int refillHollow(CommandContext<ServerCommandSource> context) throws CommandSyntaxException {
         ServerPlayerEntity player = context.getSource().getPlayerOrThrow();
         ModAttachments.data(player).hollowUsed = 0;
+        ModAttachments.data(player).hollowLock = 0L;
         Sync.player(player);
         context.getSource().sendFeedback(() -> Text.translatable("zangetsu.command.hollow"), false);
         return 1;
@@ -105,6 +107,28 @@ public final class ZangetsuCommand {
             return 0;
         }
         Dream.forceBegin(player);
+        return 1;
+    }
+
+    /** Сразу показать, как Пустой забирает тело: нужен уровень финальной формы и меч. */
+    private static int rampage(CommandContext<ServerCommandSource> context) throws CommandSyntaxException {
+        ServerPlayerEntity player = context.getSource().getPlayerOrThrow();
+        ZangetsuData data = ModAttachments.data(player);
+        if (!data.bonded || !HollowForm.isFinal(data) || SwordStacks.find(player).isEmpty()) {
+            context.getSource().sendError(Text.translatable("zangetsu.command.not_bonded"));
+            return 0;
+        }
+        if (com.zangetsu.logic.HollowRampage.isActive(player.getUuid())) {
+            return 0;
+        }
+        data.hollowLock = 0L;
+        data.hollowUsed = 0;
+        if (!data.hollowActive) {
+            HollowForm.skipRite = true;
+            HollowForm.toggle(player);
+            HollowForm.skipRite = false;
+        }
+        com.zangetsu.logic.HollowRampage.start(player);
         return 1;
     }
 
@@ -123,6 +147,7 @@ public final class ZangetsuCommand {
     private static int reset(CommandContext<ServerCommandSource> context) throws CommandSyntaxException {
         ServerPlayerEntity player = context.getSource().getPlayerOrThrow();
         Calling.abort(player);
+        com.zangetsu.logic.HollowRampage.abort(player);
         if (Trial.isActive(player.getUuid())) {
             Trial.abort(player, ModAttachments.data(player));
         }

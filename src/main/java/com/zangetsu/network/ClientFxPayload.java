@@ -18,6 +18,8 @@ public record ClientFxPayload(int effect, int duration) implements CustomPayload
     public static final int SHAKE = 4;
     /** Короткая прозрачная вспышка удара: сцена сквозь неё видна. */
     public static final int IMPACT_FLASH = 5;
+    /** Удар по камере сцены: сила в сотых. */
+    public static final int CAMERA_KICK = 6;
 
     public static final CustomPayload.Id<ClientFxPayload> ID = new CustomPayload.Id<>(ZangetsuMod.id("client_fx"));
     public static final PacketCodec<ByteBuf, ClientFxPayload> CODEC = PacketCodec.tuple(

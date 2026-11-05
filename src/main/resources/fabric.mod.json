@@ -2,8 +2,8 @@
   "schemaVersion": 1,
   "id": "zangetsu",
   "version": "${version}",
-  "name": "Зангецу",
-  "description": "Меч Зангецу из «Блича» с живым глазом: появляется, когда у тебя остаётся одно сердце, растёт вместе с тобой, рубит стрелы и конечности, а на последнем уровне превращает тебя в Пустого.",
+  "name": "Zangetsu",
+  "description": "Bleach's Zangetsu with a living eye: it comes to you in a dream the first time you sleep, grows with your bond, slices arrows and limbs, and at the top levels turns you into a Hollow.",
   "authors": ["Dobrelya22"],
   "contact": {
     "sources": "https://github.com/Dobrelya22/zangetsu-mod"

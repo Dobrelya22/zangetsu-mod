@@ -59,6 +59,14 @@ public final class Sync {
         }
     }
 
+    /** На мобе загорается след разреза: его уже разрубили, но он ещё стоит. */
+    public static void mark(LivingEntity mob) {
+        AnimationPayload payload = new AnimationPayload(mob.getId(), AnimationPayload.CUT_MARK, 0, 0);
+        for (ServerPlayerEntity viewer : PlayerLookup.tracking(mob)) {
+            ServerPlayNetworking.send(viewer, payload);
+        }
+    }
+
     public static void animation(ServerPlayerEntity player, int animation, int duration) {
         animation(player, animation, duration, 0);
     }

@@ -60,6 +60,7 @@ public class ZangetsuClient implements ClientModInitializer {
         LivingEntityFeatureRendererRegistrationCallback.EVENT.register((type, renderer, helper, context) -> {
             if (renderer instanceof PlayerEntityRenderer playerRenderer) {
                 helper.register(new BentLimbFeatureRenderer(playerRenderer));
+                helper.register(new com.zangetsu.client.render.HollowHoleRenderer(playerRenderer));
                 helper.register(new FinalFormFeatureRenderer(playerRenderer));
                 helper.register(new HollowFeatureRenderer(playerRenderer));
             }
@@ -130,6 +131,10 @@ public class ZangetsuClient implements ClientModInitializer {
             if (entity == null) {
                 return;
             }
+            if (payload.animation() == AnimationPayload.CUT_MARK) {
+                ClientState.MARKS.put(entity.getId(), entity.age);
+                return;
+            }
             if (entity instanceof PlayerEntity player && payload.animation() == AnimationPayload.AUTO_SLASH) {
                 // Меч рубит сам: быстрый приём, повёрнутый к цели, с золотым следом.
                 ZangetsuCombat.start(player, MathHelper.clamp(payload.param() * MathHelper.RADIANS_PER_DEGREE, -1.2F, 1.2F),
@@ -141,6 +146,18 @@ public class ZangetsuClient implements ClientModInitializer {
                 if (entity == client.player && payload.animation() == AnimationPayload.EXECUTE) {
                     CameraDirector.begin(payload.duration() + 12, new CameraDirector.Shot(65.0F, 95.0F, 10.0F, 4.6F, 1.3F));
                 }
+                return;
+            }
+            if (entity instanceof PlayerEntity player && payload.animation() == AnimationPayload.RAMPAGE_BEGIN) {
+                RampageScene.begin(player, payload.duration(), payload.param());
+                return;
+            }
+            if (entity instanceof PlayerEntity player && payload.animation() == AnimationPayload.RAMPAGE_END) {
+                RampageScene.end(player);
+                return;
+            }
+            if (entity instanceof PlayerEntity player && payload.animation() == AnimationPayload.EXECUTE_CHARGED) {
+                ZangetsuCombat.charged(player, payload.param(), payload.duration(), com.zangetsu.logic.Execution.CHARGE_PAUSE);
                 return;
             }
             ClientState.ANIMATIONS.put(payload.entityId(), new ClientState.Animation(payload.animation(), entity.age, payload.duration(), payload.param()));
@@ -218,6 +235,10 @@ public class ZangetsuClient implements ClientModInitializer {
                         new CameraDirector.Cut(HollowForm.RITE_LUNGE - 8, new CameraDirector.Shot(262.0F, 275.0F, 2.0F, 4.6F, 4.2F, 1.2F, -0.3F)));
                 return;
             }
+            if (payload.animation() == AnimationPayload.RAMPAGE_DEATH || payload.animation() == AnimationPayload.RAMPAGE_STANCE) {
+                // Камера этой сцены уже летит сама.
+                return;
+            }
             if (entity == client.player) {
                 // У себя — камера облетает сбоку.
                 CameraDirector.begin(payload.duration() + 8, switch (payload.animation()) {
@@ -234,6 +255,7 @@ public class ZangetsuClient implements ClientModInitializer {
                     sword.set(ModComponents.EYE, Eye.OPEN);
                     client.gameRenderer.showFloatingItem(sword);
                 }
+                case ClientFxPayload.CAMERA_KICK -> CameraDirector.kick(payload.duration() / 100.0F);
                 case ClientFxPayload.WHITE_FLASH, ClientFxPayload.RED_FLASH, ClientFxPayload.IMPACT_FLASH -> ClientState.flash(payload.effect(), payload.duration());
                 case ClientFxPayload.SHAKE -> {
                     if (client.player != null) {

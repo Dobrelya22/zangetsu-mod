@@ -183,7 +183,7 @@ public class FinalFormFeatureRenderer extends FeatureRenderer<AbstractClientPlay
         // Рука или нога ушла назад под плащ: огонь там приседает, иначе его языки торчали бы сквозь ткань. Вышла вперёд — разгорается снова.
         float covered = stepped && bodyFromSim != null ? coverage(bodyFromSim.transformPosition(wrist, new Vector3f()).z * 16.0F) : 0.0F;
         float near = stepped && capsules.length == 0 ? FIRST_PERSON_FLAME : 1.0F;
-        float length = (arm ? ARM_FLAME_HEIGHT : LEG_FLAME_HEIGHT) * near * grow * (1.0F - 0.8F * covered) / 16.0F, width = FLAME_WIDTH * near * grow * (1.0F - 0.4F * covered) / 16.0F;
+        float length = com.zangetsu.client.RampageScene.flameDim(player, now) * (arm ? ARM_FLAME_HEIGHT : LEG_FLAME_HEIGHT) * near * grow * (1.0F - 0.8F * covered) / 16.0F, width = FLAME_WIDTH * near * grow * (1.0F - 0.4F * covered) / 16.0F;
 
         VertexConsumer iron = consumers.getBuffer(RenderLayer.getEntityCutoutNoCull(Flames.WHITE));
         Chains.cuff(iron, entry, centerX, y, halfX, HALF, 0.95F, limb.side(), light);
@@ -273,7 +273,10 @@ public class FinalFormFeatureRenderer extends FeatureRenderer<AbstractClientPlay
         MatrixStack.Entry entry = matrices.peek();
         VertexConsumer iron = consumers.getBuffer(RenderLayer.getEntityCutoutNoCull(Flames.WHITE));
         float zFront = -2.42F, zBack = 2.42F, sideX = 4.42F, belt = 10.6F;
-        Chains.along(iron, entry, new Vector3f[]{new Vector3f(-4.1F, 0.1F, zFront), new Vector3f(4.1F, belt - 0.4F, zFront)}, new Vector3f(1.0F, 1.0F, 0.0F), light);
+        // Перевязь через грудь. Когда в груди дыра, её нет: цепи не на чем держаться.
+        if (com.zangetsu.client.RampageScene.hole(player, now) <= 0.0F) {
+            Chains.along(iron, entry, new Vector3f[]{new Vector3f(-4.1F, 0.1F, zFront), new Vector3f(4.1F, belt - 0.4F, zFront)}, new Vector3f(1.0F, 1.0F, 0.0F), light);
+        }
         Chains.along(iron, entry, new Vector3f[]{new Vector3f(-sideX, belt, zFront), new Vector3f(sideX, belt, zFront), new Vector3f(sideX, belt, zBack),
                 new Vector3f(-sideX, belt, zBack), new Vector3f(-sideX, belt, zFront)}, new Vector3f(0.0F, 1.0F, 0.0F), light);
         hipChain(iron, entry, physics, player, "hip_a", 9, new Vector3f(sideX, belt + 0.3F, -1.2F), simFromBody, bodyFromSim, capsules, ground, now, light, stepped);

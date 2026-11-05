@@ -157,7 +157,7 @@ final class Showcase {
         executionScene("creeper_launch", 188.0, EntityType.CREEPER, Execution.Variant.LAUNCH);
         executionScene("creeper_cleave", 192.0, EntityType.CREEPER, Execution.Variant.CLEAVE);
         executionScene("pillager_behead", 196.0, EntityType.PILLAGER, Execution.Variant.BEHEAD);
-        executionScene("vindicator_impale", 200.0, EntityType.VINDICATOR, Execution.Variant.IMPALE);
+        executionScene("vindicator_gyaku", 200.0, EntityType.VINDICATOR, Execution.Variant.GYAKU);
         executionScene("witch_kesa", 204.0, EntityType.WITCH, Execution.Variant.KESA);
         executionScene("ravager_cleave", 208.0, EntityType.RAVAGER, Execution.Variant.CLEAVE);
         executionScene("enderman_waist", 212.0, EntityType.ENDERMAN, Execution.Variant.WAIST);
@@ -290,7 +290,7 @@ final class Showcase {
 /** Проверка реакции: враг, которому остался один удар, круг, клик и то, что за ним следует. Настоящая камера и интерфейс. */
     private void reactions2() {
         reactionScene("qte_good_l4", 360.0, EntityType.ZOMBIE, null, ReactionCheck.GOOD, 4);
-        reactionScene("qte_great_zombie", 368.0, EntityType.ZOMBIE, Execution.Variant.IMPALE, ReactionCheck.GREAT, 5);
+        reactionScene("qte_great_zombie", 368.0, EntityType.ZOMBIE, Execution.Variant.QUARTER, ReactionCheck.GREAT, 5);
         reactionScene("qte_great_cross", 378.0, EntityType.ZOMBIE, Execution.Variant.CROSS, ReactionCheck.GREAT, 5);
         reactionScene("qte_great_skeleton", 388.0, EntityType.SKELETON, Execution.Variant.SHATTER, ReactionCheck.GREAT, 5);
         reactionScene("qte_great_creeper", 398.0, EntityType.CREEPER, Execution.Variant.LAUNCH, ReactionCheck.GREAT, 5);

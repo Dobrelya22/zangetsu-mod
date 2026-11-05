@@ -25,6 +25,7 @@ import net.minecraft.sound.SoundEvents;
 import net.minecraft.text.Text;
 import net.minecraft.util.Arm;
 import net.minecraft.util.Formatting;
+import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
 
 /**
@@ -79,9 +80,45 @@ public final class HollowForm {
         }
     }
 
+    /** Маска разбита в сцене смерти: формы нет целые игровые сутки. */
+    public static boolean locked(ServerPlayerEntity player, ZangetsuData data) {
+        return player.getServer().getOverworld().getTimeOfDay() < data.hollowLock;
+    }
+
     public static int ticksLeft(ServerPlayerEntity player, ZangetsuData data) {
         rollDay(player, data);
+        if (locked(player, data)) {
+            return 0;
+        }
         return Math.max(0, BUDGET - data.hollowUsed);
+    }
+
+    /**
+     * Убит монстр: шкала формы заполняется, поэтому маску можно надевать несколько раз за день. Чем крепче монстр, тем больше: за зомби 5 секунд формы. В самой форме вдвое меньше, иначе в бою она не кончалась бы никогда.
+     * Разбитую маску это не чинит, и сцена, где Пустой забрал тело, шкалу не заполняет.
+     */
+    public static void onEvilKill(ServerPlayerEntity player, ZangetsuData data, LivingEntity killed) {
+        if (data.level() < Bond.HOLLOW_LEVEL || locked(player, data) || HollowRampage.isActive(player.getUuid())) {
+            return;
+        }
+        rollDay(player, data);
+        if (data.hollowUsed <= 0) {
+            return;
+        }
+        int before = Math.max(0, BUDGET - data.hollowUsed);
+        int gain = MathHelper.clamp(Math.round(killed.getMaxHealth() * 5.0F), 60, 600);
+        data.hollowUsed = Math.max(0, data.hollowUsed - (data.hollowActive ? gain / 2 : gain));
+        int left = BUDGET - data.hollowUsed;
+        if (data.hollowActive && crackFor(before) != crackFor(left)) {
+            // Маска срастается: трещины уходят.
+            Sync.hollow(player, true);
+        }
+        Vec3d from = killed.getPos().add(0.0, killed.getHeight() * 0.5, 0.0);
+        ServerWorld world = player.getServerWorld();
+        Fx.particles(world, ParticleTypes.SOUL, from, 5, 0.2, 0.03);
+        Fx.particles(world, Fx.REIATSU_RED, player.getPos().add(0.0, 1.0, 0.0), 8, 0.3, 0.01);
+        Fx.sound(player, SoundEvents.ENTITY_EXPERIENCE_ORB_PICKUP, 0.35F, 0.55F);
+        Sync.player(player);
     }
 
     public static void toggle(ServerPlayerEntity player) {
@@ -99,6 +136,10 @@ public final class HollowForm {
         }
         if (data.bond < 0) {
             player.sendMessage(Text.translatable("zangetsu.hollow.refused").formatted(Formatting.DARK_RED), true);
+            return;
+        }
+        if (locked(player, data)) {
+            player.sendMessage(Text.translatable("zangetsu.hollow.broken").formatted(Formatting.DARK_RED), true);
             return;
         }
         if (ticksLeft(player, data) <= 0) {
@@ -293,7 +334,7 @@ public final class HollowForm {
         if (!data.hollowActive) {
             return;
         }
-        if (isTransforming(player)) {
+        if (isTransforming(player) || HollowRampage.isActive(player.getUuid())) {
             return;
         }
         data.hollowUsed++;

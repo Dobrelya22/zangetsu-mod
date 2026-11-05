@@ -30,8 +30,12 @@ public final class CameraDirector {
     private static int until = -1;
     private static Cut[] cuts;
     private static Key[] path;
-    /** Удары по камере: момент и сила, через одно. */
-    private static float[] kicks;
+    /** Удары по камере: момент и сила. */
+    private static final java.util.List<float[]> KICKS = new java.util.ArrayList<>();
+    /** Камера идёт не от игрока: у неё свой поворот, а центр догоняет игрока с запаздыванием и стоит на месте в окне {@code freeFrom}..{@code freeTo}. */
+    private static boolean anchored;
+    private static float baseYaw, freeFrom, freeTo;
+    private static double centerX, centerY, centerZ, chaseX, chaseY, chaseZ, prevChaseX, prevChaseY, prevChaseZ;
 
     private CameraDirector() {
     }
@@ -61,7 +65,45 @@ public final class CameraDirector {
 
     /** Камеру в эти моменты встряхивает и отбрасывает назад. */
     public static void impacts(float... momentsAndStrengths) {
-        kicks = momentsAndStrengths;
+        KICKS.clear();
+        for (int i = 0; i + 1 < momentsAndStrengths.length; i += 2) {
+            KICKS.add(new float[]{momentsAndStrengths[i], momentsAndStrengths[i + 1]});
+        }
+    }
+
+    /** Удар прямо сейчас. */
+    public static void kick(float strength) {
+        if (until >= 0) {
+            KICKS.add(new float[]{ClientState.ticks - start, strength});
+        }
+    }
+
+    /** Камера сцены с множеством рывков: её поворот считается от {@code yaw}, а центр следует за игроком. */
+    public static void anchor(Entity player, float yaw, float from, float to) {
+        anchored = true;
+        baseYaw = yaw;
+        freeFrom = from;
+        freeTo = to;
+        centerX = chaseX = prevChaseX = player.getX();
+        centerY = chaseY = prevChaseY = player.getY();
+        centerZ = chaseZ = prevChaseZ = player.getZ();
+    }
+
+    public static boolean isAnchored() {
+        return anchored;
+    }
+
+    public static float baseYaw() {
+        return baseYaw;
+    }
+
+    /** Точка, вокруг которой строится кадр. */
+    public static double[] anchorAt(float tickDelta) {
+        float now = ClientState.ticks + tickDelta - start;
+        if (now >= freeFrom && now < freeTo) {
+            return new double[]{centerX, centerY, centerZ};
+        }
+        return new double[]{MathHelper.lerp(tickDelta, prevChaseX, chaseX), MathHelper.lerp(tickDelta, prevChaseY, chaseY), MathHelper.lerp(tickDelta, prevChaseZ, chaseZ)};
     }
 
     private static float[] along(float now) {
@@ -76,15 +118,13 @@ public final class CameraDirector {
         for (int f = 0; f < out.length; f++) {
             out[f] = (2.0F * s3 - 3.0F * s2 + 1.0F) * a.value(f) + (s3 - 2.0F * s2 + s) * dt * slope(i, f) + (3.0F * s2 - 2.0F * s3) * b.value(f) + (s3 - s2) * dt * slope(i + 1, f);
         }
-        if (kicks != null) {
-            for (int k = 0; k + 1 < kicks.length; k += 2) {
-                float x = now - kicks[k];
-                if (x >= 0.0F) {
-                    float power = kicks[k + 1] * (float) Math.exp(-x / 7.0F);
-                    out[0] += power * 2.4F * MathHelper.sin(x * 1.9F);
-                    out[1] += power * 2.0F * MathHelper.sin(x * 2.6F + 1.0F);
-                    out[2] *= 1.0F + 0.16F * kicks[k + 1] * (float) Math.exp(-x / 5.0F) * (1.0F - (float) Math.exp(-x / 0.8F));
-                }
+        for (float[] kick : KICKS) {
+            float x = now - kick[0];
+            if (x >= 0.0F) {
+                float power = kick[1] * (float) Math.exp(-x / 7.0F);
+                out[0] += power * 2.4F * MathHelper.sin(x * 1.9F);
+                out[1] += power * 2.0F * MathHelper.sin(x * 2.6F + 1.0F);
+                out[2] *= 1.0F + 0.16F * kick[1] * (float) Math.exp(-x / 5.0F) * (1.0F - (float) Math.exp(-x / 0.8F));
             }
         }
         return out;
@@ -93,6 +133,10 @@ public final class CameraDirector {
     /** Скорость в точке пролёта: на первой и последней нулевая, между ними камера проходит насквозь. */
     private static float slope(int i, int field) {
         if (i == 0 || i == path.length - 1) {
+            return 0.0F;
+        }
+        // Две точки в один тик это монтажная склейка: кадр сменился, скорость через неё не проходит.
+        if (path[i + 1].at() - path[i].at() < 0.01F || path[i].at() - path[i - 1].at() < 0.01F) {
             return 0.0F;
         }
         return (path[i + 1].value(field) - path[i - 1].value(field)) / Math.max(0.001F, path[i + 1].at() - path[i - 1].at());
@@ -111,7 +155,8 @@ public final class CameraDirector {
         client.options.setPerspective(Perspective.THIRD_PERSON_BACK);
         cuts = newCuts;
         path = null;
-        kicks = null;
+        KICKS.clear();
+        anchored = false;
         start = ClientState.ticks;
         until = ClientState.ticks + duration;
     }
@@ -138,6 +183,14 @@ public final class CameraDirector {
     }
 
     static void tick(MinecraftClient client) {
+        if (anchored && client.player != null) {
+            prevChaseX = chaseX;
+            prevChaseY = chaseY;
+            prevChaseZ = chaseZ;
+            chaseX += (client.player.getX() - chaseX) * 0.42;
+            chaseY += (client.player.getY() - chaseY) * 0.42;
+            chaseZ += (client.player.getZ() - chaseZ) * 0.42;
+        }
         if (until >= 0 && ClientState.ticks >= until) {
             if (saved != null) {
                 client.options.setPerspective(saved);
@@ -145,6 +198,7 @@ public final class CameraDirector {
             until = -1;
             cuts = null;
             path = null;
+            anchored = false;
         }
     }
 
@@ -153,5 +207,6 @@ public final class CameraDirector {
         saved = null;
         cuts = null;
         path = null;
+        anchored = false;
     }
 }

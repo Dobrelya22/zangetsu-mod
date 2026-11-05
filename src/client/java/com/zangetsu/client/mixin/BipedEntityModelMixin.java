@@ -55,6 +55,13 @@ public abstract class BipedEntityModelMixin {
             if (ClientState.isHollow(entity)) {
                 model.hat.visible = false;
             }
+            // В груди дыра: туловище рисует HollowHoleRenderer.
+            if (com.zangetsu.client.RampageScene.hole(entity, animationProgress) > 0.0F) {
+                model.body.visible = false;
+                if (model instanceof net.minecraft.client.render.entity.model.PlayerEntityModel<?> player) {
+                    player.jacket.visible = false;
+                }
+            }
             return;
         }
         int limbs = ClientState.limbs(entity);

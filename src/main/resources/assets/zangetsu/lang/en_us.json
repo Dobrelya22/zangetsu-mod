@@ -1,4 +1,5 @@
 {
+  "modmenu.nameTranslation.zangetsu": "Zangetsu",
   "item.zangetsu.zangetsu": "Zangetsu",
   "entity.zangetsu.spirit": "Mysterious Figure",
   "entity.zangetsu.thrown_zangetsu": "Zangetsu",
@@ -71,13 +72,16 @@
 
   "zangetsu.hollow.locked": "Hollow Form unlocks at level IV",
   "zangetsu.hollow.refused": "The eye is angry and refuses the Hollow's power",
-  "zangetsu.hollow.exhausted": "The Hollow's power is spent for today — wait for the next day",
+  "zangetsu.hollow.exhausted": "The Hollow's power is spent: kill monsters or wait for the next day",
+  "zangetsu.hollow.broken": "The mask is broken: no form for a whole day",
   "zangetsu.hollow.on": "HOLLOW FORM",
   "zangetsu.hollow.on.final": "FINAL FORM",
   "zangetsu.hollow.crack.1": "The mask has cracked...",
   "zangetsu.hollow.crack.2": "A piece of the mask has chipped off!",
   "zangetsu.hollow.crack.3": "The mask is about to shatter!",
   "zangetsu.hollow.time_up": "The mask shatters. You are exhausted.",
+  "zangetsu.rampage.line_1": "This is not over yet.",
+  "zangetsu.rampage.line_2": "Pathetic.",
   "zangetsu.hollow.off": "Mask removed",
 
   "zangetsu.no_drop": "Zangetsu cannot be thrown away — it is bound to you",
@@ -101,7 +105,7 @@
   "zangetsu.tooltip.ability.1": "Slices incoming arrows in half",
   "zangetsu.tooltip.ability.2": "Parries blows, severs limbs, executions",
   "zangetsu.tooltip.ability.3": "Strikes the nearest evil mobs on its own",
-  "zangetsu.tooltip.ability.4": "Hollow Form: 2 minutes a day, Getsuga Tensho",
+  "zangetsu.tooltip.ability.4": "Hollow Form: refills daily and with every kill, Getsuga Tensho",
   "zangetsu.tooltip.ability.5": "Final Form: horned mask, more strength and speed, bigger Getsuga",
   "zangetsu.tooltip.hint": "Abilities work while the eye is open: at night or in the dark",
   "zangetsu.tooltip.unbound": "Has chosen no one yet",
@@ -110,7 +114,7 @@
   "zangetsu.hud.bond": "Bond %s / %s",
   "zangetsu.hud.bond_max": "Bond %s",
   "zangetsu.hud.hollow_ready": "[%s] Hollow",
-  "zangetsu.hud.hollow_empty": "Hollow: tomorrow",
+  "zangetsu.hud.hollow_empty": "Hollow: spent",
   "zangetsu.hud.lost": "Sword lost — go to sleep",
 
   "zangetsu.command.already_bonded": "The sword is already yours. Run /zangetsu reset first",

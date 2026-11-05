@@ -40,6 +40,9 @@ public final class Scene {
     boolean firstPerson;
     /** Камеру ведёт сама игра: сцены с настоящей камерой ({@link com.zangetsu.client.CameraDirector}) не перебиваем. */
     boolean gameCamera;
+    /** Вид игрока, но без интерфейса: шкалы в кадре не нужны. */
+    boolean hideHud;
+    boolean noHand;
     final List<Cut> cuts = new ArrayList<>();
     final List<Event> events = new ArrayList<>();
     final TreeMap<Double, Float> speeds = new TreeMap<>();

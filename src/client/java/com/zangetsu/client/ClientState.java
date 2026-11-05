@@ -23,6 +23,12 @@ public final class ClientState {
     /** id игрока → удар, который он сейчас наносит. */
     public static final Int2ObjectOpenHashMap<Swing> SWINGS = new Int2ObjectOpenHashMap<>();
 
+    /** id игрока → с какого его возраста идёт сцена, где Пустой забрал тело. */
+    public static final Int2IntOpenHashMap RAMPAGE = new Int2IntOpenHashMap();
+
+    /** id моба → с какого его возраста на нём горит след разреза. */
+    public static final Int2IntOpenHashMap MARKS = new Int2IntOpenHashMap();
+
     /** Счётчик клиентских тиков — по нему идут вспышки на экране. */
     public static int ticks;
     public static int flashType;
@@ -49,7 +55,7 @@ public final class ClientState {
         /** Это казнь: её не перебить следующим ударом, а в миг удара всё замирает сильнее обычного. */
         public boolean execution;
         public Entity target;
-        private float freezeAt = -1.0F, freezeFor;
+        private float freezeAt = -1.0F, freezeFor, frozen;
 
         public Swing(int move, float start, float duration, float aim, int color, int startTick) {
             this.move = move;
@@ -60,15 +66,19 @@ public final class ClientState {
             this.startTick = startTick;
         }
 
+        /** Замереть на {@code length} тиков с момента {@code at}. Замирания копятся: пауза в замахе и стоп при ударе не отменяют друг друга. */
         public void freeze(float at, float length) {
+            if (this.freezeAt >= 0.0F) {
+                this.frozen += this.freezeFor;
+            }
             this.freezeAt = at;
             this.freezeFor = length;
         }
 
         public float progress(float now) {
-            float time = now;
+            float time = now - this.frozen;
             if (this.freezeAt >= 0.0F && now >= this.freezeAt) {
-                time = now < this.freezeAt + this.freezeFor ? this.freezeAt : now - this.freezeFor;
+                time = now < this.freezeAt + this.freezeFor ? this.freezeAt - this.frozen : now - this.freezeFor - this.frozen;
             }
             return (time - this.start) / this.duration;
         }
@@ -133,6 +143,8 @@ public final class ClientState {
         FINAL.remove(entityId);
         SWING_VARIANT.remove(entityId);
         SWINGS.remove(entityId);
+        RAMPAGE.remove(entityId);
+        MARKS.remove(entityId);
         FormPhysics.forget(entityId);
     }
 
@@ -144,6 +156,8 @@ public final class ClientState {
         FINAL.clear();
         SWING_VARIANT.clear();
         SWINGS.clear();
+        RAMPAGE.clear();
+        MARKS.clear();
         FormPhysics.reset();
         flashStart = -1;
     }

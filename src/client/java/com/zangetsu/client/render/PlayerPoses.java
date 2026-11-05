@@ -56,6 +56,8 @@ public final class PlayerPoses {
             case AnimationPayload.GETSUGA -> getsuga(model, t, animationProgress);
             case AnimationPayload.EXECUTE_BEHIND -> behind(model, t);
             case AnimationPayload.SWORD_BROKEN -> broken(model, player, animationProgress - animation.startAge(), animationProgress);
+            case AnimationPayload.RAMPAGE_DEATH -> rampageDeath(model, player, t, animationProgress);
+            case AnimationPayload.RAMPAGE_STANCE -> rampageStance(model, player, animation, animationProgress);
             default -> {
             }
         }
@@ -285,6 +287,102 @@ public final class PlayerPoses {
         return phase(tick, 0.0F, 9.0F) * (1.0F - phase(tick, com.zangetsu.logic.SwordBreak.TOTAL - 30.0F, com.zangetsu.logic.SwordBreak.TOTAL - 6.0F));
     }
 
+    // ---------------------------------------------------------------- Пустой забрал тело
+
+    /** Падает на колено, вбивает меч, голова падает. Когда Пустой выходит, запрокидывается, дрожит, потом вырывает меч и встаёт. */
+    private static void rampageDeath(BipedEntityModel<?> m, LivingEntity player, float t, float time) {
+        float tick = t * com.zangetsu.logic.HollowRampage.RISEN;
+        boolean lefty = player.getMainArm() == Arm.LEFT;
+        float headPitchLook = m.head.pitch, headYawLook = m.head.yaw;
+        applyMove(m, player, SwordMoves.DEATH, t, 0.0F, SlashTrails.BLOOD, null, 0.0F);
+        ModelPart offLeg = lefty ? m.rightLeg : m.leftLeg, mainLeg = lefty ? m.leftLeg : m.rightLeg;
+        int offLegIndex = lefty ? RIGHT_LEG : LEFT_LEG, mainLegIndex = lefty ? LEFT_LEG : RIGHT_LEG;
+        float kneel = phase(tick, 8.0F, 16.0F) * (1.0F - phase(tick, 146.0F, 158.0F));
+        float dip = SwordMoves.sample(SwordMoves.DEATH.body(), t, ZERO)[SwordMoves.DIP];
+        float ground = LEG_GROUND - dip;
+        if (kneel > 0.0F) {
+            float k = Math.min(1.0F, kneel * 5.0F);
+            float hip = offLeg.pivotZ;
+            plantFoot(player, offLeg, offLegIndex, ground, hip - 6.5F * kneel, k);
+            plantFoot(player, mainLeg, mainLegIndex, ground - SHIN_ON_GROUND * kneel, hip + 6.6F * kneel, k);
+        }
+        float release = com.zangetsu.logic.HollowRampage.RELEASE, grown = com.zangetsu.logic.HollowRampage.GROWN;
+        float head = 0.74F * phase(tick, 4.0F, 16.0F);
+        head = MathHelper.lerp(phase(tick, release - 6.0F, release + 2.0F), head, -0.66F);
+        head = MathHelper.lerp(phase(tick, grown - 6.0F, grown + 6.0F), head, -0.05F);
+        float shake = MathHelper.sin(time * 3.7F) * 0.04F * phase(tick, release, release + 4.0F) * (1.0F - phase(tick, grown - 8.0F, grown));
+        float weight = phase(tick, 0.0F, 6.0F) * (1.0F - phase(tick, com.zangetsu.logic.HollowRampage.RISEN - 8.0F, com.zangetsu.logic.HollowRampage.RISEN));
+        m.head.pitch = MathHelper.lerp(weight, headPitchLook, head + shake);
+        m.head.yaw = MathHelper.lerp(weight, headYawLook, shake * 0.7F);
+    }
+
+    /** Позы на месте: голова опущена, вверх на луну, прямо, на колене, взрыв силы, ждёт за их спинами. */
+    private static void rampageStance(BipedEntityModel<?> m, LivingEntity player, ClientState.Animation animation, float time) {
+        float tick = time - animation.startAge();
+        float in = phase(tick, 0.0F, 8.0F);
+        boolean lefty = player.getMainArm() == Arm.LEFT;
+        float side = lefty ? -1.0F : 1.0F;
+        ModelPart main = lefty ? m.leftArm : m.rightArm, off = lefty ? m.rightArm : m.leftArm;
+        // Поза приёма могла остаться от прошлого удара: тогда меч висел бы там, где тот кончился, а не в руке.
+        SWORD_POSES.remove(player.getId());
+        switch (animation.param()) {
+            case com.zangetsu.logic.HollowRampage.STANCE_BOWED -> {
+                m.head.pitch = MathHelper.lerp(in, m.head.pitch, 0.42F);
+                m.head.yaw = MathHelper.lerp(in, m.head.yaw, 0.0F);
+                swordAside(main, side, in);
+            }
+            case com.zangetsu.logic.HollowRampage.STANCE_MOON -> {
+                float up = phase(tick, 4.0F, 26.0F);
+                m.head.pitch = MathHelper.lerp(up, 0.42F, -1.1F);
+                m.head.yaw = 0.0F;
+                swordAside(main, side, 1.0F);
+            }
+            case com.zangetsu.logic.HollowRampage.STANCE_EYE -> {
+                m.head.pitch = MathHelper.lerp(phase(tick, 0.0F, 4.0F), -1.1F, -0.08F);
+                m.head.yaw = 0.0F;
+                swordAside(main, side, 1.0F);
+            }
+            case com.zangetsu.logic.HollowRampage.STANCE_BURST -> {
+                float out = phase(tick, 0.0F, 3.0F);
+                m.head.pitch = MathHelper.lerp(out, m.head.pitch, -0.42F);
+                main.pitch = MathHelper.lerp(out, main.pitch, -0.3F);
+                main.roll = MathHelper.lerp(out, main.roll, side * 1.2F);
+                off.pitch = MathHelper.lerp(out, off.pitch, -0.3F);
+                off.roll = MathHelper.lerp(out, off.roll, -side * 1.2F);
+            }
+            case com.zangetsu.logic.HollowRampage.STANCE_WAIT -> {
+                float look = m.head.pitch, turn = m.head.yaw;
+                applyMove(m, player, SwordMoves.HOLD_LOW, MathHelper.clamp(tick / Math.max(1, animation.duration()), 0.0F, 1.0F), 0.0F, SlashTrails.BLOOD, null, 0.0F);
+                m.head.pitch = MathHelper.lerp(in, look, 0.06F);
+                m.head.yaw = MathHelper.lerp(in, turn, 0.0F);
+            }
+            case com.zangetsu.logic.HollowRampage.STANCE_KNEEL -> {
+                ModelPart offLeg = lefty ? m.rightLeg : m.leftLeg, mainLeg = lefty ? m.leftLeg : m.rightLeg;
+                int offLegIndex = lefty ? RIGHT_LEG : LEFT_LEG, mainLegIndex = lefty ? LEFT_LEG : RIGHT_LEG;
+                float kneel = stanceKneel(tick);
+                float k = Math.min(1.0F, kneel * 5.0F);
+                float hip = offLeg.pivotZ, ground = LEG_GROUND - BROKEN_DIP * kneel;
+                plantFoot(player, offLeg, offLegIndex, ground, hip - 6.5F * kneel, k);
+                plantFoot(player, mainLeg, mainLegIndex, ground - SHIN_ON_GROUND * kneel, hip + 6.6F * kneel, k);
+                m.head.pitch = MathHelper.lerp(kneel, m.head.pitch, 0.5F);
+                leanBody(m, 0.2F * kneel, 0.0F);
+            }
+            default -> {
+            }
+        }
+    }
+
+    /** Опущенная рука развёрнута наружу: клинок смотрит в сторону, а не перед лицом. */
+    private static void swordAside(ModelPart main, float side, float k) {
+        main.pitch = MathHelper.lerp(k, main.pitch, 0.06F);
+        main.yaw = MathHelper.lerp(k, main.yaw, side * 1.3F);
+        main.roll = MathHelper.lerp(k, main.roll, side * 0.12F);
+    }
+
+    private static float stanceKneel(float tick) {
+        return phase(tick, 8.0F, 18.0F);
+    }
+
     // ---------------------------------------------------------------- за спиной врага
 
     /** Вынырнул за спиной и смотрит ему в затылок: голова чуть склонена, меч опущен, плечи спокойные. Он никуда не торопится. */
@@ -463,7 +561,7 @@ public final class PlayerPoses {
             }
         }
         // Длинный обряд входит и выходит за те же тики, что и обычный удар, а не за ту же долю времени.
-        boolean scene = move == SwordMoves.RITE || move == SwordMoves.CLAIM;
+        boolean scene = move == SwordMoves.RITE || move == SwordMoves.CLAIM || move == SwordMoves.DEATH || move == SwordMoves.HOLD_LOW;
         float weight = (move == SwordMoves.CLAIM ? 1.0F : SwordMoves.smooth(0.0F, scene ? 0.03F : 0.1F, t))
                 * (1.0F - SwordMoves.smooth(move == SwordMoves.CLAIM ? 0.9F : (scene ? 0.96F : 0.86F), 1.0F, t));
 
@@ -588,6 +686,13 @@ public final class PlayerPoses {
         ClientState.Animation animation = ClientState.animation(player);
         if (animation != null && animation.type() == AnimationPayload.SWORD_BROKEN) {
             return new float[]{0.0F, BROKEN_DIP * brokenKneel(time - animation.startAge())};
+        }
+        if (animation != null && animation.type() == AnimationPayload.RAMPAGE_DEATH) {
+            float t = MathHelper.clamp((time - animation.startAge()) / Math.max(1, animation.duration()), 0.0F, 1.0F);
+            return new float[]{0.0F, SwordMoves.sample(SwordMoves.DEATH.body(), t, ZERO)[SwordMoves.DIP]};
+        }
+        if (animation != null && animation.type() == AnimationPayload.RAMPAGE_STANCE) {
+            return animation.param() == com.zangetsu.logic.HollowRampage.STANCE_KNEEL ? new float[]{0.0F, BROKEN_DIP * stanceKneel(time - animation.startAge())} : null;
         }
         if (animation != null && animation.type() == AnimationPayload.HOLLOW_FINAL) {
             float t = MathHelper.clamp((time - animation.startAge()) / Math.max(1, animation.duration()), 0.0F, 1.0F);

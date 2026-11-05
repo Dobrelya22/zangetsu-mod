@@ -1,5 +1,26 @@
 # Изменения
 
+## 1.14.0
+
+- **Умрёшь в финальной форме, и тело заберёт Пустой.** Падаешь на колени, втыкаешь меч в землю, говоришь «Это ещё не конец», и в груди открывается идеально круглая сквозная дыра. Дальше Пустой сражается сам, с собственными приёмами. Толпа окружает его, он смотрит на красную луну, глаз загорается, и он расталкивает всех силой. Затем прыгает по всем подряд, на каждом мобе остаётся светящийся жёлтый разрез. Он встаёт за спинами, говорит «Жалкие», стряхивает кровь с клинка, и все разом разваливаются на куски. После этого маска разбита на одни игровые сутки.
+- **Шкала формы Пустого заполняется за убийства.** За зомби 5 секунд, за крепких мобов больше, от 3 до 30 секунд, в самой форме вдвое меньше. Теперь форму можно пробуждать по нескольку раз в день. Это работает и для обычной, и для финальной формы.
+- **Больше казней, и это настоящее разрубание.** Новые приёмы: наискось снизу, поперёк груди, снизу вверх через всё тело, ломтями, на четыре части, три удара подряд, один взмах и разрез чуть позже.
+- **Отличная реакция быстрее и сильнее.** Короткая пауза перед ударом, потом один резкий удар со спины.
+- Когда появляется кровавая луна, солнце, заря и обычная луна плавно гаснут.
+- Новая команда `/zangetsu rampage`.
+- Подробный гайд и описание мода, теперь также на английском. В списке модов имя и описание на английском, для русской игры с переводом.
+
+### English
+
+- **Die in the Final Form and the Hollow takes your body.** You fall to your knees, drive the sword into the ground, say "This is not over yet", and a perfectly round hole opens through your chest. From there the Hollow fights on its own, with its own moves. A crowd surrounds it, it looks up at the red moon, its eye ignites, and it blasts everyone back. Then it leaps through them all, leaving a glowing yellow cut on every mob. It stands behind them, says "Pathetic", flicks the blood off the blade, and everyone falls apart at once. Afterwards the mask stays broken for one in-game day.
+- **The Hollow gauge refills with kills.** 5 seconds for a zombie, 3 to 30 seconds for tougher mobs, half as much while in the form. You can now awaken the form several times a day. This works for both the normal and the Final Form.
+- **More executions, and they really cut mobs apart.** New moves: diagonally upward, across the chest, upward through the whole body, into slices, into four pieces, three strikes in a row, one stroke with a delayed split.
+- **The great reaction is faster and hits harder.** A short pause before the strike, then one sharp blow from behind.
+- When the blood moon appears, the sun, sunrise glow and ordinary moon smoothly fade out.
+- New command: `/zangetsu rampage`.
+- A detailed guide and description, now in English too. The mod list shows the name and description in English, translated in the Russian game.
+
+
 ## 1.13.0
 
 - Яхве сделан заново в Blender: настоящая объёмная модель человека с силой фигуры из кадров аниме. Лицо с закрытым ртом и усами, капюшон и плащ одной тканью, плащ развевается как настоящая ткань и несёт на себе глаза. Глаза моргают и смотрят сами по себе, у каждого есть зрачок.

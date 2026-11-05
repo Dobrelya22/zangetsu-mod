@@ -1,4 +1,6 @@
 {
+  "modmenu.nameTranslation.zangetsu": "Зангецу",
+  "modmenu.descriptionTranslation.zangetsu": "Зангецу из «Блича» с живым глазом: приходит во сне, когда ты впервые ляжешь спать, растёт вместе с вашей дружбой, рубит стрелы и конечности, а на последних уровнях превращает тебя в Пустого.",
   "item.zangetsu.zangetsu": "Зангецу",
   "entity.zangetsu.spirit": "Таинственная фигура",
   "entity.zangetsu.thrown_zangetsu": "Зангецу",
@@ -71,13 +73,16 @@
 
   "zangetsu.hollow.locked": "Форма Пустого откроется на IV уровне",
   "zangetsu.hollow.refused": "Глаз сердится и не даёт силы Пустого",
-  "zangetsu.hollow.exhausted": "Сила Пустого на сегодня иссякла — жди следующего дня",
+  "zangetsu.hollow.exhausted": "Сила Пустого иссякла: убивай монстров или дождись нового дня",
+  "zangetsu.hollow.broken": "Маска разбита: формы не будет целые сутки",
   "zangetsu.hollow.on": "ФОРМА ПУСТОГО",
   "zangetsu.hollow.on.final": "ФИНАЛЬНАЯ ФОРМА",
   "zangetsu.hollow.crack.1": "Маска треснула...",
   "zangetsu.hollow.crack.2": "От маски откололся кусок!",
   "zangetsu.hollow.crack.3": "Маска вот-вот рассыплется!",
   "zangetsu.hollow.time_up": "Маска раскололась. Ты истощён.",
+  "zangetsu.rampage.line_1": "Это ещё не конец.",
+  "zangetsu.rampage.line_2": "Жалкие.",
   "zangetsu.hollow.off": "Маска снята",
 
   "zangetsu.no_drop": "Зангецу нельзя выбросить — он привязан к тебе",
@@ -101,7 +106,7 @@
   "zangetsu.tooltip.ability.1": "Рассекает летящие стрелы пополам",
   "zangetsu.tooltip.ability.2": "Парирует удары, отсекает конечности, казнь",
   "zangetsu.tooltip.ability.3": "Сам рубит ближайших злых мобов",
-  "zangetsu.tooltip.ability.4": "Форма Пустого: 2 минуты в день, Гецуга Теншо",
+  "zangetsu.tooltip.ability.4": "Форма Пустого: шкала заполняется каждый день и за убийства, Гецуга Теншо",
   "zangetsu.tooltip.ability.5": "Финальная форма: маска с рогом, сила и скорость выше, Гецуга крупнее",
   "zangetsu.tooltip.hint": "Способности работают, когда глаз открыт: ночью или в темноте",
   "zangetsu.tooltip.unbound": "Ещё никого не выбрал",
@@ -110,7 +115,7 @@
   "zangetsu.hud.bond": "Дружба %s / %s",
   "zangetsu.hud.bond_max": "Дружба %s",
   "zangetsu.hud.hollow_ready": "[%s] Пустой",
-  "zangetsu.hud.hollow_empty": "Пустой: завтра",
+  "zangetsu.hud.hollow_empty": "Пустой: иссяк",
   "zangetsu.hud.lost": "Меч потерян — ляг спать",
 
   "zangetsu.command.already_bonded": "Меч уже с тобой. Сначала /zangetsu reset",

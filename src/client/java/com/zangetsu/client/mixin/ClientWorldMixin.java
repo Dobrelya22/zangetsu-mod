@@ -20,4 +20,18 @@ public abstract class ClientWorldMixin {
             cir.setReturnValue(sky.lerp(blood, k * 0.85));
         }
     }
+
+    /** Пока Пустой забрал тело, над миром ночь: и пакет времени от сервера, и ход времени здесь её не перебьют. */
+    @org.spongepowered.asm.mixin.injection.ModifyVariable(method = "setTimeOfDay", at = @org.spongepowered.asm.mixin.injection.At("HEAD"), argsOnly = true)
+    private long zangetsu$night(long time) {
+        return com.zangetsu.client.RampageScene.night() ? 18000L : time;
+    }
+
+    /** Ночь в сцене только на небе: мир освещён, иначе в бою ничего не разобрать. */
+    @org.spongepowered.asm.mixin.injection.Inject(method = "getSkyBrightness", at = @org.spongepowered.asm.mixin.injection.At("RETURN"), cancellable = true)
+    private void zangetsu$lit(float tickDelta, org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable<Float> cir) {
+        if (com.zangetsu.client.RampageScene.night()) {
+            cir.setReturnValue(Math.max(cir.getReturnValue(), 0.72F));
+        }
+    }
 }

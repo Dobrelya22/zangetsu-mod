@@ -1,0 +1,7 @@
+{
+  "type": "zangetsu:rampage",
+  "generator": {
+    "type": "zangetsu:dream",
+    "biome": "zangetsu:calling_field"
+  }
+}

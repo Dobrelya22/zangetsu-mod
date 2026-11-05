@@ -47,12 +47,19 @@ public abstract class CameraMixin {
         // У своего игрока getYaw(tickDelta) не сглаживается (вид ведёт мышь), а в сцене поворот задан по тикам: без этого камера прыгала бы двадцать раз в секунду.
         float yaw = MathHelper.lerpAngleDegrees(tickDelta, focused.prevYaw, focused.getYaw());
         // Центр кадра — между игроком и тем, к чему он обращён (меч, моб).
+        double px = MathHelper.lerp(tickDelta, focused.prevX, focused.getX()), py = MathHelper.lerp(tickDelta, focused.prevY, focused.getY()), pz = MathHelper.lerp(tickDelta, focused.prevZ, focused.getZ());
+        if (CameraDirector.isAnchored()) {
+            // Сцена с рывками: камера не вертится вместе с игроком и не прыгает за ним.
+            double[] anchor = CameraDirector.anchorAt(tickDelta);
+            px = anchor[0];
+            py = anchor[1];
+            pz = anchor[2];
+            yaw = CameraDirector.baseYaw();
+        }
         double yawRad = Math.toRadians(yaw);
         double ahead = frame[3];
         this.setRotation(yaw + frame[0], frame[1]);
-        this.setPos(MathHelper.lerp(tickDelta, focused.prevX, focused.getX()) - Math.sin(yawRad) * ahead,
-                MathHelper.lerp(tickDelta, focused.prevY, focused.getY()) + MathHelper.lerp(tickDelta, this.lastCameraY, this.cameraY) - 0.35 + frame[4],
-                MathHelper.lerp(tickDelta, focused.prevZ, focused.getZ()) + Math.cos(yawRad) * ahead);
+        this.setPos(px - Math.sin(yawRad) * ahead, py + MathHelper.lerp(tickDelta, this.lastCameraY, this.cameraY) - 0.35 + frame[4], pz + Math.cos(yawRad) * ahead);
         this.moveBy(-(com.zangetsu.client.CallingScene.voidAmount() > 0.2F ? frame[2] : this.clipToSpace(frame[2])), 0.0F, 0.0F);
     }
 }
