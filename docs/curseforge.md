@@ -1,111 +1,114 @@
-# Zangetsu: a living sword from Bleach
+![Zangetsu](https://raw.githubusercontent.com/Dobrelya22/zangetsu-mod/main/docs/page/banner.jpg)
 
-**The sword chooses you in a dream, grows with your bond, cuts mobs apart for real, and turns you into a Hollow.**
+## Your sword is alive. And it chooses you.
 
-*Made by **Dobrelya22**. Claude (Anthropic's AI) helped only with the code. This is a free, unofficial fan mod. Bleach, Zangetsu, Ichigo and Yhwach belong to Tite Kubo and their respective rights holders.*
+**Zangetsu** is a story-driven sword mod for Minecraft, inspired by *Bleach*. You don't craft this weapon, and you won't find it in a chest. It comes to you in a dream. A living eye watches from the blade, your bond with it grows with every fight, and the power it gives you has a price.
 
-*Fabric, Minecraft 1.21.1, Java 21. Requires Fabric API, on both client and server. English and Russian in-game text.*
+This isn't just a stronger sword. It's a whole journey: from the first dream, through a Hollow's mask and a burning Final Form, to the moment you die and something else gets up in your place.
 
-![The Hollow takes over](https://raw.githubusercontent.com/Dobrelya22/zangetsu-mod/main/docs/rampage_eye.jpg)
+*Made by **Dobrelya22**. Claude (Anthropic's AI) helped only with the code. A free, unofficial fan mod. Bleach, Zangetsu, Ichigo and Yhwach belong to Tite Kubo and their respective rights holders.*
 
-## What the mod adds
+*Fabric · Minecraft 1.21.1 · Java 21 · Requires Fabric API, on both client and server · English and Russian*
 
-**A sword that comes to you.** There is no crafting. The first time you sleep you dream of a crimson sky and a giant Yhwach, who tells you that you are worthy. Take the sword and wake up with it, or go back to your bed and lose it forever. It is bound to you: it can't be dropped, stored or lost on death.
+## Watch the music video
 
-**A living eye on the blade.** It watches the nearest enemy, follows your cursor in the inventory and blinks. Kill evil mobs and spare the good ones to grow your bond through five levels. The eye opens at night and in the dark, and that is when the abilities wake up.
+[![Watch the music video on YouTube](https://raw.githubusercontent.com/Dobrelya22/zangetsu-mod/main/docs/page/video.jpg)](https://youtu.be/bQY_-Fg9X2M)
 
-**Real sword combat.** Eight weighty moves in third and first person replace the vanilla jab. Arrows are sliced in half in mid-air. Attacks are parried and limbs fly off: arms from zombies and skeletons, knees from endermen.
+![The sword chooses you](https://raw.githubusercontent.com/Dobrelya22/zangetsu-mod/main/docs/page/s_dream.jpg)
 
-**Executions with a reaction check.** Click while the needle is in the zone. The sword slices the mob's actual model, so the pieces are solid and every cut shows the inside. Heads, waists, diagonals, quarters, slices, and a different move every time. In the Final Form, hit the white zone for a freeze, "YOU'RE TOO SLOW" and a strike from behind.
+Go to sleep in a bed for the first time and you'll find yourself under a crimson sky, with a giant cloaked figure watching you from above. He tells you that you're worthy, and the sword plunges into the ground at your feet.
 
-**Hollow Form.** Press `H` to pass a hand over your face and put on the bone mask. You gain strength and speed, a blood-red crescent moon rises, and right-click fires Getsuga Tensho, a huge wave of black energy. The gauge refills every day and with every monster you kill.
+**Then the choice is yours.** Take the hilt and wake up with the sword and 5 extra hearts. Or go back to your bed and lose it forever.
 
-**The Final Form.** A horned mask, real fire on your arms and legs, a cloth cloak, heavy ringing chains and a much bigger Getsuga.
+Once it's yours, it's only yours: it can't be dropped, stored away or lost on death. And if it ever goes missing, go to sleep. It will be waiting in your dream.
 
-**Death has a story.**
-- Die normally and Zangetsu saves you at the cost of itself: Yhwach catches it in his palm and crushes it. Go to sleep and find the true sword among a hundred fakes.
-- Die in the Final Form and the Hollow takes your body. A perfectly round hole opens in your chest, and you watch it cut through a whole crowd in a fully staged 40-second scene.
+![A living eye](https://raw.githubusercontent.com/Dobrelya22/zangetsu-mod/main/docs/page/s_eye.jpg)
 
-![Red moon](https://raw.githubusercontent.com/Dobrelya22/zangetsu-mod/main/docs/rampage_moon.jpg)
-![Final mask](https://raw.githubusercontent.com/Dobrelya22/zangetsu-mod/main/docs/mask_final.jpg)
-![Yhwach breaks the sword](https://raw.githubusercontent.com/Dobrelya22/zangetsu-mod/main/docs/break_shards.jpg)
-![You're too slow](https://raw.githubusercontent.com/Dobrelya22/zangetsu-mod/main/docs/qte_too_slow.jpg)
-![An execution](https://raw.githubusercontent.com/Dobrelya22/zangetsu-mod/main/docs/exec_head.jpg)
+The eye on the blade really looks around. It tracks the nearest enemy, glances at you, follows your cursor in the inventory, and blinks. You have to earn its trust: **kill evil mobs and spare the good ones**. Hurt the innocent, and it squints angrily and refuses to help until you make amends.
 
-## Guide
+It opens at night and in the dark, and that's when the real power wakes up.
 
-### 1. Getting the sword
-
-Install Fabric Loader and Fabric API for Minecraft 1.21.1, put the mod into your `mods` folder and **go to sleep in a bed**. Hear Yhwach out, and the sword plunges into the ground in front of you.
-
-- **Take it: right-click the sword.** You also permanently gain 5 hearts.
-- **Refuse: right-click your bed behind you.** This is permanent.
-
-### 2. Bond and levels
-
-Kill evil mobs to raise your bond. Tougher mobs give more, bosses give +60. Killing animals, villagers and golems lowers it. If it falls below zero, the eye gets angry and refuses to help until you make amends.
-
-**Abilities only work while the eye is open: at night or in the dark.** Want to try a new level by day? Go down into a cave.
-
-| Level | Bond | Unlocks |
+| Level | Bond | What you get |
 |---|---|---|
-| I Awakening | 0 | Slices incoming arrows, deflects fireballs and tridents |
-| II Trust | 50 | Parrying, severing limbs, reaction check and executions |
-| III Unity | 150 | The sword strikes the nearest evil mobs on its own |
-| IV Hollow | 350 | Hollow Form (`H`), Getsuga Tensho (right-click) |
-| V Final Form | 700 | Horned mask, fire, cloak and chains, bigger Getsuga, long-range executions, the white reaction zone |
+| **I. Awakening** | 0 | The sword slices arrows in mid-air and deflects fireballs and tridents |
+| **II. Trust** | 50 | Parries attacks, severs limbs, unlocks executions |
+| **III. Unity** | 150 | The sword strikes nearby evil mobs on its own |
+| **IV. Hollow** | 350 | Hollow Form and Getsuga Tensho |
+| **V. Final Form** | 700 | Horned mask, fire, cloak and chains, long-range executions |
 
-### 3. Reaction check
+![Real sword combat](https://raw.githubusercontent.com/Dobrelya22/zangetsu-mod/main/docs/page/s_combat.jpg)
 
-When your enemy has one hit left or there is nothing left to cut off, it freezes and a ring with a needle appears. **Left-click while the needle is in the zone.** Miss, and the enemy recovers. The zone is small without the mask and medium in Hollow Form. The Final Form adds a small white zone for the best execution.
+Forget the vanilla jab. Zangetsu has **eight moves that flow into a combo**, in both first and third person: two-handed cuts, an overhead chop, a thrust and a full-body spin. Every swing has weight: a wind-up, a pause, and an impact you can feel.
 
-### 4. Hollow Form
+Attacks get parried and limbs fly off. Zombies and skeletons lose their arms and drop their weapons. Endermen get their knees cut, so they can't teleport or run away.
 
-Press `H` to put on the mask and again to take it off. The living blade above your hearts is a 2-minute gauge. It refills every in-game day **and with every monster you kill**: 5 seconds for a zombie, 3 to 30 seconds depending on the mob, half as much while in the form. When it runs out, the mask shatters.
+![Cut them in two](https://raw.githubusercontent.com/Dobrelya22/zangetsu-mod/main/docs/page/s_exec.jpg)
 
-### 5. If you get killed
+When an enemy has one hit left, it freezes and a ring appears on screen. **Click while the needle is in the zone**, and the blade cuts through the mob's actual model, so the pieces are solid and every cut shows what's inside.
 
-- **A real totem in your hand** goes first.
-- **Not in the Final Form:** the sword saves you and breaks. Go to sleep and find the true one on the field of swords. Its eye is on the inner side: **face the eye, and the edge is on your right**. Fakes have the edge on the left and crumble in your hand. After a minute, the true one starts winking and ringing.
-- **In the Final Form:** the Hollow takes over. You survive with 5 hearts and your sword intact, but the mask stays broken for one in-game day.
+Heads off, cut in half at the waist, sliced diagonally, into quarters, into slices: there are more than a dozen ways, and every mob type has its own. Skeletons burst into bones. Creepers get launched and explode in mid-air, harming no one.
 
-The sword does not save you from the void or commands. If it ever goes missing, go to sleep and take any sword in your dream.
+![Hollow Form](https://raw.githubusercontent.com/Dobrelya22/zangetsu-mod/main/docs/page/s_hollow.jpg)
 
-### 6. Controls and commands
+Press `H`. Your hand passes over your face, and a bone mask grows behind your palm. The sun fades, a **blood-red crescent moon** rises, and the sword catches fire from within.
 
-| Action | Key |
+You get strength, speed and regeneration, and your abilities work even in daylight. Right-click to fire **Getsuga Tensho**, a huge wave of black energy that cuts down everything in its path. The living blade above your hearts shows how long the power lasts, and every monster you kill refills it. When it runs out, the mask cracks and shatters.
+
+![The Final Form](https://raw.githubusercontent.com/Dobrelya22/zangetsu-mod/main/docs/page/s_final.jpg)
+
+At the highest level, lightning drives you to your knees and you rise as something else: a horned mask, **real fire on your arms and legs**, a cloth cloak that streams behind you, and heavy chains that ring with every move.
+
+Executions now reach up to 18 blocks. Hit the small white zone on the ring, and everything freezes: "YOU'RE TOO SLOW", a dash behind the enemy, one strike from the back.
+
+![The sword dies to save you](https://raw.githubusercontent.com/Dobrelya22/zangetsu-mod/main/docs/page/s_break.jpg)
+
+In this mod, even death is a story. A fatal blow stops time. Yhwach reaches down, the sword flies into his palm, and it cracks in his grip. "I am disappointed. I thought you were stronger." One clench of the fist, and it shatters to save your life.
+
+To get it back, go to sleep and search a **field of a hundred fake swords**. Only the real one has its eye on the inner side of the blade. Learn to tell them apart, or wait until it starts winking at you.
+
+![The Hollow takes over](https://raw.githubusercontent.com/Dobrelya22/zangetsu-mod/main/docs/page/s_rampage.jpg)
+
+Die in the Final Form, and the sword won't save you. You fall to your knees and drive it into the ground. "This is not over yet." A perfectly round hole opens through your chest, and **you lose control**.
+
+What follows is a fully staged 40-second scene. The Hollow fights on its own, a crowd closes in, it looks up at the red moon, and its eye ignites. Then it leaps through every last one of them, stands behind them and flicks the blood off the blade. Everyone falls apart at once.
+
+You survive, but the mask stays broken for a whole in-game day.
+
+![How to start](https://raw.githubusercontent.com/Dobrelya22/zangetsu-mod/main/docs/page/s_start.jpg)
+
+1. Install **Fabric Loader** and **Fabric API** for Minecraft 1.21.1.
+2. Put this mod into your `mods` folder.
+3. **Go to sleep in a bed.** Everything else comes to you.
+
+**Tip:** abilities only work while the eye is open, so at night or in the dark. Want to try something out in the daytime? Go down into a cave.
+
+| Action | Control |
 |---|---|
 | Take the sword | Right-click it |
 | Execution | Left-click while the needle is in the zone |
-| Hollow Form | `H` (rebindable in Controls) |
+| Hollow Form | `H` (can be changed in Controls) |
 | Getsuga Tensho | Right-click with the sword in Hollow Form |
 
-Testing commands (cheats required): `/zangetsu awaken`, `give`, `level 1..5`, `bond <number>`, `hollow`, `dream`, `break`, `rampage`, `reset`.
+*The banners and the video use color-graded footage from the game. The Images tab has plain in-game screenshots.*
 
 ---
 
-# Зангецу: живой меч из «Блича»
+# Зангецу: твой меч живой, и он выбирает тебя
 
-**Меч выбирает тебя во сне, растёт вместе с вашей дружбой, по-настоящему разрубает мобов и превращает тебя в Пустого.**
+**Зангецу** — это сюжетный мод на меч для Minecraft по мотивам «Блича». Этот меч нельзя скрафтить или найти в сундуке: он приходит к тебе во сне. С клинка смотрит живой глаз, ваша дружба растёт с каждым боем, а за его силу приходится платить.
 
-*Мод сделал **Dobrelya22**. Claude (ИИ от Anthropic) помогал только с кодом. Это бесплатный неофициальный фанатский мод. «Блич», Зангецу, Ичиго и Яхве принадлежат Тайто Кубо и их правообладателям.*
+*Мод сделал **Dobrelya22**. Claude (ИИ от Anthropic) помогал только с кодом. Бесплатный неофициальный фанатский мод. «Блич», Зангецу, Ичиго и Яхве принадлежат Тайто Кубо и их правообладателям.*
 
-**Меч приходит сам.** Крафтить ничего не надо. Когда ты впервые ляжешь спать, тебе приснится багровое небо и огромный Яхве. Возьми меч и проснись с ним или вернись в кровать и потеряй его навсегда.
-
-**Живой глаз на клинке.** Следит за врагами и за курсором в инвентаре, моргает. Убивай злых мобов и щади добрых, чтобы пройти пять уровней дружбы. Глаз открывается ночью и в темноте, и тогда просыпаются способности.
-
-**Настоящий бой на мечах.** Восемь весомых приёмов от первого и третьего лица. Стрелы рассекаются в воздухе, удары парируются, конечности отлетают.
-
-**Казни с проверкой реакции.** Кликни, пока стрелка в зоне. Меч режет саму модель моба, поэтому куски объёмные. В финальной форме есть белая зона: стоп-кадр, «ТЫ СЛИШКОМ МЕДЛИТЕЛЕН» и удар в спину.
-
-**Форма Пустого.** Клавиша `H`, костяная маска, кровавый серп в небе и Гецуга Теншо на ПКМ. Шкала заполняется каждый день и за каждого убитого монстра.
-
-**Финальная форма.** Маска с рогом, настоящий огонь на руках и ногах, тканевый плащ, тяжёлые звенящие цепи и Гецуга намного крупнее.
-
-**У смерти есть сюжет.** Умрёшь как обычно, и Зангецу спасёт тебя ценой себя: Яхве раздавит его в кулаке, а настоящий меч придётся искать во сне среди сотни фальшивых. Умрёшь в финальной форме, и тело заберёт Пустой: в груди откроется идеально круглая дыра, и ты будешь смотреть, как он рубит целую толпу.
+- **Меч приходит сам.** Когда ты впервые ляжешь спать, тебе приснится багровое небо и огромный Яхве. Возьми меч или откажись навсегда.
+- **Живой глаз.** Следит за врагами, моргает, и с ним надо подружиться: убивай злых мобов и щади добрых. Открывается ночью и в темноте, и тогда просыпается настоящая сила.
+- **Настоящий бой.** Восемь весомых приёмов от первого и третьего лица, стрелы рассекаются в воздухе, конечности отлетают.
+- **Казни.** Кликни, пока стрелка в зоне, и меч разрубит саму модель моба: голова с плеч, пополам, ломтями, на четыре части.
+- **Форма Пустого.** Клавиша `H`, костяная маска, кровавая луна и Гецуга Теншо.
+- **Финальная форма.** Маска с рогом, настоящий огонь, тканевый плащ и звенящие цепи.
+- **У смерти есть сюжет.** Яхве раздавит меч в кулаке, чтобы спасти тебя, а настоящий придётся искать среди сотни фальшивых. А если умрёшь в финальной форме, тело заберёт Пустой, и ты будешь только смотреть.
 
 **Как начать:** поставь Fabric Loader и Fabric API для Minecraft 1.21.1, положи мод в папку `mods` и ляг спать в кровать.
 
 ---
 
-**Full guide and source:** [Guide](https://github.com/Dobrelya22/zangetsu-mod/blob/main/docs/GUIDE.en.md) · [Гайд на русском](https://github.com/Dobrelya22/zangetsu-mod/blob/main/docs/GUIDE.md) · [Full description](https://github.com/Dobrelya22/zangetsu-mod/blob/main/README.en.md) · [Source code](https://github.com/Dobrelya22/zangetsu-mod)
+**Learn more:** [Full guide](https://github.com/Dobrelya22/zangetsu-mod/blob/main/docs/GUIDE.en.md) · [Гайд на русском](https://github.com/Dobrelya22/zangetsu-mod/blob/main/docs/GUIDE.md) · [Source code](https://github.com/Dobrelya22/zangetsu-mod)

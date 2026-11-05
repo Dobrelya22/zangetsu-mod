@@ -1,10 +1,66 @@
-# Zangetsu
+![Zangetsu](docs/page/banner.jpg)
 
-[Русская версия](README.md) · **[Full guide](docs/GUIDE.en.md)** · [Changelog](CHANGELOG.md)
+[Русская версия](README.md) · **[Full guide](docs/GUIDE.en.md)** · [Changelog](CHANGELOG.md) · [Download](../../releases/latest)
 
-A Minecraft mod (Fabric 1.21.1): Zangetsu from *Bleach*, with a living eye on the blade. The sword comes to you in a dream the first time you go to sleep, grows with your bond, slices arrows and limbs in half, and at the top levels turns you into a Hollow.
+## Your sword is alive. And it chooses you.
+
+**Zangetsu** is a story-driven sword mod for Minecraft (Fabric 1.21.1), inspired by *Bleach*. You don't craft this weapon, and you won't find it in a chest. It comes to you in a dream. A living eye watches from the blade, your bond with it grows with every fight, and the power it gives you has a price.
+
+This isn't just a stronger sword. It's a whole journey: from the first dream, through a Hollow's mask and a burning Final Form, to the moment you die and something else gets up in your place.
 
 **Made by Dobrelya22. Claude (Anthropic's AI) helped only with the code.** This is an unofficial fan mod, not affiliated with the creators or rights holders of *Bleach*.
+
+## Watch the music video
+
+[![Watch the music video on YouTube](docs/page/video.jpg)](https://youtu.be/bQY_-Fg9X2M)
+
+![The sword chooses you](docs/page/s_dream.jpg)
+
+Go to sleep in a bed for the first time and you'll find yourself under a crimson sky, with a giant cloaked figure watching you from above. He tells you that you're worthy, and the sword plunges into the ground at your feet. Then the choice is yours: take the hilt and wake up with the sword and 5 extra hearts, or go back to your bed and lose it forever.
+
+Once it's yours, it's only yours: it can't be dropped, stored away or lost on death. And if it ever goes missing, go to sleep. It will be waiting in your dream.
+
+![A living eye](docs/page/s_eye.jpg)
+
+The eye on the blade really looks around. It tracks the nearest enemy, glances at you, follows your cursor in the inventory, and blinks. You have to earn its trust: **kill evil mobs and spare the good ones**. It opens at night and in the dark, and that's when the real power wakes up.
+
+![Real sword combat](docs/page/s_combat.jpg)
+
+Instead of the vanilla jab there are **eight moves that flow into a combo**, in both first and third person, and every swing has weight. Attacks get parried and limbs fly off: zombies and skeletons lose their arms and drop their weapons, and endermen lose their knees and can no longer teleport.
+
+![Cut them in two](docs/page/s_exec.jpg)
+
+When an enemy has one hit left, it freezes and a ring appears on screen. **Click while the needle is in the zone**, and the blade cuts through the mob's actual model, so the pieces are solid. Heads off, in half, diagonally, into quarters, into slices: there are more than a dozen ways, and every mob type has its own.
+
+![Hollow Form](docs/page/s_hollow.jpg)
+
+Press `H`. Your hand passes over your face, and a bone mask grows behind your palm. The sun fades, a **blood-red crescent moon** rises, and the sword catches fire from within. Right-click to fire **Getsuga Tensho**, a huge wave of black energy. The living blade above your hearts shows how much power is left, and every monster you kill refills it.
+
+![The Final Form](docs/page/s_final.jpg)
+
+At the highest level, lightning drives you to your knees and you rise as something else: a horned mask, **real fire on your arms and legs**, a cloth cloak and heavy ringing chains. Hit the white zone on the ring, and everything freezes: "YOU'RE TOO SLOW", a dash behind the enemy, one strike.
+
+![The sword dies to save you](docs/page/s_break.jpg)
+
+Even death is part of the story. A fatal blow stops time, and Yhwach calls the sword, catches it in his palm and crushes it in his fist to save your life. To get it back, go to sleep and find the real one on a **field of a hundred fakes**.
+
+![The Hollow takes over](docs/page/s_rampage.jpg)
+
+Die in the Final Form, and the sword won't save you. You fall to your knees, a perfectly round hole opens through your chest, and **you lose control**. What follows is 40 fully staged seconds: the Hollow cuts through a crowd, looks up at the red moon, its eye ignites, and it leaps through every last one of them. One flick of the blade, and everyone falls apart at once.
+
+![How to start](docs/page/s_start.jpg)
+
+1. Install [Fabric Loader](https://fabricmc.net/use/) and [Fabric API](https://modrinth.com/mod/fabric-api/versions?g=1.21.1) for Minecraft 1.21.1.
+2. Download [`zangetsu-*.jar`](../../releases/latest) and put it into your `mods` folder.
+3. **Go to sleep in a bed.** Everything else comes to you.
+
+Everything in detail is in the [full guide](docs/GUIDE.en.md).
+
+---
+
+# In detail
+
+## In-game screenshots
 
 | | |
 |---|---|
