@@ -89,6 +89,23 @@ You survive, but the mask stays broken for a whole in-game day.
 | Hollow Form | `H` (can be changed in Controls) |
 | Getsuga Tensho | Right-click with the sword in Hollow Form |
 
+### Want to see everything right away?
+
+Most of the mod is earned through play, but with cheats on, these commands take you straight to any part of it:
+
+| Command | What it does |
+|---|---|
+| `/zangetsu awaken` | Starts the first dream (only while you don't have the sword) |
+| `/zangetsu give` | Gives you the sword without the dream |
+| `/zangetsu level 5` | Sets your level, from 1 to 5. Level 5 unlocks everything |
+| `/zangetsu hollow` | Refills the Hollow gauge and repairs a broken mask |
+| `/zangetsu rampage` | Plays the scene where the Hollow takes over (needs level 5) |
+| `/zangetsu break` | Plays the scene where Yhwach breaks the sword |
+| `/zangetsu dream` | Sends you into the dream. Once the sword is broken, that's the field of swords |
+| `/zangetsu reset` | Resets everything so you can start over |
+
+**A quick tour:** `/zangetsu give`, then `/zangetsu level 5`, press `H` and right-click with the sword. Then try `/zangetsu rampage`, `/zangetsu break` and `/zangetsu dream`.
+
 *The banners and the video use color-graded footage from the game. The Images tab has plain in-game screenshots.*
 
 ---
