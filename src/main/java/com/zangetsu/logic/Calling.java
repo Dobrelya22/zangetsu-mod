@@ -35,8 +35,8 @@ import net.minecraft.world.Heightmap;
 import net.minecraft.world.World;
 
 /**
- * Первый сон. Игрок просто живёт в мире, но когда он впервые ложится спать, ему снится бледное небо и тёмная фигура в нём: множество глаз, говорит, что он достоин меча, и
- * Зангецу вылетает из неё и вонзается в землю перед ним. Взял рукоять — просыпается с мечом. Вернулся в свою кровать за спиной — отказался: фигура прощается, и меча у него не будет уже никогда.
+ * Первый сон. Игрок просто живёт в мире, но когда он впервые ложится спать, ему снится малиновое небо и колосс в огромном плаще на горизонте: говорит, что он достоин меча, поднимает руки, и
+ * Зангецу вылетает из его груди и вонзается в землю перед ним. Взял рукоять — просыпается с мечом. Вернулся в свою кровать за спиной — отказался: фигура прощается, и меча у него не будет уже никогда.
  */
 public final class Calling {
     public static final RegistryKey<World> WORLD = RegistryKey.of(RegistryKeys.WORLD, ZangetsuMod.id("calling"));
@@ -44,8 +44,8 @@ public final class Calling {
     /** Сколько тиков игрок должен пролежать, прежде чем сон начнётся: экран успевает потемнеть. */
     private static final int FALL_ASLEEP = 40;
     /** Где всё стоит относительно места появления (блоки вперёд и вверх). */
-    private static final double FIGURE_AHEAD = 30.0, FIGURE_UP = 25.0, SWORD_AHEAD = 3.8;
-    private static final float FIGURE_SCALE = 5.8F;
+    public static final double FIGURE_AHEAD = 70.0, FIGURE_UP = 52.0, SWORD_AHEAD = 3.8;
+    public static final float FIGURE_SCALE = 22.0F;
     private static final int BED_BEHIND = 5;
     /** Дальше этого сон не отпускает. */
     private static final double ROAM_LIMIT = 52.0;
@@ -53,7 +53,9 @@ public final class Calling {
     private static final double WARN_AT = 3.6;
 
     /** Вступление: когда что происходит (тики от начала сна). */
-    private static final int FIGURE_AT = 25, LINE_1 = 118, LINE_2 = 192, LINE_3 = 306, SWORD_AT = 330, HOLD = 40, FLIGHT = 26;
+    public static final int FIGURE_AT = 25, LINE_1 = 118, LINE_2 = 192, LINE_3 = 306, SWORD_AT = 366, HOLD = 40, FLIGHT = 44;
+    /** Когда начинается пролёт камеры. */
+    public static final int CAMERA_AT = 10;
     /** Сколько тиков после вонзания остаётся широкий кадр. */
     private static final int OFFER_BARS = 96;
     /** Отказ: тики от нажатия на кровать. */
@@ -119,13 +121,15 @@ public final class Calling {
         SESSIONS.put(player.getUuid(), session);
 
         // Смотрит туда, где сейчас проступит фигура.
-        player.teleport(world, session.home.x, session.home.y, session.home.z, 0.0F, -38.0F);
+        player.teleport(world, session.home.x, session.home.y, session.home.z, 0.0F, -10.0F);
         if (player.interactionManager.getGameMode() != GameMode.SPECTATOR) {
             player.changeGameMode(GameMode.ADVENTURE);
         }
         player.clearStatusEffects();
         player.extinguish();
         send(player, CallingPayload.BEGIN, "", 80);
+        // Пока он говорит, игрок стоит и смотрит, куда ведёт камера. Как только меч вонзился, он свободен.
+        Cinematic.lock(player, SWORD_AT + HOLD + FLIGHT);
         Fx.sound(player, SoundEvents.BLOCK_BELL_RESONATE, 1.0F, 0.5F);
         Fx.sound(player, SoundEvents.AMBIENT_CAVE.value(), 0.8F, 0.7F);
         Sync.player(player);
@@ -265,6 +269,14 @@ public final class Calling {
             figure.keepWhile(() -> SESSIONS.containsKey(uuid));
             session.figure = figure.getUuid();
         }
+        ZangetsuSpiritEntity colossus = figure(player, session);
+        if (t == CAMERA_AT) {
+            // Камера одним дублем: от плеча игрока вверх к лицу, потом на всю фигуру и за мечом на землю.
+            send(player, CallingPayload.FLY, "", SWORD_AT + HOLD + FLIGHT - CAMERA_AT + 8);
+        }
+        if (colossus != null && t == LINE_3 - 10) {
+            colossus.setArms(1);
+        }
         if (t >= LINE_1 && t < SWORD_AT + HOLD && (t - LINE_1) % 44 == 0) {
             Fx.sound(player, SoundEvents.ENTITY_WARDEN_HEARTBEAT, 0.7F, 0.6F);
         }
@@ -305,6 +317,10 @@ public final class Calling {
         session.state = OFFER;
         session.stateAt = session.tick;
         phase(player, session, ZangetsuSpiritEntity.WATCH);
+        ZangetsuSpiritEntity figure = figure(player, session);
+        if (figure != null) {
+            figure.setArms(0);
+        }
         say(player, "line4", 88);
     }
 
@@ -374,8 +390,9 @@ public final class Calling {
         send(player, CallingPayload.BARS_ON, "", 0);
         ZangetsuSpiritEntity figure = figure(player, session);
         if (figure != null) {
-            lookAt(player, figure.getPos().add(0.0, 8.0, -6.0), 26);
+            lookAt(player, figure.faceAt(), 26);
             figure.setPhase(ZangetsuSpiritEntity.WRATH);
+            figure.setArms(1);
         }
         Fx.sound(player, SoundEvents.ENTITY_WARDEN_ANGRY, 1.0F, 0.5F);
     }
@@ -388,7 +405,13 @@ public final class Calling {
             case REFUSE_DUST -> swordToDust(player, world, session);
             case REFUSE_3 -> say(player, "refuse3", 100);
             case REFUSE_4 -> say(player, "refuse4", 70);
-            case REFUSE_CLOSE -> phase(player, session, ZangetsuSpiritEntity.CLOSING);
+            case REFUSE_CLOSE -> {
+                phase(player, session, ZangetsuSpiritEntity.CLOSING);
+                ZangetsuSpiritEntity figure = figure(player, session);
+                if (figure != null) {
+                    figure.setArms(0);
+                }
+            }
             case REFUSE_DISSOLVE -> {
                 phase(player, session, ZangetsuSpiritEntity.DISSOLVING);
                 Fx.sound(player, SoundEvents.ENTITY_WARDEN_DEATH, 0.6F, 0.5F);

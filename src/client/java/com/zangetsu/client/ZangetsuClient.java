@@ -74,6 +74,8 @@ public class ZangetsuClient implements ClientModInitializer {
         });
         WorldRenderEvents.BEFORE_ENTITIES.register(com.zangetsu.client.render.DreamVoid::render);
 
+        net.fabricmc.fabric.api.client.rendering.v1.CoreShaderRegistrationCallback.EVENT.register(context -> context.register(ZangetsuMod.id("yhwach"), net.minecraft.client.render.VertexFormats.POSITION_COLOR_TEXTURE_LIGHT_NORMAL, program -> com.zangetsu.client.render.YhwachModel.shader = program));
+
         KeyBindings.register();
         HudRenderCallback.EVENT.register(ZangetsuHud::render);
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
@@ -161,19 +163,32 @@ public class ZangetsuClient implements ClientModInitializer {
             if (entity == client.player && payload.animation() == AnimationPayload.SWORD_BROKEN) {
                 // Одним дублем: от плеча игрока на всю фигуру, к руке на клинке, к лицу, пока он говорит, снова к руке в миг перелома, и назад.
                 float grip = com.zangetsu.logic.SwordBreak.GRIP, snap = com.zangetsu.logic.SwordBreak.SNAP, total = com.zangetsu.logic.SwordBreak.TOTAL;
+                float arm = com.zangetsu.logic.SwordBreak.ARM_FROM, ready = com.zangetsu.logic.SwordBreak.READY, launch = com.zangetsu.logic.SwordBreak.LAUNCH, speech = com.zangetsu.logic.SwordBreak.SPEECH, crush = com.zangetsu.logic.SwordBreak.CRUSH;
+                // Куда смотреть: грудь, кулак, лицо и висящий меч, вперёд и вверх от игрока.
+                float chestAhead = 12.0F, chestUp = 15.6F, fistAhead = 5.3F, fistUp = 13.7F, faceAhead = 13.2F, faceUp = 19.6F, swordAhead = 1.75F, swordUp = 0.8F;
                 CameraDirector.fly(payload.duration() + 4,
                         new CameraDirector.Key(0.0F, 38.0F, 8.0F, 5.0F, 0.4F, -0.1F),
-                        new CameraDirector.Key(34.0F, 24.0F, -4.0F, 8.0F, 1.2F, 0.8F),
-                        new CameraDirector.Key(64.0F, 14.0F, -8.0F, 16.0F, 3.0F, 3.0F),
-                        new CameraDirector.Key(grip - 4.0F, 40.0F, -6.0F, 6.0F, 1.75F, 0.4F),
-                        new CameraDirector.Key(grip + 12.0F, 58.0F, -2.0F, 4.4F, 1.75F, 0.3F),
-                        new CameraDirector.Key(grip + 40.0F, 8.0F, -3.0F, 7.0F, 5.6F, 4.45F),
-                        new CameraDirector.Key(snap - 22.0F, -8.0F, -5.0F, 6.2F, 5.6F, 4.4F),
-                        new CameraDirector.Key(snap - 6.0F, -30.0F, 2.0F, 4.6F, 1.75F, 0.35F),
-                        new CameraDirector.Key(snap + 6.0F, -36.0F, 4.0F, 6.0F, 1.75F, 0.3F),
-                        new CameraDirector.Key(snap + 30.0F, -20.0F, -4.0F, 12.0F, 2.0F, 1.7F),
-                        new CameraDirector.Key(total - 30.0F, 10.0F, -2.0F, 12.0F, 1.0F, 1.2F),
+                        new CameraDirector.Key(30.0F, 22.0F, -14.0F, 9.0F, 0.9F, 0.9F),
+                        new CameraDirector.Key(arm - 8.0F, 20.0F, -26.0F, 22.0F, chestAhead, chestUp + 1.0F),
+                        new CameraDirector.Key(arm + 24.0F, 26.0F, -20.0F, 18.0F, 11.0F, 15.0F),
+                        new CameraDirector.Key(ready - 8.0F, 46.0F, -14.0F, 21.0F, 8.0F, 14.0F),
+                        new CameraDirector.Key(ready + 6.0F, 52.0F, -12.0F, 21.0F, 7.0F, 13.5F),
+                        new CameraDirector.Key(launch - 20.0F, 30.0F, -12.0F, 9.5F, swordAhead, swordUp),
+                        new CameraDirector.Key(launch - 1.0F, 34.0F, -10.0F, 7.5F, swordAhead, swordUp + 0.3F),
+                        new CameraDirector.Key(launch + 6.0F, 40.0F, -16.0F, 23.0F, 4.5F, 10.0F),
+                        new CameraDirector.Key(grip, 36.0F, -4.0F, 11.0F, fistAhead, fistUp),
+                        new CameraDirector.Key(grip + 22.0F, 24.0F, -3.0F, 9.0F, fistAhead, fistUp),
+                        new CameraDirector.Key(speech - 6.0F, 10.0F, -6.0F, 10.0F, fistAhead + 0.5F, fistUp + 1.0F),
+                        new CameraDirector.Key(speech + 16.0F, -26.0F, -22.0F, 16.0F, faceAhead, faceUp),
+                        new CameraDirector.Key(crush - 20.0F, -34.0F, -24.0F, 12.0F, faceAhead, faceUp),
+                        new CameraDirector.Key(crush - 4.0F, 6.0F, -6.0F, 12.5F, 5.6F, 14.3F),
+                        new CameraDirector.Key(snap, 9.0F, -6.0F, 10.5F, 5.6F, 14.3F),
+                        new CameraDirector.Key(snap + 12.0F, 11.0F, -8.0F, 15.0F, 5.6F, 14.6F),
+                        new CameraDirector.Key(snap + 36.0F, 5.0F, -20.0F, 26.0F, 7.0F, 12.0F),
+                        new CameraDirector.Key(total - 34.0F, 0.0F, -22.0F, 28.0F, 9.0F, 13.0F),
+                        new CameraDirector.Key(total - 16.0F, 0.0F, -20.0F, 26.0F, 8.0F, 12.0F),
                         new CameraDirector.Key(total + 4.0F, 25.0F, 10.0F, 5.0F, 0.0F, 0.0F));
+                CameraDirector.impacts(grip, 1.0F, snap, 1.35F);
                 return;
             }
             if (entity == client.player && payload.animation() == AnimationPayload.TOUCH_HANDLE) {
@@ -219,7 +234,7 @@ public class ZangetsuClient implements ClientModInitializer {
                     sword.set(ModComponents.EYE, Eye.OPEN);
                     client.gameRenderer.showFloatingItem(sword);
                 }
-                case ClientFxPayload.WHITE_FLASH, ClientFxPayload.RED_FLASH -> ClientState.flash(payload.effect(), payload.duration());
+                case ClientFxPayload.WHITE_FLASH, ClientFxPayload.RED_FLASH, ClientFxPayload.IMPACT_FLASH -> ClientState.flash(payload.effect(), payload.duration());
                 case ClientFxPayload.SHAKE -> {
                     if (client.player != null) {
                         client.player.maxHurtTime = 10;

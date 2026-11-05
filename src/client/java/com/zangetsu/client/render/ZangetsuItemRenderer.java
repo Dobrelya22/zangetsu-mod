@@ -56,11 +56,11 @@ public class ZangetsuItemRenderer implements BuiltinItemRendererRegistry.Dynamic
     private static final float HOLD_U = 3.7F;
     private static final float POMMEL_END = 0.8F;
     private static final float HILT_END = 5.4F;
-    private static final float BLADE_START = 6.2F;
-    private static final float TIP_START = 18.2F;
-    private static final float BLADE_END = 22.0F;
-    private static final float SPINE = -2.3F;
-    private static final float EDGE = 2.8F;
+    static final float BLADE_START = 6.2F;
+    static final float TIP_START = 18.2F;
+    static final float BLADE_END = 22.0F;
+    static final float SPINE = -2.3F;
+    static final float EDGE = 2.8F;
     private static final float BEVEL = 1.7F;
     private static final float SPINE_T = 0.62F;
     /** Скругление обуха: высота фаски и доля толщины, что остаётся на верхней грани. */
@@ -87,6 +87,8 @@ public class ZangetsuItemRenderer implements BuiltinItemRendererRegistry.Dynamic
     public static int eyeSideOverride;
     /** Клинка нет, только рукоять: меч сломан. */
     public static boolean hiltOnly;
+    /** Клинок рисует сцена поломки своими кусками: здесь только рукоять и глаз. */
+    public static boolean bladeHidden;
     /** Поворот меча от первого лица, заданный приёмом на время рисования (null — обычный). */
     public static Quaternionf firstPersonRotation;
 
@@ -138,7 +140,9 @@ public class ZangetsuItemRenderer implements BuiltinItemRendererRegistry.Dynamic
         hilt(mesh);
         collar(mesh);
         if (!hiltOnly) {
-            blade(mesh, burning);
+            if (!bladeHidden) {
+                blade(mesh, burning);
+            }
             if (burning) {
                 burnCracks(mesh, matrices, consumers, overlay, mode);
             }
@@ -381,7 +385,7 @@ public class ZangetsuItemRenderer implements BuiltinItemRendererRegistry.Dynamic
     // ---------------------------------------------------------------- клинок
 
     /** Сечение клинка в точке u: {обух, начало скоса, кромка, толщина обуха, у скоса, у кромки}. */
-    private static float[] section(float u) {
+    static float[] section(float u) {
         float s = MathHelper.clamp((u - TIP_START) / (BLADE_END - TIP_START), 0.0F, 1.0F);
         float spine = SPINE + 0.35F * s * s;
         // Остриё тесака: кромка дугой поднимается к обуху.

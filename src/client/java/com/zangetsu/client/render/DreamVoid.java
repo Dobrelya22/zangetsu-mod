@@ -20,7 +20,7 @@ import org.lwjgl.opengl.GL11;
  * и мечу не мешают ни стены пещеры, ни холмы. Под игроком остаётся только мягкая тень.
  */
 public final class DreamVoid {
-    private static final float[] PALE = {0.84F, 0.855F, 0.87F, 1.0F};
+    private static final float[] DARK = {0.25F, 0.032F, 0.075F, 1.0F};
     private static boolean shadowsOff;
 
     private DreamVoid() {
@@ -44,7 +44,7 @@ public final class DreamVoid {
         float time = context.world().getTime() + tickDelta;
         Matrix4f view = context.positionMatrix();
         RenderSystem.disableDepthTest();
-        DreamSky.paint(view, PALE, time, amount);
+        DreamSky.paint(view, DARK, time, amount, 0.5F);
         pool(view, context, tickDelta, amount);
         RenderSystem.enableDepthTest();
         if (amount >= 0.999F) {
@@ -84,6 +84,6 @@ public final class DreamVoid {
     }
 
     private static void ring(BufferBuilder buffer, Matrix4f view, Vec3d feet, float angle, float[] ring, float amount) {
-        buffer.vertex(view, (float) feet.x + MathHelper.cos(angle) * ring[0], (float) feet.y, (float) feet.z + MathHelper.sin(angle) * ring[0]).color(0.08F, 0.07F, 0.11F, ring[1] * amount);
+        buffer.vertex(view, (float) feet.x + MathHelper.cos(angle) * ring[0], (float) feet.y, (float) feet.z + MathHelper.sin(angle) * ring[0]).color(0.02F, 0.004F, 0.012F, ring[1] * amount);
     }
 }

@@ -25,8 +25,8 @@ public final class Trial {
     /** Сколько тиков идёт речь до начала поисков и через сколько настоящий начнёт подмигивать. */
     private static final int FIGURE_AT = 20, LINE_1 = 104, LINE_2 = 214, LINE_3 = 280, LINE_4 = 376, LINE_5 = 504, SEARCH_AT = 600;
     public static final int WINK_AFTER = 1200;
-    private static final double FIGURE_AHEAD = 30.0, FIGURE_UP = 25.0;
-    private static final float FIGURE_SCALE = 5.8F;
+    private static final double FIGURE_AHEAD = 70.0, FIGURE_UP = 52.0;
+    private static final float FIGURE_SCALE = 22.0F;
     /** Настоящий меч не близко и не далеко от места появления. */
     private static final double REAL_NEAR = 14.0, REAL_FAR = 34.0;
     /** Дальше этого сон не отпускает. */

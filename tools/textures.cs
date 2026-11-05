@@ -4,7 +4,7 @@ using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
 
-public static partial class ZangetsuTextures
+public static class ZangetsuTextures
 {
     // ------------------------------------------------------------------ общее
 

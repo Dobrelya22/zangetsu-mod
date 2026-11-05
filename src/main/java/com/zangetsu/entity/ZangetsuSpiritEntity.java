@@ -28,10 +28,12 @@ public class ZangetsuSpiritEntity extends Entity {
     public static final int ROAM = 0, WATCH = 1, STARE = 2, WRATH = 3, CLOSING = 4, DISSOLVING = 5;
     /** За сколько тиков он расползается по небу. */
     public static final int EMERGE = 96;
+    /** За сколько тиков поднимаются руки. */
+    public static final float ARMS_TICKS = 88.0F;
     /** Когда открывается первый глаз и с каким шагом остальные. */
     public static final int EYES_AT = 66, EYE_OPEN_STEP = 3;
     /** Сколько у него глаз и с каким шагом они закрываются на прощание. */
-    public static final int EYE_COUNT = 18, EYE_CLOSE_STEP = 5;
+    public static final int EYE_COUNT = 24, EYE_CLOSE_STEP = 4;
     /** За сколько тиков он растворяется. */
     public static final int DISSOLVE = 50;
     /** Без сна (показательный бросок): когда бросить меч и сколько он летит, когда раствориться. */
@@ -51,6 +53,8 @@ public class ZangetsuSpiritEntity extends Entity {
     private static final TrackedData<Float> VICTIM_YAW = DataTracker.registerData(ZangetsuSpiritEntity.class, TrackedDataHandlerRegistry.FLOAT);
     private static final TrackedData<Integer> EMERGE_FROM = DataTracker.registerData(ZangetsuSpiritEntity.class, TrackedDataHandlerRegistry.INTEGER);
     private static final TrackedData<Integer> EMERGE_TICKS = DataTracker.registerData(ZangetsuSpiritEntity.class, TrackedDataHandlerRegistry.INTEGER);
+    /** Руки: 0 под плащом, 1 разведены и подняты. */
+    private static final TrackedData<Integer> ARMS = DataTracker.registerData(ZangetsuSpiritEntity.class, TrackedDataHandlerRegistry.INTEGER);
 
     private UUID owner;
     private BooleanSupplier keepWhile;
@@ -61,6 +65,12 @@ public class ZangetsuSpiritEntity extends Entity {
     private int talkSerial;
     /** Когда сменилась фаза и какая была раньше: глаза переходят плавно. */
     public int phaseAt;
+    /** Когда поменялась поза рук и откуда она шла. */
+    public int armsAt = -1000;
+    public float armsFrom;
+    /** Удары сцены поломки уже прозвучали на этом клиенте. */
+    public boolean caughtHeard, snapHeard;
+    private float armsTo;
     public int previousPhase = ROAM;
     public int holdAt;
     public int flareAt = -1000;
@@ -101,6 +111,7 @@ public class ZangetsuSpiritEntity extends Entity {
 
     @Override
     protected void initDataTracker(DataTracker.Builder builder) {
+        builder.add(ARMS, 0);
         builder.add(SCALE, 1.0F);
         builder.add(PHASE, ROAM);
         builder.add(HOLD, 0);
@@ -116,6 +127,11 @@ public class ZangetsuSpiritEntity extends Entity {
     @Override
     public void onTrackedDataSet(TrackedData<?> data) {
         super.onTrackedDataSet(data);
+        if (ARMS.equals(data)) {
+            this.armsFrom = this.armsShown(0.0F);
+            this.armsTo = this.getArms() > 0 ? 1.0F : 0.0F;
+            this.armsAt = this.age;
+        }
         if (PHASE.equals(data)) {
             this.previousPhase = this.lastPhase;
             this.lastPhase = this.getPhase();
@@ -131,6 +147,26 @@ public class ZangetsuSpiritEntity extends Entity {
 
     public float getSpiritScale() {
         return this.dataTracker.get(SCALE);
+    }
+
+    /** Насколько руки подняты сейчас: 0 под плащом, 1 разведены. */
+    public float armsShown(float tickDelta) {
+        float t = MathHelper.clamp((this.age + tickDelta - this.armsAt) / ARMS_TICKS, 0.0F, 1.0F);
+        return MathHelper.lerp(t, this.armsFrom, this.armsTo);
+    }
+
+    /** Лицо фигуры в мире: туда смотрит камера, когда он говорит. */
+    public Vec3d faceAt() {
+        float s = this.getSpiritScale();
+        return this.getPos().add(Vec3d.fromPolar(0.0F, this.getYaw()).multiply(0.12 * s)).add(0.0, 1.84 * s, 0.0);
+    }
+
+    public int getArms() {
+        return this.dataTracker.get(ARMS);
+    }
+
+    public void setArms(int pose) {
+        this.dataTracker.set(ARMS, pose);
     }
 
     public int getPhase() {
@@ -198,12 +234,11 @@ public class ZangetsuSpiritEntity extends Entity {
         return grown;
     }
 
-    /** Откуда вылетает меч: с груди, там, где он показался на плаще. Лист смотрит на того, кому брошен меч. */
+    /** Откуда вылетает меч: из груди, из выреза рубашки. */
     private Vec3d mouth() {
         float s = this.getSpiritScale();
-        Vec3d toward = this.landing.add(0.0, 1.6, 0.0).subtract(this.getPos()).normalize();
-        Vec3d up = new Vec3d(0.0, 1.0, 0.0).subtract(toward.multiply(toward.y)).normalize();
-        return this.getPos().add(up.multiply(-1.25 * s)).add(toward.multiply(1.35 * s));
+        Vec3d toward = this.landing.subtract(this.getPos()).multiply(1.0, 0.0, 1.0).normalize();
+        return this.getPos().add(0.0, 1.38 * s, 0.0).add(toward.multiply(0.34 * s));
     }
 
     @Override

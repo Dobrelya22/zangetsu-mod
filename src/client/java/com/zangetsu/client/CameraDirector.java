@@ -30,6 +30,8 @@ public final class CameraDirector {
     private static int until = -1;
     private static Cut[] cuts;
     private static Key[] path;
+    /** Удары по камере: момент и сила, через одно. */
+    private static float[] kicks;
 
     private CameraDirector() {
     }
@@ -57,6 +59,11 @@ public final class CameraDirector {
         path = keys;
     }
 
+    /** Камеру в эти моменты встряхивает и отбрасывает назад. */
+    public static void impacts(float... momentsAndStrengths) {
+        kicks = momentsAndStrengths;
+    }
+
     private static float[] along(float now) {
         int i = 0;
         while (i + 2 < path.length && now >= path[i + 1].at()) {
@@ -68,6 +75,17 @@ public final class CameraDirector {
         float[] out = new float[5];
         for (int f = 0; f < out.length; f++) {
             out[f] = (2.0F * s3 - 3.0F * s2 + 1.0F) * a.value(f) + (s3 - 2.0F * s2 + s) * dt * slope(i, f) + (3.0F * s2 - 2.0F * s3) * b.value(f) + (s3 - s2) * dt * slope(i + 1, f);
+        }
+        if (kicks != null) {
+            for (int k = 0; k + 1 < kicks.length; k += 2) {
+                float x = now - kicks[k];
+                if (x >= 0.0F) {
+                    float power = kicks[k + 1] * (float) Math.exp(-x / 7.0F);
+                    out[0] += power * 2.4F * MathHelper.sin(x * 1.9F);
+                    out[1] += power * 2.0F * MathHelper.sin(x * 2.6F + 1.0F);
+                    out[2] *= 1.0F + 0.16F * kicks[k + 1] * (float) Math.exp(-x / 5.0F) * (1.0F - (float) Math.exp(-x / 0.8F));
+                }
+            }
         }
         return out;
     }
@@ -93,6 +111,7 @@ public final class CameraDirector {
         client.options.setPerspective(Perspective.THIRD_PERSON_BACK);
         cuts = newCuts;
         path = null;
+        kicks = null;
         start = ClientState.ticks;
         until = ClientState.ticks + duration;
     }

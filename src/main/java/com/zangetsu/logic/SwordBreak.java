@@ -31,14 +31,24 @@ import net.minecraft.util.math.Vec3d;
 import org.joml.Vector3f;
 
 /**
- * Зангецу спасает от смерти, как тотем, но ценой себя. Удар, который должен был убить, останавливает время: мир тает в бледном небе, игрок падает на колено, а меч сам повисает перед ним. Появляется Яхве,
- * вцепляется в клинок рукой, говорит «я думал, ты сильнее» и одной рукой ломает его. Игрок остаётся жив, но без меча: чтобы вернуть его, придётся найти настоящего среди фальшивых во сне.
+ * Зангецу спасает от смерти, как тотем, но ценой себя. Удар, который должен был убить, останавливает время: мир тает в малиновом небе, игрок падает на колено, а меч сам повисает перед ним. Над ним встаёт Яхве,
+ * медленно вытягивает руку, и меч сам летит к нему. Он берёт его за обух, сжимает пальцы, по клинку расходятся трещины. Сказав, что разочарован, он одним сжатием кулака разбивает меч на осколки. Игрок остаётся жив, но без меча: чтобы вернуть его, придётся найти настоящего среди фальшивых во сне.
  */
 public final class SwordBreak {
-    /** Сцена по тикам: мир тает, меч всплывает, фигура проступает, рука тянется, хватает, сжимает, клинок ломается, рука уходит, фигура складывается, мир возвращается. */
-    public static final int VOID_IN = 16, SWORD_FROM = 6, FIGURE_FROM = 14, FIGURE_TICKS = 36, ARM_FROM = 58, GRIP = 92, SPEECH = 104, CRUSH = 176, SNAP = 186, RELEASE = 208, FIGURE_OUT = 224, VOID_OUT = 248, TOTAL = 278;
-    /** Где всё стоит относительно игрока (блоки вперёд и вверх) и масштаб фигуры: блоков на единицу головы. */
-    public static final float SCALE = 1.05F, AHEAD = 5.8F, UP = 4.4F, SWORD_AHEAD = 1.75F, SWORD_UP = 0.62F;
+    /** Сцена по тикам: мир тает, меч всплывает, фигура проступает, рука достаётся из кармана и вытягивается, меч раскручивается, летит и бьёт в ладонь, пальцы сжимаются и клинок трещит, он говорит, кулак сжимается, клинок разлетается, рука уходит, фигура растворяется, мир возвращается. */
+    public static final int VOID_IN = 16, SWORD_FROM = 6, FIGURE_FROM = 14, FIGURE_TICKS = 40, ARM_FROM = 56, READY = 112, SPIN_FROM = 114, LAUNCH = 146, GRIP = 158, CRACK_FROM = 170, SPEECH = 196, CRUSH = 272, SNAP = 280,
+            RELEASE = 306, FIGURE_OUT = 326, VOID_OUT = 350, TOTAL = 380;
+    /** На сколько градусов всего оборачивается меч в воздухе: ровно столько, чтобы лечь плашмя, остриём вбок. */
+    private static final float SPIN_TOTAL = 90.0F + 360.0F * 5.0F;
+
+    /** Угол меча: еле начинает вращаться, потом всё быстрее, на самой большой скорости его останавливает ладонь. */
+    public static float spinAngle(float t) {
+        float k = net.minecraft.util.math.MathHelper.clamp((t - SPIN_FROM) / (float) (GRIP - SPIN_FROM), 0.0F, 1.0F);
+        return SPIN_TOTAL * (float) Math.pow(k, 2.6F);
+    }
+
+    /** Где всё стоит относительно игрока (блоки вперёд и вверх) и масштаб фигуры: блоков на метр модели. Он парит высоко, на игрока смотрит сверху. */
+    public static final float SCALE = 7.0F, AHEAD = 14.0F, UP = 8.0F, SWORD_AHEAD = 1.75F, SWORD_UP = 0.62F;
 
     private static final class Session {
         int tick;
@@ -159,35 +169,34 @@ public final class SwordBreak {
             figure.setPhase(ZangetsuSpiritEntity.STARE);
         }
         if (t == ARM_FROM) {
-            Fx.sound(player, SoundEvents.ENTITY_WARDEN_EMERGE, 0.8F, 0.7F);
+            Fx.sound(player, SoundEvents.ENTITY_WARDEN_EMERGE, 0.8F, 0.6F);
         }
-        if (t == GRIP) {
-            Fx.sound(player, SoundEvents.BLOCK_ANVIL_LAND, 0.7F, 1.5F);
-            Fx.sound(player, SoundEvents.BLOCK_CHAIN_BREAK, 1.0F, 0.6F);
-            Sync.fx(player, ClientFxPayload.SHAKE, 8);
+        if (t >= SPIN_FROM && t < GRIP && (int) (spinAngle(t) / 180.0F) != (int) (spinAngle(t - 1) / 180.0F)) {
+            // Каждый оборот слышно, и всё чаще и выше.
+            float k = (t - SPIN_FROM) / (float) (GRIP - SPIN_FROM);
+            Fx.sound(player, SoundEvents.ENTITY_PLAYER_ATTACK_SWEEP, 0.5F + 0.6F * k, 0.55F + 0.9F * k);
         }
-        if (t > GRIP && t < SNAP && t % 9 == 0) {
+        if (t == LAUNCH) {
+            // Меч срывается с места и летит к его руке.
+            Fx.sound(player, SoundEvents.ITEM_TRIDENT_RIPTIDE_3.value(), 1.0F, 0.8F);
+            Fx.sound(player, SoundEvents.ENTITY_ENDER_DRAGON_FLAP, 0.9F, 0.7F);
+        }
+        if (t >= CRACK_FROM && t < SNAP && t % 9 == 0) {
             // Клинок трещит всё чаще.
-            Fx.sound(player, SoundEvents.BLOCK_GLASS_HIT, 1.0F, 0.6F + (t - GRIP) * 0.008F);
-            Fx.sound(player, SoundEvents.BLOCK_AMETHYST_BLOCK_HIT, 0.7F, 0.5F + (t - GRIP) * 0.01F);
+            Fx.sound(player, SoundEvents.BLOCK_GLASS_HIT, 1.0F, 0.6F + (t - CRACK_FROM) * 0.006F);
+            Fx.sound(player, SoundEvents.BLOCK_AMETHYST_BLOCK_HIT, 0.7F, 0.5F + (t - CRACK_FROM) * 0.007F);
         }
         if (t == SPEECH) {
-            ServerPlayNetworking.send(player, new CallingPayload(CallingPayload.SPEECH, "zangetsu.break.line", 66, 0.0, 0.0, 0.0));
+            ServerPlayNetworking.send(player, new CallingPayload(CallingPayload.SPEECH, "zangetsu.break.line", 72, 0.0, 0.0, 0.0));
             if (figure != null) {
-                figure.speak(66);
+                figure.speak(72);
             }
         }
         if (t == CRUSH) {
-            Fx.sound(player, SoundEvents.ENTITY_IRON_GOLEM_DAMAGE, 1.0F, 0.5F);
-            Sync.fx(player, ClientFxPayload.SHAKE, 10);
+            Fx.sound(player, SoundEvents.ENTITY_WARDEN_HEARTBEAT, 1.0F, 0.5F);
         }
-        if (t == SNAP) {
-            Fx.sound(player, SoundEvents.ITEM_SHIELD_BREAK, 1.0F, 0.5F);
-            Fx.sound(player, SoundEvents.BLOCK_GLASS_BREAK, 1.0F, 0.6F);
-            Fx.sound(player, SoundEvents.BLOCK_ANVIL_BREAK, 1.0F, 0.6F);
-            Fx.sound(player, SoundEvents.ENTITY_GENERIC_EXPLODE.value(), 0.8F, 0.5F);
-            Sync.fx(player, ClientFxPayload.WHITE_FLASH, 10);
-            Sync.fx(player, ClientFxPayload.SHAKE, 18);
+        if (t == SNAP - 3) {
+            Fx.sound(player, SoundEvents.ENTITY_IRON_GOLEM_DAMAGE, 1.0F, 0.5F);
         }
         if (t == FIGURE_OUT && figure != null) {
             figure.setPhase(ZangetsuSpiritEntity.DISSOLVING);

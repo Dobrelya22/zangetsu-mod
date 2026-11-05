@@ -99,6 +99,9 @@ public final class ZangetsuHud {
             // Нарастает, держится и медленно гаснет — игрок просыпается.
             float a = t < 0.3F ? t / 0.3F : (t < 0.55F ? 1.0F : 1.0F - (t - 0.55F) / 0.45F);
             context.fill(0, 0, w, h, ((int) (MathHelper.clamp(a, 0.0F, 1.0F) * 255) << 24) | 0xFFFFFF);
+        } else if (ClientState.flashType == ClientFxPayload.IMPACT_FLASH) {
+            float a = (1.0F - t) * (1.0F - t) * 0.5F;
+            context.fill(0, 0, w, h, ((int) (a * 255) << 24) | 0xFFE8E0);
         } else if (ClientState.flashType == ClientFxPayload.RED_FLASH) {
             float a = (1.0F - t) * 0.7F;
             int edge = Math.max(w, h) / 6;

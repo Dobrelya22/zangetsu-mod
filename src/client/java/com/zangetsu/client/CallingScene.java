@@ -94,6 +94,28 @@ public final class CallingScene {
                 }
             }
             case CallingPayload.FADE_OUT -> fade(true, payload.ticks(), now);
+            case CallingPayload.FLY -> {
+                // Что где в кадре: лицо и всё тело в небе, вперёд и вверх от игрока.
+                float up = (float) com.zangetsu.logic.Calling.FIGURE_UP, ahead = (float) com.zangetsu.logic.Calling.FIGURE_AHEAD, size = com.zangetsu.logic.Calling.FIGURE_SCALE;
+                float faceAhead = ahead - 0.12F * size, faceUp = up + 1.84F * size - 1.27F, midUp = up + 0.9F * size;
+                float begin = com.zangetsu.logic.Calling.CAMERA_AT;
+                float line1 = com.zangetsu.logic.Calling.LINE_1 - begin, line2 = com.zangetsu.logic.Calling.LINE_2 - begin, line3 = com.zangetsu.logic.Calling.LINE_3 - begin;
+                float sword = com.zangetsu.logic.Calling.SWORD_AT - begin, thrown = sword + com.zangetsu.logic.Calling.HOLD, landed = thrown + com.zangetsu.logic.Calling.FLIGHT;
+                CameraDirector.fly(payload.ticks(),
+                        new CameraDirector.Key(0.0F, 14.0F, 4.0F, 5.0F, 0.3F, 0.3F),
+                        new CameraDirector.Key(30.0F, 12.0F, -14.0F, 7.0F, 0.5F, 1.0F),
+                        new CameraDirector.Key(70.0F, 6.0F, -46.0F, 13.0F, 1.5F, 5.0F),
+                        new CameraDirector.Key(line1 - 18.0F, 2.0F, -36.0F, 60.0F, faceAhead * 0.45F, faceUp * 0.42F),
+                        new CameraDirector.Key(line1 + 14.0F, -4.0F, -24.0F, 44.0F, faceAhead, faceUp),
+                        new CameraDirector.Key(line2, -12.0F, -26.0F, 36.0F, faceAhead, faceUp),
+                        new CameraDirector.Key(line3 - 42.0F, 4.0F, -18.0F, 40.0F, faceAhead, faceUp),
+                        new CameraDirector.Key(line3 + 2.0F, 8.0F, -20.0F, 80.0F, ahead * 0.74F, midUp + 5.0F),
+                        new CameraDirector.Key(sword, 6.0F, -20.0F, 88.0F, ahead * 0.72F, midUp),
+                        new CameraDirector.Key(thrown, 2.0F, -22.0F, 84.0F, ahead * 0.72F, midUp),
+                        new CameraDirector.Key(thrown + 26.0F, 20.0F, -6.0F, 18.0F, 8.0F, 3.0F),
+                        new CameraDirector.Key(landed, 22.0F, -4.0F, 7.0F, 3.8F, 0.6F),
+                        new CameraDirector.Key(landed + 8.0F, 8.0F, 4.0F, 3.6F, 0.4F, 0.0F));
+            }
             case CallingPayload.VOID_ON -> {
                 voidOn = true;
                 voidAt = now;

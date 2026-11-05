@@ -5,6 +5,7 @@ import com.zangetsu.client.KeyBindings;
 import com.zangetsu.entity.GetsugaEntity;
 import com.zangetsu.entity.SeveredPartEntity;
 import com.zangetsu.entity.ThrownZangetsuEntity;
+import com.zangetsu.entity.ZangetsuSpiritEntity;
 import com.zangetsu.logic.Awakening;
 import com.zangetsu.logic.Bond;
 import com.zangetsu.logic.Calling;
@@ -198,6 +199,12 @@ public class ZangetsuShots implements ClientModInitializer {
     private void write() {
         // В основной части мобов убивают напрямую, проверка реакции идёт отдельным разделом.
         Reaction.enabled = false;
+        // Только модель Яхве со всех сторон.
+        if ("model".equals(System.getProperty("zangetsu.shots.only"))) {
+            writeModel();
+            this.writeEnd();
+            return;
+        }
         // Только сцена, где меч ломают, и поиск настоящего.
         if ("break".equals(System.getProperty("zangetsu.shots.only"))) {
             command("time set 6000", "weather clear", "gamerule doDaylightCycle false", "gamerule doMobSpawning false", "tp @p 0.5 -60 0.5 180 0", "execute as @p run zangetsu give");
@@ -760,26 +767,60 @@ public class ZangetsuShots implements ClientModInitializer {
         shot("break_void");
         pause(14);
         shot("break_sword_rises");
-        pause(20);
+        pause(28);
         shot("break_figure_opens");
         pause(18);
-        shot("break_arm_reaches");
-        pause(24);
+        shot("break_arm_pocket");
+        pause(13);
+        shot("break_arm_out");
+        pause(13);
+        shot("break_arm_forward");
+        pause(13);
+        shot("break_arm_ready");
+        pause(13);
+        shot("break_sword_spin_slow");
+        pause(9);
+        shot("break_sword_spins");
+        pause(8);
+        shot("break_sword_launch");
+        pause(6);
+        shot("break_sword_flies");
+        pause(4);
+        shot("break_catch");
+        pause(3);
+        shot("break_recoil");
+        pause(12);
         shot("break_grip");
-        pause(24);
+        pause(22);
         shot("break_cracks");
         pause(26);
         shot("break_face_speaks");
-        pause(36);
+        pause(38);
         shot("break_crush");
-        pause(8);
+        pause(11);
         shot("break_snap");
-        pause(6);
+        pause(4);
         shot("break_shards");
         pause(18);
         shot("break_shards_float");
-        pause(30);
+        pause(21);
+        shot("break_dissolve_1");
+        pause(6);
         shot("break_figure_leaves");
+        pause(6);
+        shot("break_dissolve_3");
+        pause(6);
+        shot("break_dissolve_4");
+        pause(6);
+        shot("break_dissolve_5");
+        pause(7);
+        shot("break_dissolve_6");
+        pause(7);
+        shot("break_dissolve_7");
+        pause(7);
+        shot("break_dissolve_8");
+        pause(7);
+        shot("break_dissolve_9");
         onServer(s -> check("сцена: меч так и не вернулся", SwordStacks.find(player(s)).isEmpty()));
         pause(66);
         shot("break_after");
@@ -905,6 +946,57 @@ public class ZangetsuShots implements ClientModInitializer {
         return client.world.getEntitiesByClass(ThrownZangetsuEntity.class, client.player.getBoundingBox().expand(64.0), ThrownZangetsuEntity::isWinking).stream().findFirst().orElse(null);
     }
 
+    private static final Vec3d MODEL_AT = new Vec3d(0.5, -50.0, 0.5);
+    private ZangetsuSpiritEntity modelFigure;
+
+    /** Модель одна в тёмной пустоте, с теми же камерами, что рендеры Blender. Масштаб 1: блок равен метру модели. */
+    private void writeModel() {
+        command("gamemode spectator @p", "time set 18000", "weather clear", "gamerule doDaylightCycle false", "gamerule doMobSpawning false", "tp @p 0.5 -45 12 180 0");
+        act(c -> {
+            c.options.hudHidden = true;
+            c.options.getFov().setValue(30);
+        });
+        onServer(s -> {
+            ServerPlayerEntity player = player(s);
+            this.modelFigure = ZangetsuSpiritEntity.summon(player.getServerWorld(), MODEL_AT, 0.0F, 1.0F, player.getUuid());
+            this.modelFigure.keepWhile(() -> true);
+            this.modelFigure.setPhase(ZangetsuSpiritEntity.WATCH);
+            net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.send(player, new com.zangetsu.network.CallingPayload(com.zangetsu.network.CallingPayload.VOID_ON, "", 10, 0.0, 0.0, 0.0));
+        });
+        pause(190);
+        modelView("model_front", 0.0, 15.0, 1.1, 0.2, 0.0, 0.9);
+        modelView("model_quarter", -9.5, 11.0, 2.4, 0.2, 0.0, 0.9);
+        modelView("model_side", -15.0, 0.0, 1.6, 0.0, -0.3, 0.9);
+        modelView("model_back", 1.6, -15.0, 2.6, 0.0, 0.0, 0.9);
+        modelView("model_as_068", -1.4, 6.8, 0.9, 0.72, 0.0, 1.32);
+        modelView("model_as_037", 0.34, 2.6, 1.52, 0.06, 0.0, 1.68);
+        modelView("model_face_038", 0.02, 1.25, 1.68, 0.01, 0.0, 1.86);
+        modelView("model_mouth", 0.0, 0.62, 1.76, 0.0, 0.0, 1.79);
+        modelView("model_face_quarter", -0.75, 0.95, 1.72, 0.0, 0.03, 1.84);
+        onServer(s -> this.modelFigure.setArms(1));
+        pause(92);
+        modelView("model_as_010", 0.0, 3.0, 0.1, 0.0, 0.0, 1.56);
+        modelView("model_arms", 1.0, 5.6, 0.45, 0.1, 0.0, 1.46);
+        modelView("model_arms_near", -0.2, 1.6, 1.0, -0.75, 0.6, 1.5);
+        pause(60);
+        act(c -> ZangetsuMod.LOGGER.info("Съёмка: кадров в секунду с фигурой во весь экран: {}", c.getCurrentFps()));
+        // Глаза живут: два кадра подряд с разницей в секунду и две.
+        modelView("model_eyes_a", 0.02, 1.25, 1.68, 0.01, 0.0, 1.86);
+        pause(30);
+        modelView("model_eyes_b", 0.02, 1.25, 1.68, 0.01, 0.0, 1.86);
+    }
+
+    /** Камера как в Blender: глаз и цель заданы как x, вперёд от лица, вверх. */
+    private void modelView(String name, double ex, double ef, double ez, double tx, double tf, double tz) {
+        Vec3d eye = MODEL_AT.add(ex, ez - 1.62, ef);
+        Vec3d target = MODEL_AT.add(tx, tz, tf);
+        onServer(s -> player(s).networkHandler.requestTeleport(eye.x, eye.y, eye.z, 0.0F, 0.0F));
+        pause(3);
+        act(c -> lookAt(c, target));
+        pause(3);
+        shot(name);
+    }
+
     private void sleep() {
         onServer(s -> player(s).trySleep(new BlockPos(2, -60, 0)));
     }
@@ -940,9 +1032,15 @@ public class ZangetsuShots implements ClientModInitializer {
         shot("calling_speech_2");
         pause(40);
         onServer(s -> check("первый сон: меча ещё нет", Calling.swordOf(player(s)) == null));
-        pause(46);
+        pause(26);
+        shot("calling_arms_pocket");
+        pause(16);
+        shot("calling_arms_out");
+        pause(14);
+        shot("calling_arms_forward");
+        pause(14);
         shot("calling_worthy");
-        pause(30);
+        pause(40);
         shot("calling_sword_comes_out");
         waitFor("меч летит", c -> nearestClient(c) != null);
         pause(8);
