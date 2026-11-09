@@ -1,93 +1,42 @@
 plugins {
-    id 'fabric-loom' version '1.11-SNAPSHOT'
+    id 'dev.architectury.loom' version '1.11-SNAPSHOT' apply false
+    id 'architectury-plugin' version '3.4-SNAPSHOT'
+    id 'com.gradleup.shadow' version '8.3.6' apply false
 }
 
-version = project.mod_version
-group = project.maven_group
-
-base {
-    archivesName = project.archives_base_name
+architectury {
+    minecraft = project.minecraft_version
 }
 
-loom {
-    splitEnvironmentSourceSets()
+allprojects {
+    group = rootProject.maven_group
+    version = rootProject.mod_version
 }
 
-// Проверочная съёмка и трейлер живут отдельно и в jar мода не попадают.
-sourceSets {
-    shots {
-        compileClasspath += sourceSets.client.compileClasspath + sourceSets.main.output + sourceSets.client.output
-        runtimeClasspath += sourceSets.client.runtimeClasspath + sourceSets.main.output + sourceSets.client.output
+subprojects {
+    apply plugin: 'dev.architectury.loom'
+    apply plugin: 'architectury-plugin'
+
+    base {
+        // zangetsu-fabric-<версия>.jar и zangetsu-neoforge-<версия>.jar
+        archivesName = "$rootProject.archives_base_name-$project.name"
     }
-    trailer {
-        compileClasspath += sourceSets.client.compileClasspath + sourceSets.main.output + sourceSets.client.output
-        runtimeClasspath += sourceSets.client.runtimeClasspath + sourceSets.main.output + sourceSets.client.output
-    }
-}
-// Классы и fabric.mod.json в одной папке: так Fabric видит каждый из них отдельным модом.
-sourceSets.shots.output.resourcesDir = sourceSets.shots.java.destinationDirectory.get().asFile
-sourceSets.trailer.output.resourcesDir = sourceSets.trailer.java.destinationDirectory.get().asFile
 
-loom {
-    mods {
-        'zangetsu' {
-            sourceSet sourceSets.main
-            sourceSet sourceSets.client
+    dependencies {
+        minecraft "net.minecraft:minecraft:$rootProject.minecraft_version"
+        mappings loom.layered {
+            it.mappings("net.fabricmc:yarn:$rootProject.yarn_mappings:v2")
+            it.mappings("dev.architectury:yarn-mappings-patch-neoforge:$rootProject.yarn_mappings_patch_neoforge_version")
         }
     }
 
-    runs {
-        // Проверочная съёмка: ./gradlew runShots (игра сама проходит сцены мода и делает скриншоты)
-        shots {
-            client()
-            name 'Shots'
-            source sourceSets.shots
-            vmArg '-Dzangetsu.shots=true'
-            vmArg "-Dzangetsu.shots.only=${findProperty('shotsOnly') ?: ''}"
-            programArgs '--width', '1280', '--height', '720'
-            runDir 'run-shots'
-        }
-        // Трейлер: ./gradlew runTrailer -PtrailerVideo=trailer.mkv (кадр за кадром, 60 в секунду; нужен ffmpeg)
-        // или -PtrailerStills=stills — только стоп-кадры. -PtrailerScenes=awaken,eye — снять не всё.
-        trailer {
-            client()
-            name 'Trailer'
-            source sourceSets.trailer
-            vmArg '-Dzangetsu.trailer=true'
-            vmArg "-Dzangetsu.trailer.scenes=${findProperty('trailerScenes') ?: 'all'}"
-            vmArg "-Dzangetsu.trailer.video=${findProperty('trailerVideo') ?: ''}"
-            vmArg "-Dzangetsu.trailer.stills=${findProperty('trailerStills') ?: ''}"
-            vmArg "-Dzangetsu.trailer.stillStep=${findProperty('trailerStillStep') ?: '30'}"
-            vmArg "-Dzangetsu.trailer.script=${findProperty('trailerScript') ?: 'trailer'}"
-            vmArg "-Dzangetsu.trailer.fps=${findProperty('trailerFps') ?: '60'}"
-            vmArg "-Dzangetsu.trailer.takes=${findProperty('trailerTakes') ?: ''}"
-            programArgs '--width', "${findProperty('trailerWidth') ?: '1920'}", '--height', "${findProperty('trailerHeight') ?: '1080'}", '--username', 'Ichigo'
-            runDir 'run-trailer'
-        }
+    java {
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
     }
-}
 
-dependencies {
-    minecraft "com.mojang:minecraft:${project.minecraft_version}"
-    mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
-    modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
-    modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
-}
-
-processResources {
-    inputs.property 'version', project.version
-
-    filesMatching('fabric.mod.json') {
-        expand 'version': project.version
+    tasks.withType(JavaCompile).configureEach {
+        it.options.release = 21
+        it.options.encoding = 'UTF-8'
     }
-}
-
-tasks.withType(JavaCompile).configureEach {
-    it.options.release = 21
-    it.options.encoding = 'UTF-8'
-}
-
-java {
-    sourceCompatibility = JavaVersion.VERSION_21
-    targetCompatibility = JavaVersion.VERSION_21
 }

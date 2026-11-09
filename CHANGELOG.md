@@ -1,5 +1,18 @@
 # Изменения
 
+## 1.15.0
+
+- **Зангецу теперь и на NeoForge.** Для Minecraft 1.21.1 есть два файла. `zangetsu-fabric-1.15.0.jar` для Fabric, как раньше, вместе с Fabric API. `zangetsu-neoforge-1.15.0.jar` для NeoForge 21.1 и новее, ему больше ничего не нужно. Мод один и тот же: те же сны, формы, казни, сцены и команды.
+- На Fabric ничего не теряется: связь с мечом, уровень и дружба хранятся под теми же ключами, старые миры открываются как раньше.
+- Внутри весь мод теперь общий код, а под каждый загрузчик только тонкая прослойка. Новые обновления будут выходить сразу для обоих.
+
+### English
+
+- **Zangetsu now runs on NeoForge too.** There are two files for Minecraft 1.21.1. `zangetsu-fabric-1.15.0.jar` is for Fabric, as before, together with Fabric API. `zangetsu-neoforge-1.15.0.jar` is for NeoForge 21.1 or newer and needs nothing else. It's the same mod: the same dreams, forms, executions, cutscenes and commands.
+- Nothing is lost on Fabric: your bond with the sword, level and progress are stored under the same keys, and existing worlds load as before.
+- Under the hood the whole mod is now shared code with a thin layer for each loader, so future updates come out for both at once.
+
+
 ## 1.14.0
 
 - **Умрёшь в финальной форме, и тело заберёт Пустой.** Падаешь на колени, втыкаешь меч в землю, говоришь «Это ещё не конец», и в груди открывается идеально круглая сквозная дыра. Дальше Пустой сражается сам, с собственными приёмами. Толпа окружает его, он смотрит на красную луну, глаз загорается, и он расталкивает всех силой. Затем прыгает по всем подряд, на каждом мобе остаётся светящийся жёлтый разрез. Он встаёт за спинами, говорит «Жалкие», стряхивает кровь с клинка, и все разом разваливаются на куски. После этого маска разбита на одни игровые сутки.

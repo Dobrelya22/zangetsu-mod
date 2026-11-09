@@ -4,7 +4,7 @@
 
 ## Your sword is alive. And it chooses you.
 
-**Zangetsu** is a story-driven sword mod for Minecraft (Fabric 1.21.1), inspired by *Bleach*. You don't craft this weapon, and you won't find it in a chest. It comes to you in a dream. A living eye watches from the blade, your bond with it grows with every fight, and the power it gives you has a price.
+**Zangetsu** is a story-driven sword mod for Minecraft 1.21.1 (Fabric and NeoForge), inspired by *Bleach*. You don't craft this weapon, and you won't find it in a chest. It comes to you in a dream. A living eye watches from the blade, your bond with it grows with every fight, and the power it gives you has a price.
 
 This isn't just a stronger sword. It's a whole journey: from the first dream, through a Hollow's mask and a burning Final Form, to the moment you die and something else gets up in your place.
 
@@ -50,8 +50,8 @@ Die in the Final Form, and the sword won't save you. You fall to your knees, a p
 
 ![How to start](docs/page/s_start.jpg)
 
-1. Install [Fabric Loader](https://fabricmc.net/use/) and [Fabric API](https://modrinth.com/mod/fabric-api/versions?g=1.21.1) for Minecraft 1.21.1.
-2. Download [`zangetsu-*.jar`](../../releases/latest) and put it into your `mods` folder.
+1. Install [Fabric Loader](https://fabricmc.net/use/) with [Fabric API](https://modrinth.com/mod/fabric-api/versions?g=1.21.1), or [NeoForge](https://neoforged.net/), for Minecraft 1.21.1.
+2. Download [the jar for your loader](../../releases/latest) (`zangetsu-fabric-*.jar` or `zangetsu-neoforge-*.jar`) and put it into your `mods` folder.
 3. **Go to sleep in a bed.** Everything else comes to you.
 
 Everything in detail is in the [full guide](docs/GUIDE.en.md).
@@ -87,10 +87,18 @@ Everything in detail is in the [full guide](docs/GUIDE.en.md).
 
 ## Installation
 
-1. Install [Fabric Loader](https://fabricmc.net/use/) 0.16+ for Minecraft **1.21.1**.
+The mod comes for two loaders. Either way you need Minecraft **1.21.1** and Java 21, and the mod is required on both client and server.
+
+**Fabric**
+1. Install [Fabric Loader](https://fabricmc.net/use/) 0.16+.
 2. Download [Fabric API](https://modrinth.com/mod/fabric-api/versions?g=1.21.1) for 1.21.1.
-3. Download `zangetsu-*.jar` from the [Releases](../../releases) page.
+3. Download `zangetsu-fabric-*.jar` from the [Releases](../../releases) page.
 4. Put both files into `.minecraft/mods` and launch the game with the Fabric profile.
+
+**NeoForge**
+1. Install [NeoForge](https://neoforged.net/) 21.1+.
+2. Download `zangetsu-neoforge-*.jar` from the [Releases](../../releases) page. Nothing else is needed.
+3. Put it into `.minecraft/mods` and launch the game with the NeoForge profile.
 
 ## How it works
 

@@ -1,0 +1,132 @@
+plugins {
+    id 'com.gradleup.shadow'
+}
+
+architectury {
+    platformSetupLoomIde()
+    fabric()
+}
+
+configurations {
+    common {
+        canBeResolved = true
+        canBeConsumed = false
+    }
+    compileClasspath.extendsFrom common
+    runtimeClasspath.extendsFrom common
+    developmentFabric.extendsFrom common
+
+    // Общий код вшивается в jar мода.
+    shadowBundle {
+        canBeResolved = true
+        canBeConsumed = false
+    }
+}
+
+// Проверочная съёмка и трейлер живут отдельно и в jar мода не попадают.
+sourceSets {
+    shots {
+        // Сценарий съёмки общий с NeoForge; здесь только вход Fabric.
+        java.srcDir '../common/src/shots/java'
+        compileClasspath += sourceSets.main.compileClasspath + sourceSets.main.output
+        runtimeClasspath += sourceSets.main.runtimeClasspath + sourceSets.main.output
+    }
+    trailer {
+        compileClasspath += sourceSets.main.compileClasspath + sourceSets.main.output
+        runtimeClasspath += sourceSets.main.runtimeClasspath + sourceSets.main.output
+    }
+}
+// Классы и fabric.mod.json в одной папке: так Fabric видит каждый из них отдельным модом.
+sourceSets.shots.output.resourcesDir = sourceSets.shots.java.destinationDirectory.get().asFile
+sourceSets.trailer.output.resourcesDir = sourceSets.trailer.java.destinationDirectory.get().asFile
+// remapJar заглядывает в папки классов всех наборов: если съёмка или трейлер собираются в том же запуске, пусть они будут раньше.
+tasks.named('remapJar') {
+    mustRunAfter 'compileShotsJava', 'processShotsResources', 'compileTrailerJava', 'processTrailerResources'
+}
+
+// Тот же сценарий съёмки отдельным модом на именах игры — чтобы прогнать готовый jar в чистом Fabric, как у игрока.
+// Кладётся в build/prodlibs, в релиз не попадает: ./gradlew :fabric:remapShotsJar, запуск — ./gradlew :fabric:prodShots
+def shotsJar = tasks.register('shotsJar', Jar) {
+    from sourceSets.shots.output
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    archiveClassifier = 'shots-dev'
+    destinationDirectory = layout.buildDirectory.dir('devlibs')
+}
+def remapShotsJar = tasks.register('remapShotsJar', net.fabricmc.loom.task.RemapJarTask) {
+    inputFile = shotsJar.flatMap { it.archiveFile }
+    classpath.from(sourceSets.shots.compileClasspath)
+    archiveClassifier = 'shots'
+    destinationDirectory = layout.buildDirectory.dir('prodlibs')
+}
+// Fabric API для чистого запуска — обычный jar с Maven, как его ставят игроки.
+def prodFabricApi = configurations.detachedConfiguration(dependencies.create("net.fabricmc.fabric-api:fabric-api:$rootProject.fabric_api_version"))
+prodFabricApi.transitive = false
+tasks.register('prodShots', net.fabricmc.loom.task.prod.ClientProductionRunTask) {
+    mods.from(remapJar.archiveFile, remapShotsJar.flatMap { it.archiveFile }, prodFabricApi)
+    jvmArgs.add('-Dzangetsu.shots=true')
+    programArgs.addAll('--width', '1280', '--height', '720')
+    runDir = rootProject.file('run-prod-fabric')
+}
+
+loom {
+    runs {
+        client {
+            runDir '../run'
+        }
+        server {
+            runDir '../run-server'
+        }
+        // Проверочная съёмка: ./gradlew :fabric:runShots (игра сама проходит сцены мода и делает скриншоты)
+        shots {
+            client()
+            name 'Shots'
+            source sourceSets.shots
+            vmArg '-Dzangetsu.shots=true'
+            vmArg "-Dzangetsu.shots.only=${findProperty('shotsOnly') ?: ''}"
+            programArgs '--width', '1280', '--height', '720'
+            runDir '../run-shots'
+        }
+        // Трейлер: ./gradlew :fabric:runTrailer -PtrailerVideo=trailer.mkv (кадр за кадром, 60 в секунду; нужен ffmpeg)
+        // или -PtrailerStills=stills — только стоп-кадры. -PtrailerScenes=awaken,eye — снять не всё.
+        trailer {
+            client()
+            name 'Trailer'
+            source sourceSets.trailer
+            vmArg '-Dzangetsu.trailer=true'
+            vmArg "-Dzangetsu.trailer.scenes=${findProperty('trailerScenes') ?: 'all'}"
+            vmArg "-Dzangetsu.trailer.video=${findProperty('trailerVideo') ?: ''}"
+            vmArg "-Dzangetsu.trailer.stills=${findProperty('trailerStills') ?: ''}"
+            vmArg "-Dzangetsu.trailer.stillStep=${findProperty('trailerStillStep') ?: '30'}"
+            vmArg "-Dzangetsu.trailer.script=${findProperty('trailerScript') ?: 'trailer'}"
+            vmArg "-Dzangetsu.trailer.fps=${findProperty('trailerFps') ?: '60'}"
+            vmArg "-Dzangetsu.trailer.takes=${findProperty('trailerTakes') ?: ''}"
+            programArgs '--width', "${findProperty('trailerWidth') ?: '1920'}", '--height', "${findProperty('trailerHeight') ?: '1080'}", '--username', 'Ichigo'
+            runDir '../run-trailer'
+        }
+    }
+}
+
+dependencies {
+    modImplementation "net.fabricmc:fabric-loader:$rootProject.fabric_loader_version"
+    modImplementation "net.fabricmc.fabric-api:fabric-api:$rootProject.fabric_api_version"
+
+    common(project(path: ':common', configuration: 'namedElements')) { transitive = false }
+    shadowBundle project(path: ':common', configuration: 'transformProductionFabric')
+}
+
+processResources {
+    inputs.property 'version', project.version
+
+    filesMatching('fabric.mod.json') {
+        expand version: inputs.properties.version
+    }
+}
+
+shadowJar {
+    configurations = [project.configurations.shadowBundle]
+    archiveClassifier = 'dev-shadow'
+}
+
+remapJar {
+    inputFile.set shadowJar.archiveFile
+}

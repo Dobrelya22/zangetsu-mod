@@ -1,12 +1,16 @@
 pluginManagement {
     repositories {
-        maven {
-            name = 'Fabric'
-            url = 'https://maven.fabricmc.net/'
-        }
+        maven { url = 'https://maven.fabricmc.net/' }
+        maven { url = 'https://maven.architectury.dev/' }
+        maven { url = 'https://maven.neoforged.net/releases/' }
         mavenCentral()
         gradlePluginPortal()
     }
 }
 
 rootProject.name = 'zangetsu-mod'
+
+// Весь мод в common; fabric и neoforge — тонкая прослойка под свой загрузчик.
+include 'common'
+include 'fabric'
+include 'neoforge'

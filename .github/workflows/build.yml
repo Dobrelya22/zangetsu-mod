@@ -18,18 +18,23 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
+      # Один общий код, два jar: для Fabric и для NeoForge.
       - name: Сборка мода
         run: ./gradlew build --stacktrace
 
       - uses: actions/upload-artifact@v4
         with:
           name: zangetsu
-          path: build/libs/zangetsu-*.jar
+          path: |
+            fabric/build/libs/zangetsu-fabric-*.jar
+            neoforge/build/libs/zangetsu-neoforge-*.jar
+            !**/*-dev-shadow.jar
+            !**/*-sources.jar
 
       - name: Сценарий съёмки
-        run: ./gradlew shotsClasses --stacktrace
+        run: ./gradlew :fabric:shotsClasses --stacktrace
 
-  # Каждое обновление main с успешной сборкой выкладывает jar на страницу Releases.
+  # Каждое обновление main с успешной сборкой выкладывает оба jar на страницу Releases.
   # Версия — mod_version из gradle.properties, описание — её раздел в CHANGELOG.md.
   release:
     needs: build
@@ -53,15 +58,20 @@ jobs:
           {
             awk -v v="$version" '/^## /{p = ($2 == v); next} p' CHANGELOG.md
             echo
-            echo "**Установка:** положите \`zangetsu-$version.jar\` и [Fabric API](https://modrinth.com/mod/fabric-api/versions?g=1.21.1) в папку \`.minecraft/mods\` и запустите Minecraft 1.21.1 с [Fabric Loader](https://fabricmc.net/use/) 0.16+."
+            echo "**Установка на Fabric:** положите \`zangetsu-fabric-$version.jar\` и [Fabric API](https://modrinth.com/mod/fabric-api/versions?g=1.21.1) в папку \`.minecraft/mods\` и запустите Minecraft 1.21.1 с [Fabric Loader](https://fabricmc.net/use/) 0.16+."
             echo
-            echo "**Install:** put \`zangetsu-$version.jar\` and [Fabric API](https://modrinth.com/mod/fabric-api/versions?g=1.21.1) into \`.minecraft/mods\` and launch Minecraft 1.21.1 with Fabric. [Guide](https://github.com/Dobrelya22/zangetsu-mod/blob/main/docs/GUIDE.en.md)"
+            echo "**Установка на NeoForge:** положите \`zangetsu-neoforge-$version.jar\` в папку \`.minecraft/mods\` и запустите Minecraft 1.21.1 с [NeoForge](https://neoforged.net/) 21.1+. Больше ничего не нужно."
+            echo
+            echo "**Install on Fabric:** put \`zangetsu-fabric-$version.jar\` and [Fabric API](https://modrinth.com/mod/fabric-api/versions?g=1.21.1) into \`.minecraft/mods\` and launch Minecraft 1.21.1 with Fabric."
+            echo
+            echo "**Install on NeoForge:** put \`zangetsu-neoforge-$version.jar\` into \`.minecraft/mods\` and launch Minecraft 1.21.1 with NeoForge 21.1+. Nothing else is needed. [Guide](https://github.com/Dobrelya22/zangetsu-mod/blob/main/docs/GUIDE.en.md)"
           } > notes.md
-          rm -f dist/*-sources.jar
+          find dist -name '*.jar' -exec cp {} . \;
+          rm -f ./*-sources.jar ./*-dev-shadow.jar
           if gh release view "v$version" >/dev/null 2>&1; then
-            gh release upload "v$version" dist/*.jar --clobber
+            gh release upload "v$version" ./zangetsu-*.jar --clobber
             gh release edit "v$version" --notes-file notes.md
           else
-            gh release create "v$version" dist/*.jar --target "$GITHUB_SHA" \
+            gh release create "v$version" ./zangetsu-*.jar --target "$GITHUB_SHA" \
               --title "Zangetsu $version" --notes-file notes.md
           fi

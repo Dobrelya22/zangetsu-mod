@@ -1,0 +1,16 @@
+modLoader = "javafml"
+loaderVersion = "[4,)"
+license = "MIT"
+
+[[mods]]
+modId = "zangetsu_shots"
+version = "1.0.0"
+displayName = "Zangetsu — shots"
+description = "Проверочная съёмка мода: сама проходит сцены и делает скриншоты. Только для разработки."
+
+[[dependencies.zangetsu_shots]]
+modId = "zangetsu"
+type = "required"
+versionRange = "[0,)"
+ordering = "AFTER"
+side = "CLIENT"

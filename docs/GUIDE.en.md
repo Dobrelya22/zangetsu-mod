@@ -6,10 +6,11 @@ From your first night to the Final Form. This guide spoils the cutscenes, so if 
 
 ## 1. Installation
 
-1. Install [Fabric Loader](https://fabricmc.net/use/) 0.16 or newer for Minecraft **1.21.1**. You need Java 21.
-2. Download [Fabric API](https://modrinth.com/mod/fabric-api/versions?g=1.21.1) for 1.21.1.
-3. Put `zangetsu-*.jar` and Fabric API into `.minecraft/mods`.
-4. Launch the game with the Fabric profile. The mod is required on both client and server.
+The mod runs on Minecraft **1.21.1** with Java 21, on either Fabric or NeoForge. It is required on both client and server.
+
+**Fabric:** install [Fabric Loader](https://fabricmc.net/use/) 0.16 or newer, download [Fabric API](https://modrinth.com/mod/fabric-api/versions?g=1.21.1) for 1.21.1, put `zangetsu-fabric-*.jar` and Fabric API into `.minecraft/mods`, and launch the game with the Fabric profile.
+
+**NeoForge:** install [NeoForge](https://neoforged.net/) 21.1 or newer, put `zangetsu-neoforge-*.jar` into `.minecraft/mods`, and launch the game with the NeoForge profile. Nothing else is needed.
 
 The game language is picked up automatically: English and Russian are included.
 

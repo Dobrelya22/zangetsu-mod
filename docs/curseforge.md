@@ -8,7 +8,7 @@ This isn't just a stronger sword. It's a whole journey: from the first dream, th
 
 *Made by **Dobrelya22**. Claude (Anthropic's AI) helped only with the code. A free, unofficial fan mod. Bleach, Zangetsu, Ichigo and Yhwach belong to Tite Kubo and their respective rights holders.*
 
-*Fabric · Minecraft 1.21.1 · Java 21 · Requires Fabric API, on both client and server · English and Russian*
+*Fabric and NeoForge · Minecraft 1.21.1 · Java 21 · On both client and server · English and Russian*
 
 ## Watch the music video
 
@@ -76,8 +76,8 @@ You survive, but the mask stays broken for a whole in-game day.
 
 ![How to start](https://raw.githubusercontent.com/Dobrelya22/zangetsu-mod/main/docs/page/s_start.jpg)
 
-1. Install **Fabric Loader** and **Fabric API** for Minecraft 1.21.1.
-2. Put this mod into your `mods` folder.
+1. Install **NeoForge**, or **Fabric Loader** with **Fabric API**, for Minecraft 1.21.1.
+2. Put the file for your loader into your `mods` folder. The NeoForge file needs nothing else.
 3. **Go to sleep in a bed.** Everything else comes to you.
 
 **Tip:** abilities only work while the eye is open, so at night or in the dark. Want to try something out in the daytime? Go down into a cave.
@@ -124,7 +124,7 @@ Most of the mod is earned through play, but with cheats on, these commands take 
 - **Финальная форма.** Маска с рогом, настоящий огонь, тканевый плащ и звенящие цепи.
 - **У смерти есть сюжет.** Яхве раздавит меч в кулаке, чтобы спасти тебя, а настоящий придётся искать среди сотни фальшивых. А если умрёшь в финальной форме, тело заберёт Пустой, и ты будешь только смотреть.
 
-**Как начать:** поставь Fabric Loader и Fabric API для Minecraft 1.21.1, положи мод в папку `mods` и ляг спать в кровать.
+**Как начать:** поставь для Minecraft 1.21.1 NeoForge или Fabric Loader с Fabric API, положи файл мода под свой загрузчик в папку `mods` и ляг спать в кровать.
 
 ---
 

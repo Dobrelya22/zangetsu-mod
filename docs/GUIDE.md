@@ -6,10 +6,11 @@
 
 ## 1. Установка
 
-1. Поставь [Fabric Loader](https://fabricmc.net/use/) 0.16 или новее для Minecraft **1.21.1**. Нужна Java 21.
-2. Скачай [Fabric API](https://modrinth.com/mod/fabric-api/versions?g=1.21.1) для 1.21.1.
-3. Положи `zangetsu-*.jar` и Fabric API в папку `.minecraft/mods`.
-4. Запусти игру с профилем Fabric. Мод нужен и на клиенте, и на сервере.
+Мод работает на Minecraft **1.21.1** с Java 21, на Fabric или на NeoForge. Мод нужен и на клиенте, и на сервере.
+
+**Fabric:** поставь [Fabric Loader](https://fabricmc.net/use/) 0.16 или новее, скачай [Fabric API](https://modrinth.com/mod/fabric-api/versions?g=1.21.1) для 1.21.1, положи `zangetsu-fabric-*.jar` и Fabric API в папку `.minecraft/mods` и запусти игру с профилем Fabric.
+
+**NeoForge:** поставь [NeoForge](https://neoforged.net/) 21.1 или новее, положи `zangetsu-neoforge-*.jar` в папку `.minecraft/mods` и запусти игру с профилем NeoForge. Больше ничего не нужно.
 
 Язык подхватывается сам: в игре есть русский и английский.
 

@@ -4,7 +4,7 @@
 
 ## Твой меч живой, и он выбирает тебя
 
-**Зангецу** — это сюжетный мод на меч для Minecraft (Fabric 1.21.1) по мотивам «Блича». Этот меч нельзя скрафтить или найти в сундуке: он приходит к тебе во сне. С клинка смотрит живой глаз, ваша дружба растёт с каждым боем, а за его силу приходится платить.
+**Зангецу** — это сюжетный мод на меч для Minecraft 1.21.1 (Fabric и NeoForge) по мотивам «Блича». Этот меч нельзя скрафтить или найти в сундуке: он приходит к тебе во сне. С клинка смотрит живой глаз, ваша дружба растёт с каждым боем, а за его силу приходится платить.
 
 Это не просто меч посильнее, а целый путь: от первого сна через маску Пустого и горящую финальную форму до момента, когда ты умираешь, а вместо тебя поднимается кто-то другой.
 
@@ -50,8 +50,8 @@
 
 ![Как начать](docs/page/ru_start.jpg)
 
-1. Поставь [Fabric Loader](https://fabricmc.net/use/) и [Fabric API](https://modrinth.com/mod/fabric-api/versions?g=1.21.1) для Minecraft 1.21.1.
-2. Скачай [`zangetsu-*.jar`](../../releases/latest) и положи его в папку `mods`.
+1. Поставь для Minecraft 1.21.1 [Fabric Loader](https://fabricmc.net/use/) с [Fabric API](https://modrinth.com/mod/fabric-api/versions?g=1.21.1) или [NeoForge](https://neoforged.net/).
+2. Скачай [jar под свой загрузчик](../../releases/latest) (`zangetsu-fabric-*.jar` или `zangetsu-neoforge-*.jar`) и положи его в папку `mods`.
 3. **Ляг спать в кровать.** Всё остальное придёт само.
 
 Подробно обо всём в [полном гайде](docs/GUIDE.md).
@@ -115,10 +115,18 @@
 
 ## Установка
 
-1. Установи [Fabric Loader](https://fabricmc.net/use/) 0.16+ для Minecraft **1.21.1**.
+Мод есть для двух загрузчиков, Minecraft **1.21.1** и Java 21 нужны в обоих случаях. Мод нужен и на клиенте, и на сервере.
+
+**Fabric**
+1. Установи [Fabric Loader](https://fabricmc.net/use/) 0.16+.
 2. Скачай [Fabric API](https://modrinth.com/mod/fabric-api/versions?g=1.21.1) для 1.21.1.
-3. Скачай `zangetsu-*.jar` со страницы [Releases](../../releases) (или из последней сборки во вкладке Actions).
+3. Скачай `zangetsu-fabric-*.jar` со страницы [Releases](../../releases).
 4. Положи оба файла в папку `.minecraft/mods` и запусти игру с профилем Fabric.
+
+**NeoForge**
+1. Установи [NeoForge](https://neoforged.net/) 21.1+.
+2. Скачай `zangetsu-neoforge-*.jar` со страницы [Releases](../../releases). Больше ничего не нужно.
+3. Положи его в папку `.minecraft/mods` и запусти игру с профилем NeoForge.
 
 ## Как всё устроено
 
@@ -267,12 +275,14 @@
 
 ## Для разработчиков
 
-- Сборка: `./gradlew build` → `build/libs/zangetsu-*.jar`.
+- Весь мод в `common` (имена Yarn, без API загрузчиков). `fabric` и `neoforge` — тонкие прослойки: подписывают общий код на события своего загрузчика и хранят данные игрока. Сборка на [Architectury Loom](https://github.com/architectury/architectury-loom).
+- Сборка: `./gradlew build` → `fabric/build/libs/zangetsu-fabric-*.jar` и `neoforge/build/libs/zangetsu-neoforge-*.jar`.
+- `./gradlew :fabric:runClient` и `./gradlew :neoforge:runClient` — запустить игру с модом.
 - Текстуры нарисованы кодом: `tools/textures.cs` (запуск — `tools/textures.ps1` в Windows PowerShell).
-- `./gradlew runShots` — игра сама проходит все сцены мода и делает скриншоты в `run-shots/screenshots` (то же в GitHub Actions: workflow **shots**).
-- `./gradlew runTrailer -PtrailerStills=stills` — игра сама разыгрывает и снимает трейлер кино-камерой, кадр за кадром (60 в секунду), и сохраняет стоп-кадры; с `-PtrailerVideo=trailer.mkv` пишет видео через ffmpeg. Весь ролик с цветом и музыкой собирает workflow **trailer**.
-- `./gradlew runTrailer -PtrailerScript=clip -PtrailerFps=240 -PtrailerTakes=папка -PtrailerWidth=3840 -PtrailerHeight=2160` снимает дубли для музыкального клипа, а `tools/clip/render.py` монтирует их под трек кадр за кадром.
-- `./gradlew runTrailer -PtrailerScript=showcase -PtrailerStills=stills` — витрина для проверки графики: крупные планы меча и маски со всех сторон и все анимации ударов, со стороны и от первого лица (`-PtrailerScenes=sword,mask` — только нужные сцены).
+- `./gradlew :fabric:runShots` — игра сама проходит все сцены мода и делает скриншоты в `run-shots/screenshots` (то же в GitHub Actions: workflow **shots**). Тот же сценарий на NeoForge: `./gradlew :neoforge:runShots`, скриншоты в `run-neoforge-shots/screenshots`.
+- `./gradlew :fabric:runTrailer -PtrailerStills=stills` — игра сама разыгрывает и снимает трейлер кино-камерой, кадр за кадром (60 в секунду), и сохраняет стоп-кадры; с `-PtrailerVideo=trailer.mkv` пишет видео через ffmpeg. Весь ролик с цветом и музыкой собирает workflow **trailer**.
+- `./gradlew :fabric:runTrailer -PtrailerScript=clip -PtrailerFps=240 -PtrailerTakes=папка -PtrailerWidth=3840 -PtrailerHeight=2160` снимает дубли для музыкального клипа, а `tools/clip/render.py` монтирует их под трек кадр за кадром.
+- `./gradlew :fabric:runTrailer -PtrailerScript=showcase -PtrailerStills=stills` — витрина для проверки графики: крупные планы меча и маски со всех сторон и все анимации ударов, со стороны и от первого лица (`-PtrailerScenes=sword,mask` — только нужные сцены).
 
 ## Авторы
 

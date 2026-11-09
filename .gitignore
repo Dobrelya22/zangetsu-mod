@@ -17,8 +17,13 @@ bin/
 
 # Запуски Minecraft
 run/
+run-server/
 run-shots/
 run-trailer/
+run-neoforge/
+run-neoforge-server/
+run-neoforge-shots/
+run-prod-fabric/
 remappedSrc/
 
 # Исходники Minecraft для справки (не в репозиторий)
